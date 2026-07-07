@@ -22,7 +22,7 @@ function MoreContent() {
         if (driverId) {
           const res = await fetch(`https://api.fiinway.com/api/v1/driver/services?driver_id=${driverId}`, {
             headers: {
-              apikey: "4a282fdf-9736-476c-941d-d4ccfcb665fa",
+              apikey: "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=",
               accesstoken: token,
             }
           });
@@ -33,7 +33,7 @@ function MoreContent() {
         } else if (userId) {
           const res = await fetch(`https://api.fiinway.com/api/v1/user-categories`, {
             headers: {
-              apikey: "4a282fdf-9736-476c-941d-d4ccfcb665fa",
+              apikey: "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=",
               accesstoken: token,
             }
           });
@@ -117,35 +117,35 @@ function MoreContent() {
 
             {/* User View */}
             {userId && userCategories.length === 0 && (
-              <div className="p-6 bg-white rounded-2xl text-center text-slate-500 shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-100">
+              <div className="p-8 bg-white rounded-2xl text-center text-slate-500 shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-100">
                 No services currently available.
               </div>
             )}
 
             {userId && userCategories.map((category) => (
-              <div key={category.id} className="group p-6 bg-white rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-100 mb-6 last:mb-0 transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] hover:border-indigo-100">
-                <div className="flex items-center gap-4 mb-4 pb-4 border-b border-slate-50">
-                  <div className="w-14 h-14 bg-indigo-50/50 rounded-xl overflow-hidden p-2 flex-shrink-0 border border-indigo-100/50">
-                    <img src={getImageUrl(category.image)} alt={category.libelle} className="w-full h-full object-contain" />
+              <div key={category.id} className="mb-10 last:mb-0">
+                <div className="flex items-center gap-3 mb-5 px-1">
+                  <div className="w-10 h-10 rounded-xl bg-white shadow-sm border border-slate-100 flex items-center justify-center p-2">
+                    <img src={getImageUrl(category.image)} alt={category.libelle} className="w-full h-full object-contain opacity-80" />
                   </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-800 tracking-tight">{category.libelle}</h3>
-                  </div>
+                  <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{category.libelle}</h2>
                 </div>
                 
                 {category.subcategories && category.subcategories.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                     {category.subcategories.map((sub: any) => (
-                      <div key={sub.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50/50 border border-slate-100 hover:bg-indigo-50/50 hover:border-indigo-100/50 transition-colors cursor-pointer">
-                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-white shadow-sm flex-shrink-0 p-1.5 border border-slate-100">
-                          <img src={getImageUrl(sub.image)} alt={sub.libelle} className="w-full h-full object-contain" />
+                      <div key={sub.id} className="group flex flex-col items-center p-5 rounded-2xl bg-white border border-slate-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                        <div className="w-16 h-16 rounded-2xl bg-slate-50/80 flex items-center justify-center p-3 mb-4 group-hover:bg-blue-50/50 transition-colors duration-300">
+                          <img src={getImageUrl(sub.image)} alt={sub.libelle} className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-300" />
                         </div>
-                        <span className="font-medium text-sm text-slate-700">{sub.libelle}</span>
+                        <span className="font-bold text-[14px] text-center text-slate-800 leading-snug group-hover:text-blue-600 transition-colors line-clamp-2">{sub.libelle}</span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-400 italic px-2">No sub-categories available.</p>
+                  <div className="p-6 rounded-2xl bg-slate-50/50 border border-slate-200 border-dashed text-center">
+                    <p className="text-sm text-slate-400 font-medium">No services listed yet.</p>
+                  </div>
                 )}
               </div>
             ))}
