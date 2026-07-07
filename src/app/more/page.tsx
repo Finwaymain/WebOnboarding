@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, useRef } from "react";
 
+
 function MoreContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("accesstoken");
@@ -10,7 +11,7 @@ function MoreContent() {
   const userId = searchParams.get("user_id");
 
   const [driverServices, setDriverServices] = useState<any[]>([]);
-  const [userCategories, setUserCategories] = useState<any[]>([]);
+  const [homeServices, setHomeServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Navigation State
@@ -35,30 +36,6 @@ function MoreContent() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        if (driverId) {
-          const res = await fetch(`https://api.fiinway.com/api/v1/driver/services?driver_id=${driverId}`, {
-            headers: {
-              apikey: "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=",
-              accesstoken: token,
-            }
-          });
-          const data = await res.json();
-          if (data.success === 'success' && data.data) {
-            setDriverServices(data.data);
-          }
-        } else if (userId) {
-          const res = await fetch(`https://api.fiinway.com/api/v1/user-categories`, {
-            headers: {
-              apikey: "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=",
-              accesstoken: token,
-            }
-          });
-          const data = await res.json();
-          if (data.success === 'success' && data.data) {
-             setUserCategories(data.data);
-          }
-        }
-        
         // Fetch History
         const histRes = await fetch(`https://api.fiinway.com/api/v1/service-history?user_id=${userId || driverId}`, {
           headers: {
@@ -69,6 +46,18 @@ function MoreContent() {
         const histData = await histRes.json();
         if (histData.success === 'success' && histData.data) {
           setHistory(histData.data);
+        }
+
+        // Fetch Home Services
+        const svcsRes = await fetch(`https://api.fiinway.com/api/v1/home-services`, {
+          headers: {
+            apikey: "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=",
+            accesstoken: token,
+          }
+        });
+        const svcsData = await svcsRes.json();
+        if (svcsData.success === 'success' && svcsData.data) {
+          setHomeServices(svcsData.data);
         }
 
       } catch (err) {
@@ -252,40 +241,26 @@ function MoreContent() {
           ))}
 
           {/* User View */}
-          {userId && userCategories.length === 0 && (
-            <div className="p-8 bg-white rounded-2xl text-center text-slate-500 shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-100">
-              No services currently available.
-            </div>
-          )}
-          {userId && userCategories.map((category) => (
-            <div key={category.id} className="mb-10 last:mb-0">
+          {userId && STATIC_CATEGORIES.map((category, idx) => (
+            <div key={idx} className="mb-10 last:mb-0">
               <div className="flex items-center gap-3 mb-5 px-1">
-                <div className="w-10 h-10 rounded-xl bg-white shadow-sm border border-slate-100 flex items-center justify-center p-2">
-                  <img src={getImageUrl(category.image)} alt={category.libelle} className="w-full h-full object-contain opacity-80" />
+                <div className="w-10 h-10 rounded-xl bg-slate-50 shadow-sm border border-slate-100 flex items-center justify-center text-xl">
+                  {category.icon}
                 </div>
-                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{category.libelle}</h2>
+                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{category.title}</h2>
               </div>
               
-              {category.subcategories && category.subcategories.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {category.subcategories.map((sub: any) => (
-                    <div 
-                      key={sub.id} 
-                      onClick={() => { setSelectedService(sub); setView('BOOKING'); }}
-                      className="group flex flex-col items-center p-5 rounded-2xl bg-white border border-slate-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] hover:-translate-y-1 transition-all duration-300 cursor-pointer"
-                    >
-                      <div className="w-16 h-16 rounded-2xl bg-slate-50/80 flex items-center justify-center p-3 mb-4 group-hover:bg-blue-50/50 transition-colors">
-                        <img src={getImageUrl(sub.image)} alt={sub.libelle} className="w-full h-full object-contain" />
-                      </div>
-                      <span className="font-bold text-[14px] text-center text-slate-800 leading-snug">{sub.libelle}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-6 rounded-2xl bg-slate-50/50 border border-slate-200 border-dashed text-center">
-                  <p className="text-sm text-slate-400 font-medium">No services listed yet.</p>
-                </div>
-              )}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {category.services.map((serviceName, subIdx) => (
+                  <div 
+                    key={subIdx} 
+                    onClick={() => { setSelectedService({ libelle: serviceName, image: null }); setView('BOOKING'); }}
+                    className="group flex flex-col items-center p-5 rounded-2xl bg-white border border-slate-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] hover:-translate-y-1 transition-all duration-300 cursor-pointer text-center"
+                  >
+                    <span className="font-bold text-[14px] text-slate-800 leading-snug">{serviceName}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>
