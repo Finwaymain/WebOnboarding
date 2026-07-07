@@ -58,6 +58,19 @@ function MoreContent() {
              setUserCategories(data.data);
           }
         }
+        
+        // Fetch History
+        const histRes = await fetch(`https://api.fiinway.com/api/v1/service-history?user_id=${userId || driverId}`, {
+          headers: {
+            apikey: "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=",
+            accesstoken: token,
+          }
+        });
+        const histData = await histRes.json();
+        if (histData.success === 'success' && histData.data) {
+          setHistory(histData.data);
+        }
+
       } catch (err) {
         console.error("Error fetching data:", err);
       } finally {
@@ -114,26 +127,41 @@ function MoreContent() {
   const handleSubmitBooking = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // In a real implementation, you would post `mediaFiles` to your Laravel API.
-    // The Laravel API will then take the `base64` string and use its internal
-    // `config('imagekit.private_key')` to upload it securely to ImageKit!
-    /*
-    await fetch('https://api.fiinway.com/api/v1/book-service', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: '...' },
-      body: JSON.stringify({
-        date: bookingDate,
-        time: bookingTime,
-        description,
-        media: mediaFiles
-      })
-    });
-    */
-
-    // Simulate API call
-    setTimeout(() => {      
-      setView('SUCCESS');
-    }, 800);
+    try {
+      setLoading(true);
+      const res = await fetch('https://api.fiinway.com/api/v1/book-service', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'apikey': "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=",
+          'accesstoken': token || ""
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          driver_id: driverId,
+          service_name: selectedService?.libelle || "Custom Service",
+          address_type: addressType,
+          lat: locationCoords?.lat,
+          lng: locationCoords?.lng,
+          date: bookingDate,
+          time: bookingTime,
+          description,
+          media: mediaFiles
+        })
+      });
+      
+      const data = await res.json();
+      if (data.success === 'success') {
+        setView('SUCCESS');
+      } else {
+        alert("Booking failed: " + (data.message || "Unknown error"));
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Something went wrong");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetForm = () => {
