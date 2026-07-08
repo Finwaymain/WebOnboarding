@@ -30,6 +30,10 @@ function MoreContent() {
   // History State
   const [history, setHistory] = useState<any[]>([]);
 
+  // Search & Accordion State
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedCategory, setExpandedCategory] = useState<number | null>(null);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -228,80 +232,107 @@ function MoreContent() {
     );
   };
 
-  const renderServices = () => (
-    <div className="animate-in fade-in slide-in-from-bottom-2 duration-700">
-      <div className="mb-8">
-        <h1 className="text-[32px] font-black text-slate-900 tracking-tight leading-tight mb-2">
-          {driverId ? "Your Services" : "Discover."}
-        </h1>
-        <p className="text-slate-500 font-medium text-[15px]">
-          {driverId ? "Categories you are authorized for." : "Find the right professional for your needs."}
-        </p>
-      </div>
+  const renderServices = () => {
+    const filteredHomeServices = homeServices.map(cat => {
+      const filteredSub = cat.services.filter((svc: any) => svc.libelle.toLowerCase().includes(searchQuery.toLowerCase()));
+      return { ...cat, services: filteredSub };
+    }).filter(cat => cat.title.toLowerCase().includes(searchQuery.toLowerCase()) || cat.services.length > 0);
 
-      {loading ? (
-        <div className="flex justify-center items-center py-12">
-          <div className="w-8 h-8 border-[3px] border-slate-200 border-t-slate-900 rounded-full animate-spin"></div>
+    const filteredDriverServices = driverServices.filter(svc => svc.title.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    return (
+      <div className="animate-in fade-in slide-in-from-bottom-2 duration-700">
+        <div className="mb-8 relative">
+          <input 
+            type="text" 
+            placeholder={driverId ? "Search your services..." : "Search for services..."} 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-white border border-slate-200/60 rounded-2xl py-4 pl-12 pr-4 text-[15px] font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 transition-all shadow-[0_2px_12px_rgb(0,0,0,0.02)]"
+          />
+          <svg className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
         </div>
-      ) : (
-        <div className="space-y-12 mb-8">
-          {driverId && driverServices.length === 0 && (
-            <div className="p-8 bg-white/60 rounded-3xl text-center text-slate-500 border border-slate-200/60 backdrop-blur-md">
-              No active services found.
-            </div>
-          )}
 
-          {driverId && driverServices.map((service) => (
-            <div key={service.id} className="group p-5 bg-white rounded-3xl border border-slate-200/60 hover:border-slate-300 transition-all duration-300 shadow-[0_2px_20px_rgb(0,0,0,0.02)]">
-              <div className="flex items-center gap-5">
-                <div className="w-16 h-16 bg-slate-50 rounded-2xl overflow-hidden flex-shrink-0 border border-slate-100">
-                  <img src={getImageUrl(service.image)} alt={service.title} className="w-full h-full object-cover p-2" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-bold text-slate-900">{service.title}</h3>
-                  <span className={`inline-block mt-2 px-2.5 py-1 text-[11px] font-bold rounded-lg ${service.statut === 'yes' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                    {service.statut === 'yes' ? 'ACTIVE' : 'PENDING'}
-                  </span>
+        {loading ? (
+          <div className="flex justify-center items-center py-12">
+            <div className="w-8 h-8 border-[3px] border-slate-200 border-t-slate-900 rounded-full animate-spin"></div>
+          </div>
+        ) : (
+          <div className="space-y-4 mb-8">
+            {driverId && filteredDriverServices.length === 0 && (
+              <div className="p-8 bg-white/60 rounded-3xl text-center text-slate-500 border border-slate-200/60 backdrop-blur-md">
+                No active services found.
+              </div>
+            )}
+
+            {driverId && filteredDriverServices.map((service) => (
+              <div key={service.id} className="group p-5 bg-white rounded-3xl border border-slate-200/60 hover:border-slate-300 transition-all duration-300 shadow-[0_2px_20px_rgb(0,0,0,0.02)]">
+                <div className="flex items-center gap-5">
+                  <div className="w-16 h-16 bg-slate-50 rounded-2xl overflow-hidden flex-shrink-0 border border-slate-100">
+                    <img src={getImageUrl(service.image)} alt={service.title} className="w-full h-full object-cover p-2" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold text-slate-900">{service.title}</h3>
+                    <span className={`inline-block mt-2 px-2.5 py-1 text-[11px] font-bold rounded-lg ${service.statut === 'yes' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                      {service.statut === 'yes' ? 'ACTIVE' : 'PENDING'}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
 
-          {!driverId && homeServices.map((category, idx) => (
-            <div key={idx} className="relative">
-              <div className="flex items-center gap-3 mb-5 pl-1">
-                <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center text-lg border border-slate-200/50">
-                  {category.icon}
-                </div>
-                <h2 className="text-[20px] font-bold text-slate-900 tracking-tight">{category.title}</h2>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                {category.services.map((svc: any, sIdx: number) => (
+            {!driverId && filteredHomeServices.map((category, idx) => {
+              const isExpanded = expandedCategory === idx || searchQuery.length > 0;
+              return (
+                <div key={idx} className="bg-white rounded-[24px] border border-slate-200/60 shadow-[0_2px_12px_rgb(0,0,0,0.02)] overflow-hidden">
                   <div 
-                    key={sIdx} 
-                    onClick={() => { setSelectedService({ libelle: svc.libelle, image: svc.image }); setView('BOOKING'); }}
-                    className="group relative p-4 bg-white rounded-[20px] border border-slate-200/60 hover:border-slate-800 transition-all duration-300 cursor-pointer shadow-[0_2px_12px_rgb(0,0,0,0.02)] hover:shadow-[0_8px_24px_rgb(0,0,0,0.08)] active:scale-[0.98] flex flex-col justify-between min-h-[100px]"
+                    onClick={() => setExpandedCategory(isExpanded && !searchQuery ? null : idx)}
+                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors"
                   >
-                    {svc.image && (
-                      <div className="w-full h-16 mb-3 rounded-xl overflow-hidden bg-slate-50 border border-slate-100 flex-shrink-0">
-                        <img src={getImageUrl(svc.image)} alt={svc.libelle} className="w-full h-full object-cover" />
+                    <div className="flex items-center gap-3 pl-1">
+                      <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center text-xl border border-slate-200/50">
+                        {category.icon}
                       </div>
-                    )}
-                    <span className="font-bold text-[14px] text-slate-800 leading-snug group-hover:text-slate-900">{svc.libelle}</span>
-                    <div className="flex justify-end mt-2">
-                      <div className="w-7 h-7 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:bg-slate-900 group-hover:border-slate-900 transition-colors duration-300">
-                        <svg className="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7"></path></svg>
-                      </div>
+                      <h2 className="text-[18px] font-bold text-slate-900 tracking-tight">{category.title}</h2>
+                    </div>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform duration-300 ${isExpanded ? 'rotate-180 bg-slate-100' : 'bg-slate-50'}`}>
+                      <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"></path></svg>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+                  
+                  {isExpanded && (
+                    <div className="px-4 pb-4 pt-2 border-t border-slate-100 animate-in slide-in-from-top-2 duration-300">
+                      <div className="grid grid-cols-2 gap-3">
+                        {category.services.map((svc: any, sIdx: number) => (
+                          <div 
+                            key={sIdx} 
+                            onClick={() => { setSelectedService({ libelle: svc.libelle, image: svc.image }); setView('BOOKING'); }}
+                            className="group relative p-4 bg-slate-50/50 rounded-[20px] border border-slate-200/60 hover:border-slate-800 hover:bg-white transition-all duration-300 cursor-pointer hover:shadow-[0_8px_24px_rgb(0,0,0,0.08)] active:scale-[0.98] flex flex-col justify-between min-h-[100px]"
+                          >
+                            {svc.image && (
+                              <div className="w-full h-16 mb-3 rounded-xl overflow-hidden bg-white border border-slate-100 flex-shrink-0">
+                                <img src={getImageUrl(svc.image)} alt={svc.libelle} className="w-full h-full object-cover" />
+                              </div>
+                            )}
+                            <span className="font-bold text-[14px] text-slate-800 leading-snug group-hover:text-slate-900">{svc.libelle}</span>
+                            <div className="flex justify-end mt-2">
+                              <div className="w-7 h-7 rounded-full bg-white border border-slate-200 flex items-center justify-center group-hover:bg-slate-900 group-hover:border-slate-900 transition-colors duration-300">
+                                <svg className="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7"></path></svg>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderBookingForm = () => (
     <div className="animate-in fade-in slide-in-from-right-4 duration-500 pb-10">
