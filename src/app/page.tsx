@@ -150,6 +150,7 @@ function OnboardingForm() {
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [deliveryVehicleRole, setDeliveryVehicleRole] = useState<any>(null);
   const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({});
+  const [step3Tab, setStep3Tab] = useState<'docs' | 'zone' | 'kyc'>('docs');
 
   const toggleDropdown = (key: string) => {
     setOpenDropdowns(prev => ({ ...prev, [key]: !prev[key] }));
@@ -425,7 +426,7 @@ function OnboardingForm() {
             {/* Step 3 */}
             <div className="flex flex-col items-center">
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shadow-sm ${step >= 3 ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-600'}`}>3</div>
-              <span className={`text-[10px] mt-2 font-medium ${step >= 3 ? 'text-gray-800' : 'text-gray-400'}`}>Review</span>
+              <span className={`text-[10px] mt-2 font-medium ${step >= 3 ? 'text-gray-800' : 'text-gray-400'}`}>KYC & Docs</span>
             </div>
           </div>
           )}
@@ -626,38 +627,32 @@ function OnboardingForm() {
                     {isFleetOwner() && <h3 className="font-bold text-xs text-green-600 mb-3 uppercase tracking-wider">Vehicle {index + 1}</h3>}
 
                     <div className="space-y-3">
-                      <div className="relative z-40">
-                        <label className="block text-xs font-semibold text-gray-700 mb-1">Vehicle Category</label>
-                        <div
-                          className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-xl px-3 py-2.5 flex justify-between items-center cursor-pointer transition-all font-medium text-sm"
-                          onClick={() => toggleDropdown(`veh_cat_${veh.id}`)}
-                        >
-                          <span className={veh.type_id ? "text-gray-900" : "text-gray-400"}>
-                            {availableTypes.find((t: any) => t.id == veh.type_id)?.name || "Select Category..."}
-                          </span>
-                          <svg className={`w-4 h-4 text-gray-400 transition-transform ${openDropdowns[`veh_cat_${veh.id}`] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-                          </svg>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-2">What do you drive?</label>
+                        <div className="grid grid-cols-3 gap-3">
+                          {availableTypes.map((t: any) => {
+                            const isSelected = veh.type_id == t.id;
+                            return (
+                              <div
+                                key={t.id}
+                                onClick={() => updateVehicle(veh.id, 'type_id', t.id.toString())}
+                                className={`relative rounded-xl p-2 flex flex-col items-center justify-start text-center cursor-pointer transition-all shadow-sm ${isSelected ? 'bg-green-100 border-2 border-green-600' : 'bg-white border border-gray-200 hover:border-gray-300'}`}
+                              >
+                                <img
+                                  src={t.image || `https://placehold.co/80x60/${isSelected ? 'dcfce7' : 'f8f9fa'}/333333?text=${t.name.split(' ')[0]}`}
+                                  alt={t.name}
+                                  className="h-12 object-contain mb-2 mix-blend-multiply"
+                                />
+                                <h3 className="text-[11px] font-bold text-gray-900 leading-tight mb-1">{t.name}</h3>
+                                {isSelected && (
+                                  <div className="absolute -top-1.5 -right-1.5 bg-green-600 text-white rounded-full p-0.5 shadow-md">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" /></svg>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
-                        {openDropdowns[`veh_cat_${veh.id}`] && (
-                          <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                            <div className="max-h-[200px] overflow-y-auto divide-y divide-gray-50">
-                              {availableTypes.map((t: any) => (
-                                <div
-                                  key={t.id}
-                                  className={`px-4 py-3 flex items-center justify-between cursor-pointer transition-colors text-sm ${veh.type_id == t.id ? 'bg-green-50 text-green-700 font-bold' : 'text-gray-700 font-medium hover:bg-gray-50'}`}
-                                  onClick={() => {
-                                    updateVehicle(veh.id, 'type_id', t.id.toString());
-                                    toggleDropdown(`veh_cat_${veh.id}`);
-                                  }}
-                                >
-                                  {t.name}
-                                  {veh.type_id == t.id && <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
@@ -774,76 +769,142 @@ function OnboardingForm() {
           )}
 
           {step === 3 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-sm font-bold text-gray-800">Required Documents</h2>
-                <span className="text-[10px] font-bold px-2 py-1 bg-green-100 text-green-700 rounded-full">Secure Upload</span>
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {/* Tab Bar */}
+              <div className="flex bg-gray-100 p-1 rounded-xl mb-4">
+                <button
+                  onClick={() => setStep3Tab('docs')}
+                  className={`flex-1 py-2 text-[12px] font-bold rounded-lg transition-all ${step3Tab === 'docs' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                >
+                  📋 Documents
+                </button>
+                <button
+                  onClick={() => setStep3Tab('zone')}
+                  className={`flex-1 py-2 text-[12px] font-bold rounded-lg transition-all ${step3Tab === 'zone' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                >
+                  📍 Zone
+                </button>
+                <button
+                  onClick={() => setStep3Tab('kyc')}
+                  className={`flex-1 py-2 text-[12px] font-bold rounded-lg transition-all ${step3Tab === 'kyc' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                >
+                  🏦 KYC & Bank
+                </button>
               </div>
 
-              <div className="space-y-3">
-                {adminDocs
-                  .filter(doc => businessRequiresVehicle() || ![0, 2, 3, 4].includes(doc.id))
-                  .map(doc => {
-                    const file = documents[`doc_${doc.id}`];
-                    return (
-                      <div key={doc.id} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between group hover:border-gray-300 transition-colors">
-                        <div className="flex-1 pr-3">
-                          <p className="font-semibold text-gray-800 text-[13px] mb-0.5">{doc.title}</p>
-                          <p className={`text-[10px] font-medium ${file ? 'text-green-600' : 'text-red-500'}`}>
-                            {file ? "✓ " + file.name : "Required"}
-                          </p>
-                        </div>
-                        <div>
-                          <label className="cursor-pointer bg-gray-50 hover:bg-gray-100 text-gray-700 font-semibold text-[11px] px-3 py-2 rounded-lg transition-colors inline-block border border-gray-200 shadow-sm">
-                            {file ? 'Change' : 'Upload'}
-                            <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(doc.id, e.target.files?.[0] || null)} />
-                          </label>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-
-              <div className="pt-4 border-t border-gray-200 mt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-bold text-gray-800">Operational Zone</h2>
-                  <span className="text-[10px] font-bold px-2 py-1 bg-amber-100 text-amber-700 rounded-full">Required for Assignment</span>
-                </div>
-                <div className="mb-4">
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Select your working zone</label>
-                  <select 
-                    value={zoneId} 
-                    onChange={e => setZoneId(e.target.value)} 
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-600 focus:outline-none"
+              {/* Documents Tab */}
+              {step3Tab === 'docs' && (
+                <div className="animate-in fade-in duration-300">
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-sm font-bold text-gray-800">Required Documents</h2>
+                    <span className="text-[10px] font-bold px-2 py-1 bg-green-100 text-green-700 rounded-full">Secure Upload</span>
+                  </div>
+                  <div className="space-y-3">
+                    {adminDocs
+                      .filter(doc => businessRequiresVehicle() || doc.is_required === 'yes' || !['Driving License', 'Vehicle Registration', 'Vehicle Insurance', 'Vehicle Image'].includes(doc.title))
+                      .map(doc => {
+                        const file = documents[`doc_${doc.id}`];
+                        return (
+                          <div key={doc.id} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between group hover:border-gray-300 transition-colors">
+                            <div className="flex-1 pr-3">
+                              <p className="font-semibold text-gray-800 text-[13px] mb-0.5">{doc.title}</p>
+                              <p className={`text-[10px] font-medium ${file ? 'text-green-600' : 'text-red-500'}`}>
+                                {file ? '✓ ' + file.name : doc.is_required === 'yes' ? 'Required' : 'Optional'}
+                              </p>
+                            </div>
+                            <div>
+                              <label className="cursor-pointer bg-gray-50 hover:bg-gray-100 text-gray-700 font-semibold text-[11px] px-3 py-2 rounded-lg transition-colors inline-block border border-gray-200 shadow-sm">
+                                {file ? 'Change' : 'Upload'}
+                                <input type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(doc.id, e.target.files?.[0] || null)} />
+                              </label>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                  <button
+                    onClick={() => setStep3Tab('zone')}
+                    className="w-full mt-5 py-3 bg-green-600 text-white font-bold rounded-xl text-sm hover:bg-green-700 transition-colors"
                   >
-                    <option value="" disabled>Select a zone</option>
-                    {zonesData.map((zone: any) => (
-                      <option key={zone.id} value={zone.id}>{zone.name}</option>
-                    ))}
-                  </select>
+                    Next: Select Zone →
+                  </button>
                 </div>
-              </div>
+              )}
 
-              <div className="pt-4 border-t border-gray-200 mt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-bold text-gray-800">Bank Details</h2>
-                  <span className="text-[10px] font-bold px-2 py-1 bg-amber-100 text-amber-700 rounded-full">Required for Payouts</span>
+              {/* Zone Tab */}
+              {step3Tab === 'zone' && (
+                <div className="animate-in fade-in duration-300">
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-sm font-bold text-gray-800">Operational Zone</h2>
+                    <span className="text-[10px] font-bold px-2 py-1 bg-amber-100 text-amber-700 rounded-full">Required for Assignment</span>
+                  </div>
+                  <div className="mb-4">
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Select your working zone</label>
+                    <select
+                      value={zoneId}
+                      onChange={e => setZoneId(e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-600 focus:outline-none"
+                    >
+                      <option value="" disabled>Select a zone</option>
+                      {zonesData.map((zone: any) => (
+                        <option key={zone.id} value={zone.id}>{zone.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    onClick={() => setStep3Tab('kyc')}
+                    className="w-full mt-5 py-3 bg-green-600 text-white font-bold rounded-xl text-sm hover:bg-green-700 transition-colors"
+                  >
+                    Next: KYC & Bank Details →
+                  </button>
                 </div>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Bank Name</label>
-                    <input type="text" value={bankName} onChange={e => setBankName(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-600 focus:outline-none" placeholder="e.g. State Bank of India" />
+              )}
+
+              {/* KYC & Bank Details Tab */}
+              {step3Tab === 'kyc' && (
+                <div className="animate-in fade-in duration-300">
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-sm font-bold text-gray-800">KYC & Bank Details</h2>
+                    <span className="text-[10px] font-bold px-2 py-1 bg-amber-100 text-amber-700 rounded-full">Required for Payouts</span>
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Account Number</label>
-                    <input type="text" value={accountNo} onChange={e => setAccountNo(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-600 focus:outline-none" placeholder="Enter Account Number" />
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 flex items-start gap-2">
+                    <span className="text-amber-500 mt-0.5">🔒</span>
+                    <p className="text-[11px] text-amber-700 font-medium">Your bank details are securely stored and used only for salary and commission payouts.</p>
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">IFSC Code</label>
-                    <input type="text" value={ifscCode} onChange={e => setIfscCode(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-600 focus:outline-none" placeholder="e.g. SBIN0001234" />
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Bank Name</label>
+                      <input
+                        type="text"
+                        value={bankName}
+                        onChange={e => setBankName(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-600 focus:outline-none"
+                        placeholder="e.g. State Bank of India"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Account Number</label>
+                      <input
+                        type="text"
+                        value={accountNo}
+                        onChange={e => setAccountNo(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-600 focus:outline-none"
+                        placeholder="Enter Account Number"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">IFSC Code</label>
+                      <input
+                        type="text"
+                        value={ifscCode}
+                        onChange={e => setIfscCode(e.target.value.toUpperCase())}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-600 focus:outline-none"
+                        placeholder="e.g. SBIN0001234"
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </main>

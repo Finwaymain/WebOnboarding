@@ -50,7 +50,7 @@ function MoreContent() {
     const fetchHomeServices = async () => {
       try {
         setLoading(true);
-        const svcsRes = await fetch(`https://api.fiinway.com/api/v1/home-services`, {
+        const svcsRes = await fetch(`https://fiinway.online/api/v1/home-services`, {
           headers: {
             apikey: "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=",
             accesstoken: token,
@@ -120,7 +120,7 @@ function MoreContent() {
     e.preventDefault();
     try {
       setLoading(true);
-      const res = await fetch('https://api.fiinway.com/api/v1/book-service', {
+      const res = await fetch('https://fiinway.online/api/v1/book-service', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -182,16 +182,16 @@ function MoreContent() {
   }
 
   const getImageUrl = (path: string) => {
-    if (!path) return "https://api.fiinway.com/assets/images/placeholder_image.jpg";
+    if (!path) return "https://fiinway.online/assets/images/placeholder_image.jpg";
     if (path.startsWith("http")) return path;
-    return `https://api.fiinway.com/assets/images/service_type_images/${path}`;
+    return `https://fiinway.online/assets/images/service_type_images/${path}`;
   };
 
   const fetchHistory = async () => {
     if (!token) return;
     try {
       setLoading(true);
-      const histRes = await fetch(`https://api.fiinway.com/api/v1/service-history?user_id=${userId || driverId}`, {
+      const histRes = await fetch(`https://fiinway.online/api/v1/service-history?user_id=${userId || driverId}`, {
         headers: {
           apikey: "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=",
           accesstoken: token,
