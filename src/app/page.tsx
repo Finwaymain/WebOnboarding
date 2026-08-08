@@ -52,6 +52,9 @@ function OnboardingForm() {
   const [accountNo, setAccountNo] = useState("");
   const [ifscCode, setIfscCode] = useState("");
 
+  const [visitingCharge, setVisitingCharge] = useState("");
+  const [additionalServices, setAdditionalServices] = useState<{ id: number; name: string; price: string }[]>([]);
+
   // UI State
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -62,7 +65,12 @@ function OnboardingForm() {
   useEffect(() => {
     const fetchInitData = async () => {
       try {
-        const res = await fetch("/api/v1/driver/onboarding/init", {
+        const initUrl = new URL("/api/v1/driver/onboarding/init", window.location.origin);
+        if (driverId) {
+          initUrl.searchParams.set("driver_id", driverId);
+        }
+
+        const res = await fetch(initUrl.toString(), {
           headers: {
             "accesstoken": accesstoken || "",
             "apikey": "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU="
@@ -100,6 +108,18 @@ function OnboardingForm() {
           // Load documents from API (matches admin_documents table exactly)
           setAdminDocs(result.data.admin_docs || []);
           setZonesData(result.data.zones || []);
+
+          if (result.data.service_pricing) {
+            const pricing = result.data.service_pricing;
+            setVisitingCharge(pricing.visiting_charge?.toString() || "");
+            setAdditionalServices(
+              (pricing.service_items || []).map((item: any, index: number) => ({
+                id: Date.now() + index,
+                name: item.name || "",
+                price: item.price?.toString() || "",
+              }))
+            );
+          }
         } else {
           setInitError("Failed to load onboarding data.");
         }
@@ -110,13 +130,13 @@ function OnboardingForm() {
       }
     };
 
-    if (accesstoken) {
+    if (accesstoken || driverId) {
       fetchInitData();
     } else {
       setInitError("Missing access token.");
       setLoadingInit(false);
     }
-  }, [accesstoken]);
+  }, [accesstoken, driverId]);
 
   // Disable pinch/gesture zoom on mobile devices (e.g. iOS Safari)
   useEffect(() => {
@@ -172,11 +192,39 @@ function OnboardingForm() {
     return !!(vehicleMappings[String(businessType.id)] || vehicleMappings[businessType.id]);
   };
 
+  const businessRequiresHomeVisitPricing = () => {
+    if (!businessType || businessRequiresVehicle()) return false;
+
+    if (typeof businessType.requires_home_visit === 'boolean') {
+      return businessType.requires_home_visit;
+    }
+
+    const parentLabel = primaryCategory?.libelle || '';
+    const excluded = [
+      'Online Seller', 'Retail Shop', 'Restaurant', 'Hotel', 'Manufacturing',
+      'Transport', 'Delivery', 'Mobility', 'Logistics',
+    ];
+    return !excluded.some((term) => parentLabel.includes(term));
+  };
+
+  const step2IsPricing = () => businessRequiresHomeVisitPricing();
+
   const isFleetOwner = () => {
     return businessType?.libelle === 'Fleet Owner';
   };
 
   const canProceedToStep3 = () => {
+    if (businessRequiresHomeVisitPricing()) {
+      const charge = parseFloat(visitingCharge);
+      if (isNaN(charge) || charge < 0) return false;
+
+      return additionalServices.every((service) => {
+        if (!service.name.trim() && !service.price.trim()) return true;
+        const price = parseFloat(service.price);
+        return service.name.trim() !== '' && !isNaN(price) && price >= 0;
+      });
+    }
+
     if (!businessRequiresVehicle()) return true;
 
     // Ensure all active vehicles are fully filled
@@ -187,11 +235,25 @@ function OnboardingForm() {
   };
 
   const handleNextFromStep1 = () => {
-    if (businessRequiresVehicle()) {
-      setStep(2); // Go to vehicle setup
+    if (businessRequiresVehicle() || businessRequiresHomeVisitPricing()) {
+      setStep(2);
     } else {
-      setStep(3); // Skip straight to documents
+      setStep(3);
     }
+  };
+
+  const addServiceItem = () => {
+    setAdditionalServices((prev) => [...prev, { id: Date.now(), name: "", price: "" }]);
+  };
+
+  const removeServiceItem = (id: number) => {
+    setAdditionalServices((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const updateServiceItem = (id: number, field: "name" | "price", value: string) => {
+    setAdditionalServices((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    );
   };
 
   // Vehicle Management
@@ -261,6 +323,17 @@ function OnboardingForm() {
 
     if (businessRequiresVehicle()) {
       data.append("vehicles", JSON.stringify(vehicles));
+    }
+
+    if (businessRequiresHomeVisitPricing()) {
+      data.append("visiting_charge", visitingCharge);
+      const serviceItems = additionalServices
+        .filter((item) => item.name.trim() && item.price.trim())
+        .map((item) => ({
+          name: item.name.trim(),
+          price: item.price.trim(),
+        }));
+      data.append("service_items", JSON.stringify(serviceItems));
     }
 
     Object.entries(documents).forEach(([key, file]) => {
@@ -386,7 +459,7 @@ function OnboardingForm() {
           <div className="w-full flex items-center relative mb-2">
             <button
               onClick={() => {
-                if (step > 1) setStep(businessRequiresVehicle() && step === 3 ? 2 : 1);
+                if (step > 1) setStep(step - 1);
                 else {
                   try {
                     // @ts-ignore
@@ -401,7 +474,7 @@ function OnboardingForm() {
             </button>
             <div className="w-full text-center flex-1">
               <h1 className="text-xl font-bold text-gray-900 leading-tight tracking-tight">
-                {step === 1 ? 'Choose Services' : step === 2 ? 'Vehicle Info' : 'Upload Docs'}
+                {step === 1 ? 'Choose Services' : step === 2 ? (step2IsPricing() ? 'Service Pricing' : 'Profession Info') : 'Upload Docs'}
               </h1>
             </div>
           </div>
@@ -416,12 +489,14 @@ function OnboardingForm() {
             {/* Step 1 */}
             <div className="flex flex-col items-center">
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shadow-sm ${step >= 1 ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-600'}`}>1</div>
-              <span className={`text-[10px] mt-2 font-medium ${step >= 1 ? 'text-gray-800' : 'text-gray-400'}`}>Basic Info</span>
+              <span className={`text-[10px] mt-2 font-medium ${step >= 1 ? 'text-gray-800' : 'text-gray-400'}`}>Business Category</span>
             </div>
             {/* Step 2 */}
             <div className="flex flex-col items-center">
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shadow-sm ${step >= 2 ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-600'}`}>2</div>
-              <span className={`text-[10px] mt-2 font-medium ${step >= 2 ? 'text-gray-800' : 'text-gray-400'}`}>Vehicle</span>
+              <span className={`text-[10px] mt-2 font-medium ${step >= 2 ? 'text-gray-800' : 'text-gray-400'}`}>
+                {step2IsPricing() ? 'Pricing' : 'Profession'}
+              </span>
             </div>
             {/* Step 3 */}
             <div className="flex flex-col items-center">
@@ -606,7 +681,93 @@ function OnboardingForm() {
             </div>
           )}
 
-          {step === 2 && (
+          {step === 2 && step2IsPricing() && (
+            <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="bg-green-50 border border-green-100 rounded-xl p-4">
+                <h2 className="text-sm font-bold text-green-700 mb-1">Home Visit Service Pricing</h2>
+                <p className="text-xs text-green-600 leading-relaxed">
+                  Set your fixed visiting charge and add optional service prices customers can book (e.g. AC repair, AC installation).
+                </p>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                <label className="block text-sm font-bold text-gray-800 mb-2">Visiting Charge (Fixed)</label>
+                <p className="text-xs text-gray-500 mb-3">One-time fee for visiting the customer&apos;s home (e.g. ₹300)</p>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-semibold">₹</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="300"
+                    value={visitingCharge}
+                    onChange={(e) => setVisitingCharge(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-xl pl-8 pr-3 py-3 text-sm font-medium focus:ring-2 focus:ring-green-600 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-800">Additional Services</h3>
+                    <p className="text-xs text-gray-500 mt-1">Add custom services with your own prices</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addServiceItem}
+                    className="text-xs font-bold text-green-700 bg-green-50 px-3 py-2 rounded-lg hover:bg-green-100"
+                  >
+                    + Add Service
+                  </button>
+                </div>
+
+                {additionalServices.length === 0 ? (
+                  <div className="text-center py-6 text-gray-400 text-sm border border-dashed border-gray-200 rounded-xl">
+                    No extra services yet. Tap &quot;Add Service&quot; to add AC repair, installation, etc.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {additionalServices.map((service, index) => (
+                      <div key={service.id} className="grid grid-cols-[1fr_110px_32px] gap-2 items-end">
+                        <div>
+                          {index === 0 && <label className="block text-[10px] font-semibold text-gray-600 mb-1">Service Name</label>}
+                          <input
+                            type="text"
+                            placeholder="e.g. AC Repair"
+                            value={service.name}
+                            onChange={(e) => updateServiceItem(service.id, 'name', e.target.value)}
+                            className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-xl px-3 py-2.5 text-sm font-medium"
+                          />
+                        </div>
+                        <div>
+                          {index === 0 && <label className="block text-[10px] font-semibold text-gray-600 mb-1">Price (₹)</label>}
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            placeholder="500"
+                            value={service.price}
+                            onChange={(e) => updateServiceItem(service.id, 'price', e.target.value)}
+                            className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-xl px-3 py-2.5 text-sm font-medium"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeServiceItem(service.id)}
+                          className="h-10 w-8 flex items-center justify-center text-red-500 hover:bg-red-50 rounded-lg"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {step === 2 && !step2IsPricing() && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {vehicles.map((veh, index) => {
                 const relevantRoleId = deliveryVehicleRole ? deliveryVehicleRole.id : businessType.id;
@@ -914,11 +1075,11 @@ function OnboardingForm() {
           {step === 1 && (
             mode === 'edit_category' ? (
               <button
-                onClick={submitForm}
+                onClick={businessRequiresHomeVisitPricing() ? handleNextFromStep1 : submitForm}
                 disabled={!canProceedToStep2() || loading}
                 className="w-full py-3.5 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm"
               >
-                {loading ? 'Saving...' : 'Save Category'}
+                {loading ? 'Saving...' : businessRequiresHomeVisitPricing() ? 'Continue' : 'Save Category'}
               </button>
             ) : (
               <button
@@ -932,16 +1093,30 @@ function OnboardingForm() {
           )}
           {step === 2 && (
             <button
-              onClick={() => setStep(3)}
-              disabled={!canProceedToStep3()}
+              onClick={() => {
+                if (mode === 'edit_category') {
+                  submitForm();
+                } else {
+                  setStep(3);
+                }
+              }}
+              disabled={!canProceedToStep3() || loading}
               className="w-full py-3.5 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm"
             >
-              Continue
+              {mode === 'edit_category' ? (loading ? 'Saving...' : 'Save Category') : 'Continue'}
             </button>
           )}
           {step === 3 && (
             <button
-              onClick={submitForm}
+              onClick={() => {
+                if (step3Tab === 'docs') {
+                  setStep3Tab('zone');
+                } else if (step3Tab === 'zone') {
+                  setStep3Tab('kyc');
+                } else {
+                  submitForm();
+                }
+              }}
               disabled={loading}
               className="w-full py-3.5 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm flex items-center justify-center"
             >
@@ -950,7 +1125,7 @@ function OnboardingForm() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-              ) : "Submit Profile"}
+              ) : step3Tab === 'docs' ? 'Next: Select Zone →' : step3Tab === 'zone' ? 'Next: KYC & Bank Details →' : 'Submit Application'}
             </button>
           )}
         </div>

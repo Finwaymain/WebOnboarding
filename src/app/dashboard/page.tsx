@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, useCallback, useRef } from "react";
 
 const API_KEY = "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=";
-const API_BASE = "https://fiinway.online/api/v1";
+const getApiBase = () => (typeof window !== "undefined" ? `${window.location.origin}/api/v1` : "https://fiinway.online/api/v1");
 
 function fmtMoney(v: string | number) {
   const n = Number(v || 0);
@@ -15,6 +15,7 @@ function DashboardContent() {
   const searchParams = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
   const [driverId, setDriverId] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -35,18 +36,22 @@ function DashboardContent() {
       const d = urlParams.get("driver_id") || searchParams.get("driver_id");
       setToken(t);
       setDriverId(d);
+      setIsInitialized(true);
     }
   }, [searchParams]);
 
   const fetchStats = useCallback(async () => {
     if (!token || !driverId) return;
     try {
-      const res = await fetch(`${API_BASE}/driver-dashboard-stats/?driver_id=${driverId}`, {
+      const apiBase = getApiBase();
+      const url = `${apiBase}/driver-dashboard-stats/?driver_id=${driverId}&apikey=${encodeURIComponent(API_KEY)}&accesstoken=${encodeURIComponent(token)}`;
+      const res = await fetch(url, {
         headers: { apikey: API_KEY, accesstoken: token },
       });
       const json = await res.json();
       if (json.success === "success" && json.data) {
         setData(json.data);
+        setError("");
       } else {
         setError(json.error || "Failed to load dashboard.");
       }
@@ -60,9 +65,14 @@ function DashboardContent() {
   }, [token, driverId]);
 
   useEffect(() => {
-    if (!token || !driverId) return;
+    if (!token || !driverId) {
+      if (isInitialized) {
+        setLoading(false);
+      }
+      return;
+    }
     fetchStats();
-  }, [token, driverId, fetchStats]);
+  }, [token, driverId, fetchStats, isInitialized]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (window.scrollY === 0) {
@@ -102,7 +112,8 @@ function DashboardContent() {
     setTogglingOnline(true);
     setData((prev: any) => ({ ...prev, online: nextOnline }));
     try {
-      const res = await fetch(`${API_BASE}/change-status/`, {
+      const apiBase = getApiBase();
+      const res = await fetch(`${apiBase}/change-status/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -128,20 +139,20 @@ function DashboardContent() {
     window.location.href = url;
   };
 
+  if (!isInitialized || loading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5FA] flex items-center justify-center">
+        <div className="w-8 h-8 border-[3px] border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
   if (!token || !driverId) {
     return (
       <div className="min-h-screen bg-[#F5F5FA] flex items-center justify-center p-6 font-sans">
         <div className="bg-red-50/80 text-red-700 px-5 py-4 rounded-2xl font-medium shadow-sm border border-red-100/50">
           Unauthorized access. Missing session token or driver id.
         </div>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#F5F5FA] flex items-center justify-center">
-        <div className="w-8 h-8 border-[3px] border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
       </div>
     );
   }
