@@ -12,15 +12,19 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Keep onboarding readable in mobile WebViews that force dark mode. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #f8fafc;
+    --foreground: #0f172a;
   }
 }
 
 html, body {
   touch-action: pan-x pan-y;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 body {

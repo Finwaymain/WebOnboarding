@@ -1,15 +1,42 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useState, useEffect, useMemo } from 'react';
+import {
+  getDefaultExpandedIds,
+  getProfessionSkillHeading,
+  isHealthcareProfession,
+  isPackagePricingProfession,
+  PACKAGE_GROUP_LABELS,
+  resolveNodeIcon,
+  resolveSkillCatalogForProfession,
+} from '@/lib/skillCatalog';
+import { HOME_SERVICE_GROUPS, HomeServiceGroup } from '@/lib/homeServiceGroups';
+import { ProfessionCard, ServiceGroupCard } from '@/components/ProfessionCard';
+import { OnboardingErrorBoundary } from '@/components/OnboardingErrorBoundary';
+
+function readUrlParams() {
+  if (typeof window === 'undefined') {
+    return { driverId: null as string | null, accesstoken: null as string | null, mode: null as string | null };
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  return {
+    driverId: params.get('driver_id'),
+    accesstoken: params.get('accesstoken'),
+    mode: params.get('mode'),
+  };
+}
 
 function OnboardingForm() {
-  const searchParams = useSearchParams();
+  const [urlParams, setUrlParams] = useState(() => readUrlParams());
 
-  // URL Params
-  const driverId = searchParams.get("driver_id");
-  const accesstoken = searchParams.get("accesstoken");
-  const mode = searchParams.get("mode");
+  useEffect(() => {
+    setUrlParams(readUrlParams());
+  }, []);
+
+  const driverId = urlParams.driverId;
+  const accesstoken = urlParams.accesstoken;
+  const mode = urlParams.mode;
 
   // API Data State
   const [loadingInit, setLoadingInit] = useState(true);
@@ -54,8 +81,18 @@ function OnboardingForm() {
 
   const [visitingCharge, setVisitingCharge] = useState("");
   const [additionalServices, setAdditionalServices] = useState<{ id: number; name: string; price: string }[]>([]);
+  const [homeServiceCatalog, setHomeServiceCatalog] = useState<any[]>([]);
+  const [selectedSkillIds, setSelectedSkillIds] = useState<number[]>([]);
+  const [expandedSkillGroups, setExpandedSkillGroups] = useState<Record<number, boolean>>({});
+  const [homeServiceGroups, setHomeServiceGroups] = useState<HomeServiceGroup[]>(HOME_SERVICE_GROUPS);
+  const [selectedHomeGroup, setSelectedHomeGroup] = useState<HomeServiceGroup | null>(null);
+  const [professionSearch, setProfessionSearch] = useState('');
 
   // UI State
+  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
+  const [deliveryVehicleRole, setDeliveryVehicleRole] = useState<any>(null);
+  const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({});
+  const [step3Tab, setStep3Tab] = useState<'docs' | 'zone' | 'kyc'>('docs');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -108,6 +145,11 @@ function OnboardingForm() {
           // Load documents from API (matches admin_documents table exactly)
           setAdminDocs(result.data.admin_docs || []);
           setZonesData(result.data.zones || []);
+          setHomeServiceCatalog(result.data.home_service_catalog || []);
+          if (Array.isArray(result.data.home_service_groups) && result.data.home_service_groups.length > 0) {
+            setHomeServiceGroups(result.data.home_service_groups);
+          }
+          setSelectedSkillIds(result.data.selected_skills || []);
 
           if (result.data.service_pricing) {
             const pricing = result.data.service_pricing;
@@ -159,18 +201,164 @@ function OnboardingForm() {
     };
   }, []);
 
+  const isHomeServicesCategory = (category: any = primaryCategory) => {
+    const label = (category?.libelle || '').toLowerCase();
+    return label.includes('home services');
+  };
+
+  const isHealthcareBusinessType = () => isHealthcareProfession(businessType?.libelle || '');
+
+  const isPackagePricingFlow = () => isPackagePricingProfession(businessType?.libelle || '');
+
+  const skillCatalogForDisplay = useMemo(
+    () => resolveSkillCatalogForProfession(homeServiceCatalog, businessType?.libelle || ''),
+    [homeServiceCatalog, businessType?.id, businessType?.libelle]
+  );
+
+  const skillSectionHeading = useMemo(
+    () => getProfessionSkillHeading(businessType?.libelle || ''),
+    [businessType?.libelle]
+  );
+
+  const findSkillNodeById = (nodes: any[], targetId: number): any | null => {
+    for (const node of nodes) {
+      if (node.id === targetId) return node;
+      if (node.children?.length) {
+        const found = findSkillNodeById(node.children, targetId);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const findSkillPathLabels = (nodes: any[], targetId: number, trail: string[] = []): string[] | null => {
+    for (const node of nodes) {
+      const nextTrail = [...trail, node.libelle];
+      if (node.id === targetId) return nextTrail;
+      if (node.children?.length) {
+        const found = findSkillPathLabels(node.children, targetId, nextTrail);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const prefillPackageRowsFromSkills = () => {
+    const packageNames: string[] = [];
+    selectedSkillIds.forEach((skillId) => {
+      const path = findSkillPathLabels(homeServiceCatalog, skillId) || [];
+      const isPackageLeaf = PACKAGE_GROUP_LABELS.some((group) => path.includes(group));
+      if (!isPackageLeaf) return;
+      const node = findSkillNodeById(homeServiceCatalog, skillId);
+      if (node?.libelle) packageNames.push(node.libelle);
+    });
+
+    if (packageNames.length === 0) return;
+
+    setAdditionalServices((prev) => {
+      const existing = new Set(prev.map((item) => item.name.trim().toLowerCase()));
+      const rows = [...prev];
+      packageNames.forEach((name, index) => {
+        if (existing.has(name.trim().toLowerCase())) return;
+        rows.push({ id: Date.now() + index, name, price: '' });
+      });
+      return rows;
+    });
+  };
+
+  useEffect(() => {
+    if (!businessType || skillCatalogForDisplay.length === 0) return;
+    setExpandedSkillGroups((prev) => ({
+      ...prev,
+      ...getDefaultExpandedIds(skillCatalogForDisplay),
+    }));
+  }, [businessType?.id, skillCatalogForDisplay]);
+
+  const isLeafSkillNode = (node: any) => !node?.has_children && (!node?.children || node.children.length === 0);
+
+  const toggleSkillSelection = (skillId: number) => {
+    setSelectedSkillIds((prev) =>
+      prev.includes(skillId) ? prev.filter((id) => id !== skillId) : [...prev, skillId]
+    );
+  };
+
+  const toggleSkillGroup = (groupId: number) => {
+    setExpandedSkillGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
+  };
+
+  const renderSkillNodes = (nodes: any[], depth = 0) => {
+    return nodes.map((node) => {
+      const hasChildren = node.children && node.children.length > 0;
+      const isLeaf = isLeafSkillNode(node);
+      const isSelected = selectedSkillIds.includes(node.id);
+
+      if (hasChildren) {
+        const expanded = expandedSkillGroups[node.id] ?? depth === 0;
+        return (
+          <div key={node.id} className="mb-2">
+            <button
+              type="button"
+              onClick={() => toggleSkillGroup(node.id)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-left gap-2"
+            >
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="text-base shrink-0" aria-hidden>{resolveNodeIcon(node)}</span>
+                <span className="text-sm font-semibold text-gray-800 truncate">{node.libelle}</span>
+              </span>
+              <svg className={`w-4 h-4 text-gray-500 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            {expanded && (
+              <div className={`mt-2 space-y-2 ${depth === 0 ? 'pl-2' : 'pl-3 border-l border-gray-100 ml-2'}`}>
+                {renderSkillNodes(node.children, depth + 1)}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      if (!isLeaf) return null;
+
+      return (
+        <label
+          key={node.id}
+          className={`flex items-center gap-3 px-3 py-3 rounded-xl border cursor-pointer transition-colors ${isSelected ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-200 hover:border-slate-300'}`}
+        >
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => toggleSkillSelection(node.id)}
+            className="w-5 h-5 accent-emerald-600 shrink-0"
+          />
+          <span className="text-sm font-medium text-slate-800 flex-1 leading-snug">{node.libelle}</span>
+        </label>
+      );
+    });
+  };
+
+  const homeServiceProfessions = useMemo(() => {
+    if (!primaryCategory?.subcategories?.length) return [];
+    if (!selectedHomeGroup) return [];
+
+    const allowed = new Set(selectedHomeGroup.professions);
+    const query = professionSearch.trim().toLowerCase();
+
+    return primaryCategory.subcategories.filter((sub: any) => {
+      if (!allowed.has(sub.libelle)) return false;
+      if (!query) return true;
+      return (sub.libelle || '').toLowerCase().includes(query);
+    });
+  }, [primaryCategory, selectedHomeGroup, professionSearch]);
+
   // Validation
   const canProceedToStep2 = () => {
     if (!primaryCategory || !businessType) return false;
+    if (isHomeServicesCategory() && selectedSkillIds.length === 0) return false;
     if (primaryCategory?.libelle && ['Delivery', 'Logistics'].some(t => primaryCategory.libelle.includes(t)) && !deliveryVehicleRole) return false;
     if (providesDelivery && secondaryTypes.length === 0) return false;
     return true;
   };
-
-  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
-  const [deliveryVehicleRole, setDeliveryVehicleRole] = useState<any>(null);
-  const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({});
-  const [step3Tab, setStep3Tab] = useState<'docs' | 'zone' | 'kyc'>('docs');
 
   const toggleDropdown = (key: string) => {
     setOpenDropdowns(prev => ({ ...prev, [key]: !prev[key] }));
@@ -194,17 +382,7 @@ function OnboardingForm() {
 
   const businessRequiresHomeVisitPricing = () => {
     if (!businessType || businessRequiresVehicle()) return false;
-
-    if (typeof businessType.requires_home_visit === 'boolean') {
-      return businessType.requires_home_visit;
-    }
-
-    const parentLabel = primaryCategory?.libelle || '';
-    const excluded = [
-      'Online Seller', 'Retail Shop', 'Restaurant', 'Hotel', 'Manufacturing',
-      'Transport', 'Delivery', 'Mobility', 'Logistics',
-    ];
-    return !excluded.some((term) => parentLabel.includes(term));
+    return isHomeServicesCategory() || businessType.requires_home_visit === true;
   };
 
   const step2IsPricing = () => businessRequiresHomeVisitPricing();
@@ -215,6 +393,14 @@ function OnboardingForm() {
 
   const canProceedToStep3 = () => {
     if (businessRequiresHomeVisitPricing()) {
+      if (isPackagePricingFlow()) {
+        return additionalServices.every((service) => {
+          if (!service.name.trim() && !service.price.trim()) return true;
+          const price = parseFloat(service.price);
+          return service.name.trim() !== '' && (service.price.trim() === '' || (!isNaN(price) && price >= 0));
+        });
+      }
+
       const charge = parseFloat(visitingCharge);
       if (isNaN(charge) || charge < 0) return false;
 
@@ -236,6 +422,9 @@ function OnboardingForm() {
 
   const handleNextFromStep1 = () => {
     if (businessRequiresVehicle() || businessRequiresHomeVisitPricing()) {
+      if (businessRequiresHomeVisitPricing() && isPackagePricingFlow()) {
+        prefillPackageRowsFromSkills();
+      }
       setStep(2);
     } else {
       setStep(3);
@@ -315,6 +504,9 @@ function OnboardingForm() {
     const data = new FormData();
     data.append("driver_id", driverId);
     data.append("primary_category_id", businessType.id.toString());
+    if (businessType?.libelle) {
+      data.append("business_subcategory_label", businessType.libelle);
+    }
     if (mode) data.append("mode", mode);
 
     if (secondaryTypes.length > 0) {
@@ -326,14 +518,17 @@ function OnboardingForm() {
     }
 
     if (businessRequiresHomeVisitPricing()) {
-      data.append("visiting_charge", visitingCharge);
+      if (!isPackagePricingFlow() || visitingCharge.trim() !== '') {
+        data.append("visiting_charge", visitingCharge);
+      }
       const serviceItems = additionalServices
-        .filter((item) => item.name.trim() && item.price.trim())
+        .filter((item) => item.name.trim())
         .map((item) => ({
           name: item.name.trim(),
           price: item.price.trim(),
         }));
       data.append("service_items", JSON.stringify(serviceItems));
+      data.append("selected_skills", JSON.stringify(selectedSkillIds));
     }
 
     Object.entries(documents).forEach(([key, file]) => {
@@ -432,30 +627,49 @@ function OnboardingForm() {
   }
 
   if (initError) {
-    return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-red-500">{initError}</div>;
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+        <p className="text-red-600 font-semibold mb-2">{initError}</p>
+        <p className="text-sm text-slate-500">Close onboarding and open it again from the driver app.</p>
+      </div>
+    );
+  }
+
+  if (!categoriesData.length) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+        <p className="text-slate-800 font-semibold mb-2">No service categories available</p>
+        <p className="text-sm text-slate-500">Please try again in a few minutes or contact support.</p>
+      </div>
+    );
   }
 
   // Allowed Delivery Types for this business
-  const allowedDeliveryTypes = businessType ? (transportDeliveryMap[businessType.libelle] || []) : [];
+  const allowedDeliveryTypes = businessType
+    ? (transportDeliveryMap[businessType.libelle] || []).filter((type: string) => {
+        if (businessType.libelle === 'Cab Driver' || businessType.libelle?.toLowerCase().includes('cab')) {
+          return !type.toLowerCase().includes('logistic');
+        }
+        return true;
+      })
+    : [];
 
   return (
-    <div className="bg-slate-50 sm:bg-gray-100 antialiased text-gray-800 min-h-screen sm:flex sm:items-center sm:justify-center">
+    <div className="bg-slate-100 min-h-screen antialiased text-slate-800">
       <style dangerouslySetInnerHTML={{
         __html: `
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: #f1f1f1; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        .app-container { width: 100%; height: 100vh; background-color: #ffffff; position: relative; display: flex; flex-direction: column; overflow: hidden; }
+        html, body { height: auto; min-height: 100%; overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+        .onboarding-shell { width: 100%; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; background: #f8fafc; }
+        .onboarding-header { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(10px); background: rgba(255,255,255,0.95); }
+        .onboarding-main { flex: 1; padding: 1rem 1rem 6.5rem; }
+        .onboarding-footer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom)); background: rgba(255,255,255,0.96); border-top: 1px solid #e2e8f0; backdrop-filter: blur(8px); }
         @media (min-width: 640px) {
-          .app-container { width: 375px; height: 812px; max-height: 90vh; border-radius: 40px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); border: 8px solid #333; }
+          .onboarding-shell { max-width: 420px; margin: 0 auto; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; box-shadow: 0 10px 40px rgba(15,23,42,0.08); }
+          .onboarding-footer { max-width: 420px; left: 50%; transform: translateX(-50%); }
         }
-        .scrollable-content { -ms-overflow-style: none; scrollbar-width: none; }
-        .scrollable-content::-webkit-scrollbar { display: none; }
       `}} />
-      <div className="app-container">
-        {/* Header (Fixed) */}
-        <header className="bg-white px-4 pt-12 pb-4 sm:pt-6 sticky top-0 z-10 flex flex-col items-center border-b border-gray-100">
+      <div className="onboarding-shell">
+        <header className="onboarding-header px-4 pt-10 pb-4 border-b border-slate-100">
           <div className="w-full flex items-center relative mb-2">
             <button
               onClick={() => {
@@ -507,8 +721,7 @@ function OnboardingForm() {
           )}
         </header>
 
-        {/* Content Area */}
-        <main className="flex-1 overflow-y-auto bg-white px-4 py-6 scrollable-content pb-32">
+        <main className="onboarding-main space-y-5">
           {error && (
             <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-6 font-medium text-sm border border-red-100 flex items-start">
               <svg className="w-5 h-5 mr-3 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -533,8 +746,8 @@ function OnboardingForm() {
                 </div>
 
                 {isCategoryOpen && (
-                  <div className="absolute z-50 left-0 right-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                    <div className="max-h-[300px] overflow-y-auto divide-y divide-gray-50">
+                  <div className="mt-2 bg-white border border-slate-100 rounded-2xl shadow-lg overflow-hidden">
+                    <div className="divide-y divide-slate-50">
                       {categoriesData.map((cat: any) => (
                         <div
                           key={cat.id}
@@ -546,6 +759,10 @@ function OnboardingForm() {
                             setSecondaryTypes([]);
                             setIsCategoryOpen(false);
                             setDeliveryVehicleRole(null);
+                            setSelectedSkillIds([]);
+                            setExpandedSkillGroups({});
+                            setSelectedHomeGroup(null);
+                            setProfessionSearch('');
                           }}
                         >
                           {cat.libelle}
@@ -563,42 +780,144 @@ function OnboardingForm() {
                 <section className="mb-8 animate-in fade-in slide-in-from-top-2 duration-300">
                   <div className="flex items-center space-x-2 mb-4 px-1">
                     <span className="text-green-600 text-xl">
-                      {["Transport & Mobility", "Delivery & Logistics", "Services"].findIndex(n => primaryCategory.libelle.includes(n)) === 0 ? "🚘" : "💼"}
+                      {isHomeServicesCategory() ? '🧹' : ['Transport & Mobility', 'Delivery & Logistics'].some((n) => primaryCategory.libelle.includes(n)) ? '🚘' : '💼'}
                     </span>
                     <h2 className="text-sm font-bold text-green-600 tracking-wide">
-                      Select Vehicle
+                      {isHomeServicesCategory()
+                        ? selectedHomeGroup
+                          ? `${selectedHomeGroup.emoji} ${selectedHomeGroup.group}`
+                          : 'Choose Service Group'
+                        : ['Transport & Mobility', 'Delivery & Logistics'].some((n) => primaryCategory.libelle.includes(n))
+                          ? 'Select Vehicle'
+                          : 'Select Your Service'}
                     </h2>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {primaryCategory.subcategories.map((sub: any) => {
-                      const isSelected = businessType?.id === sub.id;
-                      return (
-                        <div
-                          key={sub.id}
-                          onClick={() => {
-                            setBusinessType(sub);
-                            setProvidesDelivery(false);
-                            setSecondaryTypes([]);
-                            setDeliveryVehicleRole(null);
-                          }}
-                          className={`relative rounded-xl p-2 flex flex-col items-center justify-start text-center cursor-pointer transition-all shadow-sm ${isSelected ? 'bg-green-100 border-2 border-green-600' : 'bg-white border border-gray-200 hover:border-gray-300'}`}
-                        >
-                          <img
-                            src={sub.image || `https://placehold.co/80x60/${isSelected ? 'dcfce7' : 'f8f9fa'}/333333?text=${sub.libelle.split(' ')[0]}`}
-                            alt={sub.libelle}
-                            className="h-12 object-contain mb-2 mix-blend-multiply"
-                          />
-                          <h3 className="text-[11px] font-bold text-gray-900 leading-tight mb-1">{sub.libelle}</h3>
 
-                          {isSelected && (
-                            <div className="absolute -top-1.5 -right-1.5 bg-green-600 text-white rounded-full p-0.5 shadow-md">
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" /></svg>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
+                  {isHomeServicesCategory() && !selectedHomeGroup && (
+                    <>
+                      <p className="text-xs text-slate-500 mb-3 px-1">
+                        Pick your service area, then choose your exact profession.
+                      </p>
+                      <div className="grid grid-cols-2 gap-3">
+                        {homeServiceGroups.map((group) => (
+                          <ServiceGroupCard
+                            key={group.group}
+                            emoji={group.emoji}
+                            title={group.group}
+                            count={group.professions.length}
+                            onClick={() => {
+                              setSelectedHomeGroup(group);
+                              setBusinessType(null);
+                              setSelectedSkillIds([]);
+                              setProfessionSearch('');
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {isHomeServicesCategory() && selectedHomeGroup && (
+                    <>
+                      <div className="flex items-center gap-2 mb-3 px-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedHomeGroup(null);
+                            setBusinessType(null);
+                            setSelectedSkillIds([]);
+                            setProfessionSearch('');
+                          }}
+                          className="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5"
+                        >
+                          ← All groups
+                        </button>
+                        <input
+                          type="search"
+                          value={professionSearch}
+                          onChange={(e) => setProfessionSearch(e.target.value)}
+                          placeholder="Search profession..."
+                          className="flex-1 text-sm border border-slate-200 rounded-xl px-3 py-2.5 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {homeServiceProfessions.map((sub: any) => (
+                          <ProfessionCard
+                            key={sub.id}
+                            label={sub.libelle}
+                            image={sub.image}
+                            groupEmoji={selectedHomeGroup?.emoji}
+                            selected={businessType?.id === sub.id}
+                            onClick={() => {
+                              setBusinessType(sub);
+                              setProvidesDelivery(false);
+                              setSecondaryTypes([]);
+                              setDeliveryVehicleRole(null);
+                              setSelectedSkillIds([]);
+                            }}
+                          />
+                        ))}
+                      </div>
+                      {homeServiceProfessions.length === 0 && (
+                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 mt-2">
+                          No professions loaded for this group yet. Ask admin to run:{' '}
+                          <span className="font-mono">php artisan db:seed --class=HomeServicesProfessionSeeder</span>
+                        </p>
+                      )}
+                    </>
+                  )}
+
+                  {!isHomeServicesCategory() && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {(primaryCategory.subcategories || []).map((sub: any) => (
+                      <ProfessionCard
+                        key={sub.id}
+                        label={sub.libelle}
+                        image={sub.image}
+                        selected={businessType?.id === sub.id}
+                        onClick={() => {
+                          setBusinessType(sub);
+                          setProvidesDelivery(false);
+                          setSecondaryTypes([]);
+                          setDeliveryVehicleRole(null);
+                          setSelectedSkillIds([]);
+                        }}
+                      />
+                    ))}
                   </div>
+                  )}
+                </section>
+              )}
+
+              {isHomeServicesCategory() && businessType && skillCatalogForDisplay.length === 0 && (
+                <section className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-sm font-semibold text-amber-800">Skills catalog not available</p>
+                  <p className="text-xs text-amber-700 mt-1">
+                    Ask your admin to run database seeders on the server, then reopen onboarding.
+                  </p>
+                </section>
+              )}
+
+              {isHomeServicesCategory() && businessType && skillCatalogForDisplay.length > 0 && (
+                <section className="mb-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="flex items-center justify-between mb-3 px-1">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-green-600 text-xl">{isHealthcareBusinessType() ? '🏥' : '🛠️'}</span>
+                      <h2 className="text-sm font-bold text-green-600 tracking-wide">
+                        {skillSectionHeading.title}
+                      </h2>
+                    </div>
+                    <span className="text-[11px] font-semibold text-gray-500">{selectedSkillIds.length} selected</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-3 px-1">
+                    {skillSectionHeading.hint}
+                  </p>
+                  <div className="space-y-2">
+                    {renderSkillNodes(skillCatalogForDisplay)}
+                  </div>
+                  {selectedSkillIds.length === 0 && (
+                    <p className="text-xs text-amber-600 mt-3 px-1 font-medium">Select at least one skill to continue.</p>
+                  )}
                 </section>
               )}
 
@@ -611,31 +930,18 @@ function OnboardingForm() {
                       Select Delivery Vehicle Type
                     </h2>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {categoriesData.find(c => c.libelle.includes('Transport'))?.subcategories
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {(categoriesData.find(c => c.libelle.includes('Transport'))?.subcategories || [])
                       .filter((sub: any) => !sub.libelle.toLowerCase().includes('cab'))
-                      .map((sub: any) => {
-                        const isSelected = deliveryVehicleRole?.id === sub.id;
-                        return (
-                          <div
-                            key={sub.id}
-                            onClick={() => setDeliveryVehicleRole(sub)}
-                            className={`relative rounded-xl p-2 flex flex-col items-center justify-start text-center cursor-pointer transition-all shadow-sm ${isSelected ? 'bg-green-100 border-2 border-green-600' : 'bg-white border border-gray-200 hover:border-gray-300'}`}
-                          >
-                            <img
-                              src={sub.image || `https://placehold.co/80x60/${isSelected ? 'dcfce7' : 'f8f9fa'}/333333?text=${sub.libelle.split(' ')[0]}`}
-                              alt={sub.libelle}
-                              className="h-12 object-contain mb-2 mix-blend-multiply"
-                            />
-                            <h3 className="text-[11px] font-bold text-gray-900 leading-tight mb-1">{sub.libelle}</h3>
-                            {isSelected && (
-                              <div className="absolute -top-1.5 -right-1.5 bg-green-600 text-white rounded-full p-0.5 shadow-md">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" /></svg>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
+                      .map((sub: any) => (
+                        <ProfessionCard
+                          key={sub.id}
+                          label={sub.libelle}
+                          image={sub.image}
+                          selected={deliveryVehicleRole?.id === sub.id}
+                          onClick={() => setDeliveryVehicleRole(sub)}
+                        />
+                      ))}
                   </div>
                 </section>
               )}
@@ -649,32 +955,22 @@ function OnboardingForm() {
                       Choose Services
                     </h2>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {allowedDeliveryTypes.map((delType: string) => {
-                      const isSelected = secondaryTypes.includes(delType);
-                      return (
-                        <div
-                          key={delType}
-                          onClick={() => {
-                            if (isSelected) setSecondaryTypes(secondaryTypes.filter(t => t !== delType));
-                            else setSecondaryTypes([...secondaryTypes, delType]);
-                          }}
-                          className={`relative rounded-xl p-2 flex flex-col items-center justify-start text-center cursor-pointer transition-all shadow-sm ${isSelected ? 'bg-green-100 border-2 border-green-600' : 'bg-white border border-gray-200 hover:border-gray-300'}`}
-                        >
-                          <img
-                            src={categoryImageMap[delType] || `https://placehold.co/80x60/${isSelected ? 'dcfce7' : 'f8f9fa'}/333333?text=${delType.split(' ')[0]}`}
-                            alt={delType}
-                            className="h-12 object-contain mb-2 mix-blend-multiply"
-                          />
-                          <h3 className="text-[11px] font-bold text-gray-900 leading-tight mb-1">{delType}</h3>
-                          {isSelected && (
-                            <div className="absolute -top-1.5 -right-1.5 bg-green-600 text-white rounded-full p-0.5 shadow-md">
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" /></svg>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {allowedDeliveryTypes.map((delType: string) => (
+                      <ProfessionCard
+                        key={delType}
+                        label={delType}
+                        image={categoryImageMap[delType]}
+                        selected={secondaryTypes.includes(delType)}
+                        onClick={() => {
+                          if (secondaryTypes.includes(delType)) {
+                            setSecondaryTypes(secondaryTypes.filter((t) => t !== delType));
+                          } else {
+                            setSecondaryTypes([...secondaryTypes, delType]);
+                          }
+                        }}
+                      />
+                    ))}
                   </div>
                 </section>
               )}
@@ -684,12 +980,17 @@ function OnboardingForm() {
           {step === 2 && step2IsPricing() && (
             <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="bg-green-50 border border-green-100 rounded-xl p-4">
-                <h2 className="text-sm font-bold text-green-700 mb-1">Home Visit Service Pricing</h2>
+                <h2 className="text-sm font-bold text-green-700 mb-1">
+                  {isPackagePricingFlow() ? 'Healthcare Booking Packages' : 'Home Visit Service Pricing'}
+                </h2>
                 <p className="text-xs text-green-600 leading-relaxed">
-                  Set your fixed visiting charge and add optional service prices customers can book (e.g. AC repair, AC installation).
+                  {isPackagePricingFlow()
+                    ? 'Add optional prices for nursing/healthcare packages. Prices are not compulsory — leave blank to discuss with customer.'
+                    : 'Set your fixed visiting charge and add optional service prices customers can book (e.g. AC repair, AC installation).'}
                 </p>
               </div>
 
+              {!isPackagePricingFlow() && (
               <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                 <label className="block text-sm font-bold text-gray-800 mb-2">Visiting Charge (Fixed)</label>
                 <p className="text-xs text-gray-500 mb-3">One-time fee for visiting the customer&apos;s home (e.g. ₹300)</p>
@@ -706,12 +1007,19 @@ function OnboardingForm() {
                   />
                 </div>
               </div>
+              )}
 
               <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between mb-3">
                   <div>
-                    <h3 className="text-sm font-bold text-gray-800">Additional Services</h3>
-                    <p className="text-xs text-gray-500 mt-1">Add custom services with your own prices</p>
+                    <h3 className="text-sm font-bold text-gray-800">
+                      {isPackagePricingFlow() ? 'Booking Packages (Optional Prices)' : 'Additional Services'}
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {isPackagePricingFlow()
+                        ? 'e.g. One-Time Nurse Visit, Full-Day Nursing Care, Weekly Package'
+                        : 'Add custom services with your own prices'}
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -790,29 +1098,16 @@ function OnboardingForm() {
                     <div className="space-y-3">
                       <div>
                         <label className="block text-xs font-semibold text-gray-700 mb-2">What do you drive?</label>
-                        <div className="grid grid-cols-3 gap-3">
-                          {availableTypes.map((t: any) => {
-                            const isSelected = veh.type_id == t.id;
-                            return (
-                              <div
-                                key={t.id}
-                                onClick={() => updateVehicle(veh.id, 'type_id', t.id.toString())}
-                                className={`relative rounded-xl p-2 flex flex-col items-center justify-start text-center cursor-pointer transition-all shadow-sm ${isSelected ? 'bg-green-100 border-2 border-green-600' : 'bg-white border border-gray-200 hover:border-gray-300'}`}
-                              >
-                                <img
-                                  src={t.image || `https://placehold.co/80x60/${isSelected ? 'dcfce7' : 'f8f9fa'}/333333?text=${t.name.split(' ')[0]}`}
-                                  alt={t.name}
-                                  className="h-12 object-contain mb-2 mix-blend-multiply"
-                                />
-                                <h3 className="text-[11px] font-bold text-gray-900 leading-tight mb-1">{t.name}</h3>
-                                {isSelected && (
-                                  <div className="absolute -top-1.5 -right-1.5 bg-green-600 text-white rounded-full p-0.5 shadow-md">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" /></svg>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {availableTypes.map((t: any) => (
+                            <ProfessionCard
+                              key={t.id}
+                              label={t.name}
+                              image={t.image}
+                              selected={veh.type_id == t.id}
+                              onClick={() => updateVehicle(veh.id, 'type_id', t.id.toString())}
+                            />
+                          ))}
                         </div>
                       </div>
 
@@ -1071,7 +1366,7 @@ function OnboardingForm() {
         </main>
 
         {/* Fixed Bottom Action Bar */}
-        <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 pb-6 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <div className="onboarding-footer">
           {step === 1 && (
             mode === 'edit_category' ? (
               <button
@@ -1136,8 +1431,8 @@ function OnboardingForm() {
 
 export default function Page() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center text-slate-400 font-medium">Loading Setup...</div>}>
+    <OnboardingErrorBoundary>
       <OnboardingForm />
-    </Suspense>
+    </OnboardingErrorBoundary>
   );
 }
