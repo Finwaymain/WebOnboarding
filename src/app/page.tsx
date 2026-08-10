@@ -2,13 +2,17 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import {
+  collectLeafSkillNodes,
+  formatAdminCommission,
   getDefaultExpandedIds,
   getProfessionSkillHeading,
   isHealthcareProfession,
   isPackagePricingProfession,
+  normalizeLabel,
   PACKAGE_GROUP_LABELS,
   resolveNodeIcon,
   resolveSkillCatalogForProfession,
+  usesInlineSkillPricing,
 } from '@/lib/skillCatalog';
 import { HOME_SERVICE_GROUPS, HomeServiceGroup } from '@/lib/homeServiceGroups';
 import { ProfessionCard, ServiceGroupCard } from '@/components/ProfessionCard';
@@ -32,6 +36,28 @@ function OnboardingForm() {
 
   useEffect(() => {
     setUrlParams(readUrlParams());
+  }, []);
+
+  useEffect(() => {
+    const showBootError = (message: string) => {
+      setInitError(message || 'Onboarding failed to load. Please reopen from the app.');
+      setLoadingInit(false);
+    };
+
+    const onWindowError = (event: ErrorEvent) => {
+      showBootError(event.message || 'Unexpected script error');
+    };
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      showBootError(String(event.reason || 'Unhandled promise rejection'));
+    };
+
+    window.addEventListener('error', onWindowError);
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('error', onWindowError);
+      window.removeEventListener('unhandledrejection', onUnhandledRejection);
+    };
   }, []);
 
   const driverId = urlParams.driverId;
@@ -83,6 +109,8 @@ function OnboardingForm() {
   const [additionalServices, setAdditionalServices] = useState<{ id: number; name: string; price: string }[]>([]);
   const [homeServiceCatalog, setHomeServiceCatalog] = useState<any[]>([]);
   const [selectedSkillIds, setSelectedSkillIds] = useState<number[]>([]);
+  const [skillPrices, setSkillPrices] = useState<Record<number, string>>({});
+  const [adminCommission, setAdminCommission] = useState<{ value?: string | number; type?: string } | null>(null);
   const [expandedSkillGroups, setExpandedSkillGroups] = useState<Record<number, boolean>>({});
   const [homeServiceGroups, setHomeServiceGroups] = useState<HomeServiceGroup[]>(HOME_SERVICE_GROUPS);
   const [selectedHomeGroup, setSelectedHomeGroup] = useState<HomeServiceGroup | null>(null);
@@ -93,6 +121,14 @@ function OnboardingForm() {
   const [deliveryVehicleRole, setDeliveryVehicleRole] = useState<any>(null);
   const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({});
   const [step3Tab, setStep3Tab] = useState<'docs' | 'zone' | 'kyc'>('docs');
+  const [hasRegisteredShop, setHasRegisteredShop] = useState<'yes' | 'no' | ''>('');
+  const [serviceDeclarationAccepted, setServiceDeclarationAccepted] = useState(false);
+  const [homeDocs, setHomeDocs] = useState<Record<string, File | null>>({
+    selfie: null,
+    aadhaar_front: null,
+    aadhaar_back: null,
+    shop_photo: null,
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -150,17 +186,34 @@ function OnboardingForm() {
             setHomeServiceGroups(result.data.home_service_groups);
           }
           setSelectedSkillIds(result.data.selected_skills || []);
+          if (result.data.admin_commission) {
+            setAdminCommission(result.data.admin_commission);
+          }
 
           if (result.data.service_pricing) {
             const pricing = result.data.service_pricing;
             setVisitingCharge(pricing.visiting_charge?.toString() || "");
-            setAdditionalServices(
-              (pricing.service_items || []).map((item: any, index: number) => ({
-                id: Date.now() + index,
-                name: item.name || "",
-                price: item.price?.toString() || "",
-              }))
-            );
+            const loadedItems = (pricing.service_items || []).map((item: any, index: number) => ({
+              id: Date.now() + index,
+              name: item.name || "",
+              price: item.price?.toString() || "",
+            }));
+            setAdditionalServices(loadedItems);
+
+            const catalog = result.data.home_service_catalog || [];
+            const leafNodes = collectLeafSkillNodes(catalog);
+            const restoredPrices: Record<number, string> = {};
+            loadedItems.forEach((item: { name: string; price: string }) => {
+              const node = leafNodes.find(
+                (leaf) => normalizeLabel(leaf.libelle) === normalizeLabel(item.name)
+              );
+              if (node && item.price) {
+                restoredPrices[node.id] = item.price;
+              }
+            });
+            if (Object.keys(restoredPrices).length > 0) {
+              setSkillPrices(restoredPrices);
+            }
           }
         } else {
           setInitError("Failed to load onboarding data.");
@@ -209,6 +262,30 @@ function OnboardingForm() {
   const isHealthcareBusinessType = () => isHealthcareProfession(businessType?.libelle || '');
 
   const isPackagePricingFlow = () => isPackagePricingProfession(businessType?.libelle || '');
+
+  const isInlineSkillPricingFlow = () => usesInlineSkillPricing(businessType?.libelle || '');
+
+  const commissionLabel = formatAdminCommission(adminCommission);
+
+  const buildServiceItemsPayload = () => {
+    if (isInlineSkillPricingFlow()) {
+      return selectedSkillIds
+        .map((skillId) => {
+          const node = findSkillNodeById(homeServiceCatalog, skillId);
+          const price = skillPrices[skillId];
+          if (!node || !price?.trim()) return null;
+          return { name: node.libelle, price: price.trim() };
+        })
+        .filter(Boolean) as { name: string; price: string }[];
+    }
+
+    return additionalServices
+      .filter((item) => item.name.trim())
+      .map((item) => ({
+        name: item.name.trim(),
+        price: item.price.trim(),
+      }));
+  };
 
   const skillCatalogForDisplay = useMemo(
     () => resolveSkillCatalogForProfession(homeServiceCatalog, businessType?.libelle || ''),
@@ -277,9 +354,21 @@ function OnboardingForm() {
   const isLeafSkillNode = (node: any) => !node?.has_children && (!node?.children || node.children.length === 0);
 
   const toggleSkillSelection = (skillId: number) => {
-    setSelectedSkillIds((prev) =>
-      prev.includes(skillId) ? prev.filter((id) => id !== skillId) : [...prev, skillId]
-    );
+    setSelectedSkillIds((prev) => {
+      if (prev.includes(skillId)) {
+        setSkillPrices((prices) => {
+          const next = { ...prices };
+          delete next[skillId];
+          return next;
+        });
+        return prev.filter((id) => id !== skillId);
+      }
+      return [...prev, skillId];
+    });
+  };
+
+  const updateSkillPrice = (skillId: number, price: string) => {
+    setSkillPrices((prev) => ({ ...prev, [skillId]: price }));
   };
 
   const toggleSkillGroup = (groupId: number) => {
@@ -303,7 +392,7 @@ function OnboardingForm() {
             >
               <span className="flex items-center gap-2 min-w-0">
                 <span className="text-base shrink-0" aria-hidden>{resolveNodeIcon(node)}</span>
-                <span className="text-sm font-semibold text-gray-800 truncate">{node.libelle}</span>
+                <span className="text-sm font-semibold text-gray-800">{node.libelle}</span>
               </span>
               <svg className={`w-4 h-4 text-gray-500 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
@@ -320,19 +409,40 @@ function OnboardingForm() {
 
       if (!isLeaf) return null;
 
+      const showPriceField = isInlineSkillPricingFlow() && isSelected;
+
       return (
-        <label
+        <div
           key={node.id}
-          className={`flex items-center gap-3 px-3 py-3 rounded-xl border cursor-pointer transition-colors ${isSelected ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-200 hover:border-slate-300'}`}
+          className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-colors ${isSelected ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-200'}`}
         >
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={() => toggleSkillSelection(node.id)}
-            className="w-5 h-5 accent-emerald-600 shrink-0"
-          />
-          <span className="text-sm font-medium text-slate-800 flex-1 leading-snug">{node.libelle}</span>
-        </label>
+          <label className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => toggleSkillSelection(node.id)}
+              className="w-5 h-5 accent-emerald-600 shrink-0"
+            />
+            <span className="text-sm font-medium text-slate-800 flex-1 leading-snug">{node.libelle}</span>
+          </label>
+          {showPriceField && (
+            <div className="w-[88px] shrink-0">
+              <div className="relative">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-semibold">₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="Price"
+                  value={skillPrices[node.id] || ''}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => updateSkillPrice(node.id, e.target.value)}
+                  className="w-full bg-white border border-slate-200 text-slate-800 rounded-lg pl-5 pr-2 py-2 text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
+            </div>
+          )}
+        </div>
       );
     });
   };
@@ -355,6 +465,13 @@ function OnboardingForm() {
   const canProceedToStep2 = () => {
     if (!primaryCategory || !businessType) return false;
     if (isHomeServicesCategory() && selectedSkillIds.length === 0) return false;
+    if (isInlineSkillPricingFlow()) {
+      const allPriced = selectedSkillIds.every((skillId) => {
+        const price = parseFloat(skillPrices[skillId] || '');
+        return !isNaN(price) && price >= 0 && skillPrices[skillId]?.trim() !== '';
+      });
+      if (!allPriced) return false;
+    }
     if (primaryCategory?.libelle && ['Delivery', 'Logistics'].some(t => primaryCategory.libelle.includes(t)) && !deliveryVehicleRole) return false;
     if (providesDelivery && secondaryTypes.length === 0) return false;
     return true;
@@ -379,6 +496,56 @@ function OnboardingForm() {
     // Fallback: check vehicleMappings with string coercion (PHP groupBy uses string keys)
     return !!(vehicleMappings[String(businessType.id)] || vehicleMappings[businessType.id]);
   };
+
+  const isTransportOrDeliveryCategory = () => {
+    const label = (primaryCategory?.libelle || '').toLowerCase();
+    return (label.includes('transport') && label.includes('mobility'))
+      || (label.includes('delivery') && label.includes('logistics'));
+  };
+
+  const handleHomeDocChange = (key: string, file: File | null) => {
+    if (file) {
+      setHomeDocs((prev) => ({ ...prev, [key]: file }));
+    }
+  };
+
+  const canProceedFromDocsTab = () => {
+    if (isTransportOrDeliveryCategory()) return true;
+    if (!homeDocs.selfie || !homeDocs.aadhaar_front || !homeDocs.aadhaar_back) return false;
+    if (!hasRegisteredShop) return false;
+    if (hasRegisteredShop === 'yes' && !homeDocs.shop_photo) return false;
+    if (hasRegisteredShop === 'no' && !serviceDeclarationAccepted) return false;
+    return true;
+  };
+
+  const renderUploadCard = (
+    label: string,
+    hint: string,
+    file: File | null,
+    onChange: (file: File | null) => void,
+    required = true,
+    capture?: 'user' | 'environment',
+  ) => (
+    <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between group hover:border-green-200 transition-colors">
+      <div className="flex-1 pr-3">
+        <p className="font-semibold text-gray-800 text-[13px] mb-0.5">{label}</p>
+        <p className={`text-[10px] font-medium ${file ? 'text-green-600' : required ? 'text-red-500' : 'text-gray-400'}`}>
+          {file ? `✓ ${file.name}` : required ? 'Required' : 'Optional'}
+        </p>
+        {hint ? <p className="text-[10px] text-gray-400 mt-1">{hint}</p> : null}
+      </div>
+      <label className="cursor-pointer bg-gray-50 hover:bg-green-50 text-gray-700 font-semibold text-[11px] px-3 py-2 rounded-lg transition-colors inline-block border border-gray-200 shadow-sm">
+        {file ? 'Change' : 'Upload'}
+        <input
+          type="file"
+          className="hidden"
+          accept="image/*"
+          {...(capture ? { capture } : {})}
+          onChange={(e) => onChange(e.target.files?.[0] || null)}
+        />
+      </label>
+    </div>
+  );
 
   const businessRequiresHomeVisitPricing = () => {
     if (!businessType || businessRequiresVehicle()) return false;
@@ -422,13 +589,89 @@ function OnboardingForm() {
 
   const handleNextFromStep1 = () => {
     if (businessRequiresVehicle() || businessRequiresHomeVisitPricing()) {
-      if (businessRequiresHomeVisitPricing() && isPackagePricingFlow()) {
+      if (isInlineSkillPricingFlow()) {
+        setStep(3);
+      } else if (businessRequiresHomeVisitPricing() && isPackagePricingFlow()) {
         prefillPackageRowsFromSkills();
+        setStep(2);
+      } else {
+        setStep(2);
       }
-      setStep(2);
     } else {
       setStep(3);
     }
+  };
+
+  const closeOnboarding = () => {
+    try {
+      // @ts-ignore
+      if (window.AppBridge) window.AppBridge.postMessage('close');
+      window.history.back();
+    } catch (e) { /* ignore */ }
+  };
+
+  const handleBackNavigation = () => {
+    if (step === 3) {
+      if (step3Tab === 'kyc') {
+        setStep3Tab('zone');
+        return;
+      }
+      if (step3Tab === 'zone') {
+        setStep3Tab('docs');
+        return;
+      }
+      setStep3Tab('docs');
+      if (isInlineSkillPricingFlow() && businessRequiresHomeVisitPricing()) {
+        setStep(1);
+      } else if (businessRequiresVehicle() || businessRequiresHomeVisitPricing()) {
+        setStep(2);
+      } else {
+        setStep(1);
+      }
+      return;
+    }
+
+    if (step === 2) {
+      setStep(1);
+      return;
+    }
+
+    if (isCategoryOpen) {
+      setIsCategoryOpen(false);
+      return;
+    }
+
+    if (businessType) {
+      setBusinessType(null);
+      setSelectedSkillIds([]);
+      setSkillPrices({});
+      setProvidesDelivery(false);
+      setSecondaryTypes([]);
+      setDeliveryVehicleRole(null);
+      return;
+    }
+
+    if (isHomeServicesCategory() && selectedHomeGroup) {
+      setSelectedHomeGroup(null);
+      setProfessionSearch('');
+      return;
+    }
+
+    if (primaryCategory) {
+      setPrimaryCategory(null);
+      setBusinessType(null);
+      setSelectedHomeGroup(null);
+      setSelectedSkillIds([]);
+      setSkillPrices({});
+      setProvidesDelivery(false);
+      setSecondaryTypes([]);
+      setDeliveryVehicleRole(null);
+      setExpandedSkillGroups({});
+      setProfessionSearch('');
+      return;
+    }
+
+    closeOnboarding();
   };
 
   const addServiceItem = () => {
@@ -521,12 +764,7 @@ function OnboardingForm() {
       if (!isPackagePricingFlow() || visitingCharge.trim() !== '') {
         data.append("visiting_charge", visitingCharge);
       }
-      const serviceItems = additionalServices
-        .filter((item) => item.name.trim())
-        .map((item) => ({
-          name: item.name.trim(),
-          price: item.price.trim(),
-        }));
+      const serviceItems = buildServiceItemsPayload();
       data.append("service_items", JSON.stringify(serviceItems));
       data.append("selected_skills", JSON.stringify(selectedSkillIds));
     }
@@ -536,6 +774,15 @@ function OnboardingForm() {
         data.append(key, file);
       }
     });
+
+    if (!isTransportOrDeliveryCategory()) {
+      data.append('has_registered_shop', hasRegisteredShop);
+      data.append('service_declaration_accepted', hasRegisteredShop === 'no' && serviceDeclarationAccepted ? '1' : '0');
+      if (homeDocs.selfie) data.append('home_selfie', homeDocs.selfie);
+      if (homeDocs.aadhaar_front) data.append('home_aadhaar_front', homeDocs.aadhaar_front);
+      if (homeDocs.aadhaar_back) data.append('home_aadhaar_back', homeDocs.aadhaar_back);
+      if (homeDocs.shop_photo) data.append('home_shop_photo', homeDocs.shop_photo);
+    }
 
     data.append("bank_name", bankName);
     data.append("account_no", accountNo);
@@ -655,33 +902,48 @@ function OnboardingForm() {
     : [];
 
   return (
-    <div className="bg-slate-100 min-h-screen antialiased text-slate-800">
+    <>
       <style dangerouslySetInnerHTML={{
         __html: `
-        html, body { height: auto; min-height: 100%; overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-        .onboarding-shell { width: 100%; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; background: #f8fafc; }
-        .onboarding-header { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(10px); background: rgba(255,255,255,0.95); }
-        .onboarding-main { flex: 1; padding: 1rem 1rem 6.5rem; }
-        .onboarding-footer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom)); background: rgba(255,255,255,0.96); border-top: 1px solid #e2e8f0; backdrop-filter: blur(8px); }
-        @media (min-width: 640px) {
-          .onboarding-shell { max-width: 420px; margin: 0 auto; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; box-shadow: 0 10px 40px rgba(15,23,42,0.08); }
-          .onboarding-footer { max-width: 420px; left: 50%; transform: translateX(-50%); }
+        html, body { height: 100%; margin: 0; overflow: hidden; }
+        .onboarding-page {
+          height: 100vh;
+          height: 100dvh;
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          background: #f8fafc;
+        }
+        .onboarding-scroll {
+          flex: 1;
+          min-height: 0;
+          overflow-x: hidden;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+          overscroll-behavior-y: contain;
+        }
+        .onboarding-header {
+          background: #fff;
+          border-bottom: 1px solid #e2e8f0;
+        }
+        .onboarding-main {
+          padding: 0.75rem 1rem 2rem;
+        }
+        .onboarding-footer {
+          flex-shrink: 0;
+          background: #fff;
+          border-top: 1px solid #e2e8f0;
+          box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.06);
+          padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
         }
       `}} />
-      <div className="onboarding-shell">
-        <header className="onboarding-header px-4 pt-10 pb-4 border-b border-slate-100">
+      <div className="onboarding-page antialiased text-slate-800">
+      <div className="onboarding-scroll">
+        <header className="onboarding-header px-4 pt-5 pb-3 border-b border-slate-100">
           <div className="w-full flex items-center relative mb-2">
             <button
-              onClick={() => {
-                if (step > 1) setStep(step - 1);
-                else {
-                  try {
-                    // @ts-ignore
-                    if (window.AppBridge) window.AppBridge.postMessage('close');
-                    window.history.back();
-                  } catch (e) { }
-                }
-              }}
+              onClick={handleBackNavigation}
               className="p-2 -ml-2 text-gray-800 hover:bg-gray-100 rounded-full transition-colors absolute left-0"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
@@ -696,7 +958,7 @@ function OnboardingForm() {
 
           {/* Stepper */}
           {mode !== 'edit_category' && (
-          <div className="w-full px-6 mt-6 flex justify-between items-start relative">
+          <div className="w-full px-4 mt-4 flex justify-between items-start relative">
             <div className="absolute top-[14px] left-10 right-10 h-[1px] bg-gray-300 -z-10"></div>
             <div className={`absolute top-[14px] left-10 h-[1px] bg-green-600 -z-10 transition-all duration-300 ${step === 1 ? 'w-0' : step === 2 ? 'w-1/2' : 'w-full'}`}></div>
 
@@ -760,6 +1022,7 @@ function OnboardingForm() {
                             setIsCategoryOpen(false);
                             setDeliveryVehicleRole(null);
                             setSelectedSkillIds([]);
+                            setSkillPrices({});
                             setExpandedSkillGroups({});
                             setSelectedHomeGroup(null);
                             setProfessionSearch('');
@@ -809,6 +1072,7 @@ function OnboardingForm() {
                               setSelectedHomeGroup(group);
                               setBusinessType(null);
                               setSelectedSkillIds([]);
+                              setSkillPrices({});
                               setProfessionSearch('');
                             }}
                           />
@@ -826,6 +1090,7 @@ function OnboardingForm() {
                             setSelectedHomeGroup(null);
                             setBusinessType(null);
                             setSelectedSkillIds([]);
+                            setSkillPrices({});
                             setProfessionSearch('');
                           }}
                           className="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5"
@@ -840,7 +1105,7 @@ function OnboardingForm() {
                           className="flex-1 text-sm border border-slate-200 rounded-xl px-3 py-2.5 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         />
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-2 gap-3">
                         {homeServiceProfessions.map((sub: any) => (
                           <ProfessionCard
                             key={sub.id}
@@ -854,6 +1119,7 @@ function OnboardingForm() {
                               setSecondaryTypes([]);
                               setDeliveryVehicleRole(null);
                               setSelectedSkillIds([]);
+                              setSkillPrices({});
                             }}
                           />
                         ))}
@@ -868,7 +1134,7 @@ function OnboardingForm() {
                   )}
 
                   {!isHomeServicesCategory() && (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     {(primaryCategory.subcategories || []).map((sub: any) => (
                       <ProfessionCard
                         key={sub.id}
@@ -881,6 +1147,7 @@ function OnboardingForm() {
                           setSecondaryTypes([]);
                           setDeliveryVehicleRole(null);
                           setSelectedSkillIds([]);
+                          setSkillPrices({});
                         }}
                       />
                     ))}
@@ -912,11 +1179,26 @@ function OnboardingForm() {
                   <p className="text-xs text-gray-500 mb-3 px-1">
                     {skillSectionHeading.hint}
                   </p>
+                  {commissionLabel && (
+                    <div className="mb-3 mx-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                      <p className="text-[11px] text-amber-900 leading-relaxed">
+                        <span className="font-bold">Admin commission:</span> {commissionLabel} will be deducted from each completed service booking.
+                      </p>
+                    </div>
+                  )}
+                  {isInlineSkillPricingFlow() && (
+                    <div className="flex items-center justify-end gap-2 mb-2 px-1">
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Price (₹)</span>
+                    </div>
+                  )}
                   <div className="space-y-2">
                     {renderSkillNodes(skillCatalogForDisplay)}
                   </div>
                   {selectedSkillIds.length === 0 && (
                     <p className="text-xs text-amber-600 mt-3 px-1 font-medium">Select at least one skill to continue.</p>
+                  )}
+                  {isInlineSkillPricingFlow() && selectedSkillIds.length > 0 && !canProceedToStep2() && (
+                    <p className="text-xs text-amber-600 mt-3 px-1 font-medium">Add a price for every selected service to continue.</p>
                   )}
                 </section>
               )}
@@ -930,7 +1212,7 @@ function OnboardingForm() {
                       Select Delivery Vehicle Type
                     </h2>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     {(categoriesData.find(c => c.libelle.includes('Transport'))?.subcategories || [])
                       .filter((sub: any) => !sub.libelle.toLowerCase().includes('cab'))
                       .map((sub: any) => (
@@ -955,7 +1237,7 @@ function OnboardingForm() {
                       Choose Services
                     </h2>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     {allowedDeliveryTypes.map((delType: string) => (
                       <ProfessionCard
                         key={delType}
@@ -979,6 +1261,13 @@ function OnboardingForm() {
 
           {step === 2 && step2IsPricing() && (
             <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {commissionLabel && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <p className="text-xs text-amber-900 leading-relaxed">
+                    <span className="font-bold">Admin commission:</span> {commissionLabel} will be deducted from each completed service booking.
+                  </p>
+                </div>
+              )}
               <div className="bg-green-50 border border-green-100 rounded-xl p-4">
                 <h2 className="text-sm font-bold text-green-700 mb-1">
                   {isPackagePricingFlow() ? 'Healthcare Booking Packages' : 'Home Visit Service Pricing'}
@@ -1098,7 +1387,7 @@ function OnboardingForm() {
                     <div className="space-y-3">
                       <div>
                         <label className="block text-xs font-semibold text-gray-700 mb-2">What do you drive?</label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-2 gap-3">
                           {availableTypes.map((t: any) => (
                             <ProfessionCard
                               key={t.id}
@@ -1252,20 +1541,22 @@ function OnboardingForm() {
               {step3Tab === 'docs' && (
                 <div className="animate-in fade-in duration-300">
                   <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-sm font-bold text-gray-800">Required Documents</h2>
+                    <h2 className="text-sm font-bold text-gray-800">
+                      {isTransportOrDeliveryCategory() ? 'Required Documents' : 'Identity & Business Documents'}
+                    </h2>
                     <span className="text-[10px] font-bold px-2 py-1 bg-green-100 text-green-700 rounded-full">Secure Upload</span>
                   </div>
-                  <div className="space-y-3">
-                    {adminDocs
-                      .filter(doc => businessRequiresVehicle() || doc.is_required === 'yes' || !['Driving License', 'Vehicle Registration', 'Vehicle Insurance', 'Vehicle Image'].includes(doc.title))
-                      .map(doc => {
+
+                  {isTransportOrDeliveryCategory() ? (
+                    <div className="space-y-3">
+                      {adminDocs.map(doc => {
                         const file = documents[`doc_${doc.id}`];
                         return (
                           <div key={doc.id} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between group hover:border-gray-300 transition-colors">
                             <div className="flex-1 pr-3">
                               <p className="font-semibold text-gray-800 text-[13px] mb-0.5">{doc.title}</p>
                               <p className={`text-[10px] font-medium ${file ? 'text-green-600' : 'text-red-500'}`}>
-                                {file ? '✓ ' + file.name : doc.is_required === 'yes' ? 'Required' : 'Optional'}
+                                {file ? '✓ ' + file.name : 'Required'}
                               </p>
                             </div>
                             <div>
@@ -1277,13 +1568,67 @@ function OnboardingForm() {
                           </div>
                         );
                       })}
-                  </div>
-                  <button
-                    onClick={() => setStep3Tab('zone')}
-                    className="w-full mt-5 py-3 bg-green-600 text-white font-bold rounded-xl text-sm hover:bg-green-700 transition-colors"
-                  >
-                    Next: Select Zone →
-                  </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="space-y-3">
+                        {renderUploadCard('Selfie', 'Take a clear photo of your face', homeDocs.selfie, (file) => handleHomeDocChange('selfie', file), true, 'user')}
+                        {renderUploadCard('Aadhaar Front', 'Upload front side of Aadhaar card', homeDocs.aadhaar_front, (file) => handleHomeDocChange('aadhaar_front', file))}
+                        {renderUploadCard('Aadhaar Back', 'Upload back side of Aadhaar card', homeDocs.aadhaar_back, (file) => handleHomeDocChange('aadhaar_back', file))}
+                      </div>
+
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                        <p className="font-semibold text-gray-800 text-[13px] mb-3">Do you have a Registered Business Shop?</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHasRegisteredShop('yes');
+                              setServiceDeclarationAccepted(false);
+                            }}
+                            className={`py-2.5 rounded-xl text-sm font-bold border transition-colors ${hasRegisteredShop === 'yes' ? 'bg-green-600 text-white border-green-600' : 'bg-gray-50 text-gray-600 border-gray-200'}`}
+                          >
+                            Yes
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHasRegisteredShop('no');
+                              setHomeDocs((prev) => ({ ...prev, shop_photo: null }));
+                            }}
+                            className={`py-2.5 rounded-xl text-sm font-bold border transition-colors ${hasRegisteredShop === 'no' ? 'bg-green-600 text-white border-green-600' : 'bg-gray-50 text-gray-600 border-gray-200'}`}
+                          >
+                            No
+                          </button>
+                        </div>
+                      </div>
+
+                      {hasRegisteredShop === 'yes' && (
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold text-gray-700">Upload Shop Photo</p>
+                          {renderUploadCard('Shop Photo', 'Upload a clear photo of your registered shop', homeDocs.shop_photo, (file) => handleHomeDocChange('shop_photo', file))}
+                        </div>
+                      )}
+
+                      {hasRegisteredShop === 'no' && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                          <label className="flex items-start gap-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={serviceDeclarationAccepted}
+                              onChange={(e) => setServiceDeclarationAccepted(e.target.checked)}
+                              className="mt-1 h-4 w-4 rounded border-amber-300 text-green-600 focus:ring-green-600"
+                            />
+                            <span className="text-[12px] text-gray-700 leading-relaxed">
+                              <span className="font-bold text-gray-900">I Declaration</span>
+                              <br />
+                              I have complete knowledge of the services we are going to provide through your app, and we will deliver all those services in the correct and proper manner.
+                            </span>
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1307,12 +1652,6 @@ function OnboardingForm() {
                       ))}
                     </select>
                   </div>
-                  <button
-                    onClick={() => setStep3Tab('kyc')}
-                    className="w-full mt-5 py-3 bg-green-600 text-white font-bold rounded-xl text-sm hover:bg-green-700 transition-colors"
-                  >
-                    Next: KYC & Bank Details →
-                  </button>
                 </div>
               )}
 
@@ -1364,15 +1703,22 @@ function OnboardingForm() {
             </div>
           )}
         </main>
+      </div>
 
-        {/* Fixed Bottom Action Bar */}
-        <div className="onboarding-footer">
+        {/* Bottom Action Bar — outside scroll area so it never overlaps content */}
+        <footer className="onboarding-footer">
           {step === 1 && (
             mode === 'edit_category' ? (
               <button
-                onClick={businessRequiresHomeVisitPricing() ? handleNextFromStep1 : submitForm}
+                onClick={
+                  businessRequiresHomeVisitPricing()
+                    ? isInlineSkillPricingFlow()
+                      ? submitForm
+                      : handleNextFromStep1
+                    : submitForm
+                }
                 disabled={!canProceedToStep2() || loading}
-                className="w-full py-3.5 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm"
+                className="w-full py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm text-sm"
               >
                 {loading ? 'Saving...' : businessRequiresHomeVisitPricing() ? 'Continue' : 'Save Category'}
               </button>
@@ -1380,7 +1726,7 @@ function OnboardingForm() {
               <button
                 onClick={handleNextFromStep1}
                 disabled={!canProceedToStep2()}
-                className="w-full py-3.5 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm"
+                className="w-full py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm text-sm"
               >
                 Continue
               </button>
@@ -1396,7 +1742,7 @@ function OnboardingForm() {
                 }
               }}
               disabled={!canProceedToStep3() || loading}
-              className="w-full py-3.5 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm"
+              className="w-full py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm text-sm"
             >
               {mode === 'edit_category' ? (loading ? 'Saving...' : 'Save Category') : 'Continue'}
             </button>
@@ -1405,27 +1751,39 @@ function OnboardingForm() {
             <button
               onClick={() => {
                 if (step3Tab === 'docs') {
+                  if (!canProceedFromDocsTab()) {
+                    setError(isTransportOrDeliveryCategory()
+                      ? 'Please upload the required documents.'
+                      : 'Please complete all required uploads and questions before continuing.');
+                    return;
+                  }
+                  setError('');
                   setStep3Tab('zone');
                 } else if (step3Tab === 'zone') {
+                  if (!zoneId) {
+                    setError('Please select your working zone.');
+                    return;
+                  }
+                  setError('');
                   setStep3Tab('kyc');
                 } else {
                   submitForm();
                 }
               }}
-              disabled={loading}
-              className="w-full py-3.5 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm flex items-center justify-center"
+              disabled={loading || (step3Tab === 'zone' && !zoneId) || (step3Tab === 'docs' && !canProceedFromDocsTab())}
+              className="w-full py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm flex items-center justify-center text-sm"
             >
               {loading ? (
                 <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-              ) : step3Tab === 'docs' ? 'Next: Select Zone →' : step3Tab === 'zone' ? 'Next: KYC & Bank Details →' : 'Submit Application'}
+              ) : step3Tab === 'docs' ? 'Continue to Zone' : step3Tab === 'zone' ? 'Continue to KYC' : 'Submit Application'}
             </button>
           )}
-        </div>
+        </footer>
       </div>
-    </div>
+    </>
   );
 }
 

@@ -30,6 +30,9 @@ export class OnboardingErrorBoundary extends Component<Props, State> {
             <p className="text-sm text-slate-600 mb-4">
               Please close and reopen onboarding from the app. If this continues, contact support.
             </p>
+            {this.state.error?.message && (
+              <p className="text-xs text-red-600 mb-4 break-words">{this.state.error.message}</p>
+            )}
             <button
               type="button"
               onClick={() => this.setState({ error: null })}

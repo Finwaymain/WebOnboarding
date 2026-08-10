@@ -26,14 +26,14 @@ export function ProfessionCard({
     <button
       type="button"
       onClick={onClick}
-      className={`relative w-full rounded-2xl p-3 flex flex-col items-center text-center transition-all active:scale-[0.98] ${
+      className={`relative w-full min-h-[7.75rem] rounded-2xl p-3.5 flex flex-col items-center justify-center text-center transition-all active:scale-[0.98] touch-manipulation ${
         selected
           ? 'bg-emerald-50 border-2 border-emerald-600 shadow-md shadow-emerald-100'
           : 'bg-white border border-slate-200 hover:border-emerald-300 hover:shadow-sm'
       }`}
     >
       <div
-        className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-2 overflow-hidden ${
+        className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-2.5 overflow-hidden ${
           showImage ? 'bg-slate-50' : 'bg-gradient-to-br from-emerald-50 to-teal-100'
         }`}
       >
@@ -50,7 +50,7 @@ export function ProfessionCard({
           </span>
         )}
       </div>
-      <span className="text-[11px] font-semibold text-slate-800 leading-snug line-clamp-3 min-h-[2.5rem]">
+      <span className="text-xs font-semibold text-slate-800 leading-snug line-clamp-3 px-1">
         {label}
       </span>
       {selected && (
@@ -85,13 +85,13 @@ export function ServiceGroupCard({
     <button
       type="button"
       onClick={onClick}
-      className={`w-full rounded-2xl border p-4 text-left transition-all active:scale-[0.98] ${
+      className={`w-full min-h-[7.75rem] rounded-2xl border p-4 flex flex-col items-center justify-center text-center transition-all active:scale-[0.98] touch-manipulation ${
         selected
           ? 'border-emerald-600 bg-emerald-50 shadow-md'
           : 'border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/40'
       }`}
     >
-      <span className="text-3xl block mb-2" aria-hidden>
+      <span className="text-4xl block mb-2" aria-hidden>
         {emoji}
       </span>
       <p className="text-sm font-bold text-slate-900 leading-tight">{title}</p>

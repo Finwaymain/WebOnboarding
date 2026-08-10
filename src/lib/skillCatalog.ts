@@ -1,4 +1,4 @@
-import { leadingEmoji } from './emoji';
+import { leadingEmoji, stripEmoji } from './emoji';
 
 export type CatalogNode = {
   id: number;
@@ -9,11 +9,7 @@ export type CatalogNode = {
 };
 
 export const normalizeLabel = (value: string) =>
-  (value || '')
-    .toLowerCase()
-    .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}]/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  stripEmoji((value || '').toLowerCase());
 
 const MATERIAL_ICON_EMOJI: Record<string, string> = {
   'icon:home_rounded': '🏠',
@@ -227,19 +223,25 @@ export function getProfessionSkillHeading(professionLabel: string): { title: str
   if (['nurse', 'nursing care'].includes(key)) {
     return {
       title: 'Nursing Care Skills',
-      hint: 'Select nursing services and optional booking packages you provide.',
+      hint: 'Select nursing services you provide, then add your price (₹) for each on the right.',
     };
   }
   if (key === 'lab technician') {
     return {
       title: 'Lab & Sample Collection',
-      hint: 'Select tests, health packages, and home collection services you offer.',
+      hint: 'Select tests or packages you offer, then add your price (₹) for each on the right.',
     };
   }
   if (key === 'home tutor') {
     return {
       title: 'Tutoring Skills',
-      hint: 'Choose classes, subjects, boards, and tuition modes you teach.',
+      hint: 'Select subjects or classes you teach, then add your price (₹) for each service on the right.',
+    };
+  }
+  if (['music teacher', 'dance teacher', 'yoga trainer', 'gym trainer', 'language tutor'].includes(key)) {
+    return {
+      title: 'Service Skills',
+      hint: 'Select the services you offer, then add your price (₹) for each on the right.',
     };
   }
   if (['barber & saloon service', 'salon spa & others (female)', 'massage therapist'].includes(key)) {
@@ -269,7 +271,58 @@ export function isHealthcareProfession(professionLabel: string): boolean {
 
 export function isPackagePricingProfession(professionLabel: string): boolean {
   const key = normalizeLabel(professionLabel);
-  return ['doctor home visit', 'physiotherapist', 'nurse', 'nursing care', 'lab technician'].includes(key);
+  return ['doctor home visit', 'physiotherapist'].includes(key);
+}
+
+const EDUCATION_PROFESSIONS = [
+  'home tutor',
+  'music teacher',
+  'dance teacher',
+  'yoga trainer',
+  'gym trainer',
+  'language tutor',
+];
+
+const INLINE_SKILL_PRICING_PROFESSIONS = new Set<string>([
+  'lab technician',
+  'nurse',
+  'nursing care',
+  ...EDUCATION_PROFESSIONS,
+]);
+
+export function isEducationProfession(professionLabel: string): boolean {
+  return EDUCATION_PROFESSIONS.includes(normalizeLabel(professionLabel));
+}
+
+/** Lab, nursing, and education: price each selected skill inline in step 1. */
+export function usesInlineSkillPricing(professionLabel: string): boolean {
+  return INLINE_SKILL_PRICING_PROFESSIONS.has(normalizeLabel(professionLabel));
+}
+
+export function formatAdminCommission(commission?: { value?: string | number; type?: string } | null): string {
+  if (!commission?.value && commission?.value !== 0) return '';
+  const value = String(commission.value);
+  const type = (commission.type || '').toLowerCase();
+  if (type === 'percentage' || type.includes('percent')) {
+    return `${value}%`;
+  }
+  return `₹${value} flat`;
+}
+
+export function collectLeafSkillNodes(nodes: CatalogNode[]): CatalogNode[] {
+  const leaves: CatalogNode[] = [];
+  const walk = (list: CatalogNode[]) => {
+    list.forEach((node) => {
+      const hasChildren = node.children && node.children.length > 0;
+      if (!hasChildren && !node.has_children) {
+        leaves.push(node);
+      } else if (node.children?.length) {
+        walk(node.children);
+      }
+    });
+  };
+  walk(nodes);
+  return leaves;
 }
 
 export const PACKAGE_GROUP_LABELS = [
