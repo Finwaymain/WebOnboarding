@@ -42,6 +42,9 @@ const MATERIAL_ICON_EMOJI: Record<string, string> = {
 
 const HEALTHCARE_PROFESSION_ALIASES: Record<string, string> = {
   nurse: 'Nursing Care',
+  'nursing care': 'Nursing Care',
+  'doctor home visit': 'Doctor Home Visit',
+  physiotherapist: 'Physiotherapist',
   'lab technician': 'Lab Sample Collection',
   'ambulance booking': 'Ambulance Booking',
 };
@@ -247,13 +250,13 @@ export function getProfessionSkillHeading(professionLabel: string): { title: str
   if (['barber & saloon service', 'salon spa & others (female)', 'massage therapist'].includes(key)) {
     return {
       title: 'Service Skills',
-      hint: 'Select the beauty, salon, or massage services you provide.',
+      hint: 'Select the services you offer, then add your price (₹) for each on the right.',
     };
   }
 
   return {
     title: 'Select Your Skills',
-    hint: 'Choose the specific services you can provide under your profession.',
+    hint: 'Choose the services you offer, then add your price (₹) for each on the right.',
   };
 }
 
@@ -270,8 +273,7 @@ export function isHealthcareProfession(professionLabel: string): boolean {
 }
 
 export function isPackagePricingProfession(professionLabel: string): boolean {
-  const key = normalizeLabel(professionLabel);
-  return ['doctor home visit', 'physiotherapist'].includes(key);
+  return false;
 }
 
 const EDUCATION_PROFESSIONS = [
@@ -283,20 +285,19 @@ const EDUCATION_PROFESSIONS = [
   'language tutor',
 ];
 
-const INLINE_SKILL_PRICING_PROFESSIONS = new Set<string>([
-  'lab technician',
-  'nurse',
-  'nursing care',
-  ...EDUCATION_PROFESSIONS,
-]);
-
 export function isEducationProfession(professionLabel: string): boolean {
   return EDUCATION_PROFESSIONS.includes(normalizeLabel(professionLabel));
 }
 
-/** Lab, nursing, and education: price each selected skill inline in step 1. */
-export function usesInlineSkillPricing(professionLabel: string): boolean {
-  return INLINE_SKILL_PRICING_PROFESSIONS.has(normalizeLabel(professionLabel));
+/** Price each selected skill inline whenever the profession has a skill catalog. */
+export function usesInlineSkillPricing(
+  professionLabel: string,
+  skillCatalogNodes: CatalogNode[] = []
+): boolean {
+  if (isPackagePricingProfession(professionLabel)) {
+    return false;
+  }
+  return collectLeafSkillNodes(skillCatalogNodes).length > 0;
 }
 
 export function formatAdminCommission(commission?: { value?: string | number; type?: string } | null): string {

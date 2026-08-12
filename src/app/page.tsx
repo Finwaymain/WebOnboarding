@@ -31,11 +31,75 @@ function readUrlParams() {
   };
 }
 
+function resolveEditMode(search?: string) {
+  if (typeof window === 'undefined' && !search) return false;
+  const params = new URLSearchParams(search ?? window.location.search);
+  const mode = params.get('mode');
+  return mode === 'edit_profile' || mode === 'edit_category' || params.get('edit') === '1';
+}
+
+function applyExistingSelection(
+  categories: any[],
+  selection: any,
+  homeServiceGroups: HomeServiceGroup[],
+  setters: {
+    setPrimaryCategory: (value: any) => void;
+    setBusinessType: (value: any) => void;
+    setSelectedHomeGroup: (value: HomeServiceGroup | null) => void;
+    setBankName: (value: string) => void;
+    setAccountNo: (value: string) => void;
+    setIfscCode: (value: string) => void;
+    setZoneId: (value: string) => void;
+  }
+) {
+  if (!selection || !categories.length) return;
+
+  const businessId = Number(selection.business_subcategory_id || 0);
+  if (!businessId) return;
+
+  let foundParent: any = null;
+  let foundBusiness: any = null;
+
+  for (const parent of categories) {
+    const directSub = parent.subcategories?.find((sub: any) => Number(sub.id) === businessId);
+    if (directSub) {
+      foundParent = parent;
+      foundBusiness = directSub;
+      break;
+    }
+    if (Number(parent.id) === businessId) {
+      foundParent = parent;
+      foundBusiness = parent;
+      break;
+    }
+  }
+
+  if (foundParent) setters.setPrimaryCategory(foundParent);
+  if (foundBusiness) setters.setBusinessType(foundBusiness);
+
+  const businessLabel = normalizeLabel(selection.business_subcategory_label || foundBusiness?.libelle || '');
+  if (businessLabel) {
+    const matchedGroup = homeServiceGroups.find((group) =>
+      group.professions.some((profession) => normalizeLabel(profession) === businessLabel)
+    );
+    if (matchedGroup) {
+      setters.setSelectedHomeGroup(matchedGroup);
+    }
+  }
+
+  if (selection.bank_name) setters.setBankName(String(selection.bank_name));
+  if (selection.account_no) setters.setAccountNo(String(selection.account_no));
+  if (selection.ifsc_code) setters.setIfscCode(String(selection.ifsc_code));
+  if (selection.zone_id) setters.setZoneId(String(selection.zone_id));
+}
+
 function OnboardingForm() {
   const [urlParams, setUrlParams] = useState(() => readUrlParams());
+  const [paramsReady, setParamsReady] = useState(false);
 
   useEffect(() => {
     setUrlParams(readUrlParams());
+    setParamsReady(true);
   }, []);
 
   useEffect(() => {
@@ -63,6 +127,10 @@ function OnboardingForm() {
   const driverId = urlParams.driverId;
   const accesstoken = urlParams.accesstoken;
   const mode = urlParams.mode;
+  const isEditCategoryMode = mode === 'edit_category';
+  const isEditProfileMode = mode === 'edit_profile';
+  const isEditMode = isEditCategoryMode || isEditProfileMode;
+  const editModeActive = isEditMode || (paramsReady && resolveEditMode());
 
   // API Data State
   const [loadingInit, setLoadingInit] = useState(true);
@@ -134,13 +202,30 @@ function OnboardingForm() {
   const [success, setSuccess] = useState(false);
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
 
+  useEffect(() => {
+    if (paramsReady && resolveEditMode()) {
+      setAlreadySubmitted(false);
+    }
+  }, [paramsReady, mode]);
+
   // Fetch Init Data
   useEffect(() => {
+    if (!paramsReady) return;
+
     const fetchInitData = async () => {
+      const editMode = resolveEditMode();
+      const currentMode = new URLSearchParams(window.location.search).get('mode');
+
       try {
         const initUrl = new URL("/api/v1/driver/onboarding/init", window.location.origin);
         if (driverId) {
           initUrl.searchParams.set("driver_id", driverId);
+        }
+        if (currentMode) {
+          initUrl.searchParams.set("mode", currentMode);
+        }
+        if (new URLSearchParams(window.location.search).get('edit') === '1') {
+          initUrl.searchParams.set("edit", "1");
         }
 
         const res = await fetch(initUrl.toString(), {
@@ -151,14 +236,14 @@ function OnboardingForm() {
         });
         const result = await res.json();
         if (result.success === 'success' || result.success === 'Success') {
+          const canEdit = editMode || result.data.allow_edit === true;
           if (result.data.onboarding_completed) {
-            if (mode === 'edit_category') {
-              setAlreadySubmitted(false);
-            } else {
+            if (!canEdit) {
               setAlreadySubmitted(true);
               setLoadingInit(false);
               return;
             }
+            setAlreadySubmitted(false);
           }
           const categories = result.data.categories || [];
           setCategoriesData(categories);
@@ -215,6 +300,25 @@ function OnboardingForm() {
               setSkillPrices(restoredPrices);
             }
           }
+
+          if (result.data.existing_selection) {
+            applyExistingSelection(
+              categories,
+              result.data.existing_selection,
+              Array.isArray(result.data.home_service_groups) && result.data.home_service_groups.length > 0
+                ? result.data.home_service_groups
+                : HOME_SERVICE_GROUPS,
+              {
+                setPrimaryCategory,
+                setBusinessType,
+                setSelectedHomeGroup,
+                setBankName,
+                setAccountNo,
+                setIfscCode,
+                setZoneId,
+              }
+            );
+          }
         } else {
           setInitError("Failed to load onboarding data.");
         }
@@ -231,7 +335,7 @@ function OnboardingForm() {
       setInitError("Missing access token.");
       setLoadingInit(false);
     }
-  }, [accesstoken, driverId]);
+  }, [paramsReady, accesstoken, driverId, mode]);
 
   // Disable pinch/gesture zoom on mobile devices (e.g. iOS Safari)
   useEffect(() => {
@@ -259,11 +363,22 @@ function OnboardingForm() {
     return label.includes('home services');
   };
 
+  const skillCatalogForDisplay = useMemo(
+    () => resolveSkillCatalogForProfession(homeServiceCatalog, businessType?.libelle || ''),
+    [homeServiceCatalog, businessType?.id, businessType?.libelle]
+  );
+
+  const skillSectionHeading = useMemo(
+    () => getProfessionSkillHeading(businessType?.libelle || ''),
+    [businessType?.libelle]
+  );
+
   const isHealthcareBusinessType = () => isHealthcareProfession(businessType?.libelle || '');
 
   const isPackagePricingFlow = () => isPackagePricingProfession(businessType?.libelle || '');
 
-  const isInlineSkillPricingFlow = () => usesInlineSkillPricing(businessType?.libelle || '');
+  const isInlineSkillPricingFlow = () =>
+    usesInlineSkillPricing(businessType?.libelle || '', skillCatalogForDisplay);
 
   const commissionLabel = formatAdminCommission(adminCommission);
 
@@ -271,7 +386,7 @@ function OnboardingForm() {
     if (isInlineSkillPricingFlow()) {
       return selectedSkillIds
         .map((skillId) => {
-          const node = findSkillNodeById(homeServiceCatalog, skillId);
+          const node = findSkillNodeById(skillCatalogForDisplay, skillId);
           const price = skillPrices[skillId];
           if (!node || !price?.trim()) return null;
           return { name: node.libelle, price: price.trim() };
@@ -286,16 +401,6 @@ function OnboardingForm() {
         price: item.price.trim(),
       }));
   };
-
-  const skillCatalogForDisplay = useMemo(
-    () => resolveSkillCatalogForProfession(homeServiceCatalog, businessType?.libelle || ''),
-    [homeServiceCatalog, businessType?.id, businessType?.libelle]
-  );
-
-  const skillSectionHeading = useMemo(
-    () => getProfessionSkillHeading(businessType?.libelle || ''),
-    [businessType?.libelle]
-  );
 
   const findSkillNodeById = (nodes: any[], targetId: number): any | null => {
     for (const node of nodes) {
@@ -428,7 +533,7 @@ function OnboardingForm() {
           {showPriceField && (
             <div className="w-[88px] shrink-0">
               <div className="relative">
-                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-semibold">₹</span>
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-semibold">{(typeof window !== 'undefined' && (window as any).CURRENCY_SYMBOL) || ''}</span>
                 <input
                   type="number"
                   min="0"
@@ -510,6 +615,7 @@ function OnboardingForm() {
   };
 
   const canProceedFromDocsTab = () => {
+    if (isEditMode) return true;
     if (isTransportOrDeliveryCategory()) return true;
     if (!homeDocs.selfie || !homeDocs.aadhaar_front || !homeDocs.aadhaar_back) return false;
     if (!hasRegisteredShop) return false;
@@ -568,6 +674,11 @@ function OnboardingForm() {
         });
       }
 
+      if (isInlineSkillPricingFlow()) {
+        const charge = parseFloat(visitingCharge);
+        return !isNaN(charge) && charge >= 0;
+      }
+
       const charge = parseFloat(visitingCharge);
       if (isNaN(charge) || charge < 0) return false;
 
@@ -589,14 +700,10 @@ function OnboardingForm() {
 
   const handleNextFromStep1 = () => {
     if (businessRequiresVehicle() || businessRequiresHomeVisitPricing()) {
-      if (isInlineSkillPricingFlow()) {
-        setStep(3);
-      } else if (businessRequiresHomeVisitPricing() && isPackagePricingFlow()) {
+      if (businessRequiresHomeVisitPricing() && isPackagePricingFlow()) {
         prefillPackageRowsFromSkills();
-        setStep(2);
-      } else {
-        setStep(2);
       }
+      setStep(2);
     } else {
       setStep(3);
     }
@@ -621,9 +728,7 @@ function OnboardingForm() {
         return;
       }
       setStep3Tab('docs');
-      if (isInlineSkillPricingFlow() && businessRequiresHomeVisitPricing()) {
-        setStep(1);
-      } else if (businessRequiresVehicle() || businessRequiresHomeVisitPricing()) {
+      if (businessRequiresVehicle() || businessRequiresHomeVisitPricing()) {
         setStep(2);
       } else {
         setStep(1);
@@ -633,6 +738,23 @@ function OnboardingForm() {
 
     if (step === 2) {
       setStep(1);
+      return;
+    }
+
+    if (isEditMode && step === 1) {
+      if (isCategoryOpen) {
+        setIsCategoryOpen(false);
+        return;
+      }
+      if (professionSearch.trim()) {
+        setProfessionSearch('');
+        return;
+      }
+      if (isHomeServicesCategory() && selectedHomeGroup && !businessType) {
+        setSelectedHomeGroup(null);
+        return;
+      }
+      closeOnboarding();
       return;
     }
 
@@ -820,9 +942,13 @@ function OnboardingForm() {
           <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
             <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
           </div>
-          <h2 className="text-2xl font-bold text-slate-800 mb-3">Onboarding Complete!</h2>
+          <h2 className="text-2xl font-bold text-slate-800 mb-3">
+            {isEditMode ? 'Profile Updated!' : 'Onboarding Complete!'}
+          </h2>
           <p className="text-slate-500 mb-6 leading-relaxed">
-            Your details have been successfully submitted. Our team will verify your profile within 24-48 hours.
+            {isEditMode
+              ? 'Your profile and services have been saved successfully.'
+              : 'Your details have been successfully submitted. Our team will verify your profile within 24-48 hours.'}
           </p>
           <button
             onClick={() => {
@@ -841,7 +967,7 @@ function OnboardingForm() {
     );
   }
 
-  if (alreadySubmitted) {
+  if (alreadySubmitted && !editModeActive) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center border border-slate-100">
@@ -869,7 +995,7 @@ function OnboardingForm() {
     );
   }
 
-  if (loadingInit) {
+  if (!paramsReady || loadingInit) {
     return <div className="min-h-screen bg-slate-50 flex items-center justify-center">Loading Setup Data...</div>;
   }
 
@@ -950,7 +1076,15 @@ function OnboardingForm() {
             </button>
             <div className="w-full text-center flex-1">
               <h1 className="text-xl font-bold text-gray-900 leading-tight tracking-tight">
-                {step === 1 ? 'Choose Services' : step === 2 ? (step2IsPricing() ? 'Service Pricing' : 'Profession Info') : 'Upload Docs'}
+                {isEditProfileMode
+                  ? 'Edit Profile & Services'
+                  : isEditCategoryMode
+                    ? 'Edit Categories'
+                    : step === 1
+                      ? 'Choose Services'
+                      : step === 2
+                        ? (step2IsPricing() ? 'Service Pricing' : 'Profession Info')
+                        : 'Upload Docs'}
               </h1>
             </div>
           </div>
@@ -1188,7 +1322,7 @@ function OnboardingForm() {
                   )}
                   {isInlineSkillPricingFlow() && (
                     <div className="flex items-center justify-end gap-2 mb-2 px-1">
-                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Price (₹)</span>
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Price</span>
                     </div>
                   )}
                   <div className="space-y-2">
@@ -1270,21 +1404,26 @@ function OnboardingForm() {
               )}
               <div className="bg-green-50 border border-green-100 rounded-xl p-4">
                 <h2 className="text-sm font-bold text-green-700 mb-1">
-                  {isPackagePricingFlow() ? 'Healthcare Booking Packages' : 'Home Visit Service Pricing'}
+                  {isPackagePricingFlow()
+                    ? 'Healthcare Booking Packages'
+                    : isInlineSkillPricingFlow()
+                      ? 'Home Visit Charge'
+                      : 'Home Visit Service Pricing'}
                 </h2>
                 <p className="text-xs text-green-600 leading-relaxed">
                   {isPackagePricingFlow()
                     ? 'Add optional prices for nursing/healthcare packages. Prices are not compulsory — leave blank to discuss with customer.'
-                    : 'Set your fixed visiting charge and add optional service prices customers can book (e.g. AC repair, AC installation).'}
+                    : isInlineSkillPricingFlow()
+                      ? 'Set your fixed visiting charge. Service prices were added in the previous step.'
+                      : 'Set your fixed visiting charge and add optional service prices customers can book (e.g. AC repair, AC installation).'}
                 </p>
               </div>
 
               {!isPackagePricingFlow() && (
               <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                 <label className="block text-sm font-bold text-gray-800 mb-2">Visiting Charge (Fixed)</label>
-                <p className="text-xs text-gray-500 mb-3">One-time fee for visiting the customer&apos;s home (e.g. ₹300)</p>
+                <p className="text-xs text-gray-500 mb-3">One-time fee for visiting the customer&apos;s home (e.g. 300)</p>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-semibold">₹</span>
                   <input
                     type="number"
                     min="0"
@@ -1292,12 +1431,13 @@ function OnboardingForm() {
                     placeholder="300"
                     value={visitingCharge}
                     onChange={(e) => setVisitingCharge(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-xl pl-8 pr-3 py-3 text-sm font-medium focus:ring-2 focus:ring-green-600 focus:outline-none"
+                    className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-xl px-3 py-3 text-sm font-medium focus:ring-2 focus:ring-green-600 focus:outline-none"
                   />
                 </div>
               </div>
               )}
 
+              {!isInlineSkillPricingFlow() && (
               <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between mb-3">
                   <div>
@@ -1338,7 +1478,7 @@ function OnboardingForm() {
                           />
                         </div>
                         <div>
-                          {index === 0 && <label className="block text-[10px] font-semibold text-gray-600 mb-1">Price (₹)</label>}
+                          {index === 0 && <label className="block text-[10px] font-semibold text-gray-600 mb-1">Price</label>}
                           <input
                             type="number"
                             min="0"
@@ -1361,6 +1501,7 @@ function OnboardingForm() {
                   </div>
                 )}
               </div>
+              )}
             </div>
           )}
 
@@ -1712,9 +1853,7 @@ function OnboardingForm() {
               <button
                 onClick={
                   businessRequiresHomeVisitPricing()
-                    ? isInlineSkillPricingFlow()
-                      ? submitForm
-                      : handleNextFromStep1
+                    ? handleNextFromStep1
                     : submitForm
                 }
                 disabled={!canProceedToStep2() || loading}
@@ -1778,7 +1917,7 @@ function OnboardingForm() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-              ) : step3Tab === 'docs' ? 'Continue to Zone' : step3Tab === 'zone' ? 'Continue to KYC' : 'Submit Application'}
+              ) : step3Tab === 'docs' ? 'Continue to Zone' : step3Tab === 'zone' ? 'Continue to KYC' : (isEditMode ? 'Save Changes' : 'Submit Application')}
             </button>
           )}
         </footer>

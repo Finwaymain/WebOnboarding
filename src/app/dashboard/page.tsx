@@ -8,7 +8,8 @@ const getApiBase = () => (typeof window !== "undefined" ? `${window.location.ori
 
 function fmtMoney(v: string | number) {
   const n = Number(v || 0);
-  return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+  const sym = typeof window !== "undefined" && (window as any).CURRENCY_SYMBOL !== undefined ? (window as any).CURRENCY_SYMBOL : "";
+  return `${sym}${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
 function DashboardContent() {
