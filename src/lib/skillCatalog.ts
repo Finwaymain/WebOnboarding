@@ -42,9 +42,6 @@ const MATERIAL_ICON_EMOJI: Record<string, string> = {
 
 const HEALTHCARE_PROFESSION_ALIASES: Record<string, string> = {
   nurse: 'Nursing Care',
-  'nursing care': 'Nursing Care',
-  'doctor home visit': 'Doctor Home Visit',
-  physiotherapist: 'Physiotherapist',
   'lab technician': 'Lab Sample Collection',
   'ambulance booking': 'Ambulance Booking',
 };
@@ -214,13 +211,13 @@ export function getProfessionSkillHeading(professionLabel: string): { title: str
   if (key === 'doctor home visit') {
     return {
       title: 'Doctor Skills & Services',
-      hint: 'Select the consultations and home-visit services you provide as a doctor.',
+      hint: 'Select the consultations and home-visit services you provide, then add your price (₹) for each on the right.',
     };
   }
   if (key === 'physiotherapist') {
     return {
       title: 'Physiotherapy Skills',
-      hint: 'Choose therapy types and rehabilitation services you offer at home.',
+      hint: 'Choose therapy types and rehabilitation services you offer, then add your price (₹) for each on the right.',
     };
   }
   if (['nurse', 'nursing care'].includes(key)) {
@@ -273,6 +270,9 @@ export function isHealthcareProfession(professionLabel: string): boolean {
 }
 
 export function isPackagePricingProfession(professionLabel: string): boolean {
+  // No professions currently use the package pricing flow.
+  // Doctor home visit and physiotherapist now use inline skill pricing (same as Nurse).
+  void professionLabel;
   return false;
 }
 
