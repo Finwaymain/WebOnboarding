@@ -211,13 +211,13 @@ export function getProfessionSkillHeading(professionLabel: string): { title: str
   if (key === 'doctor home visit') {
     return {
       title: 'Doctor Skills & Services',
-      hint: 'Select the consultations and home-visit services you provide, then add your price (₹) for each on the right.',
+      hint: 'Select the service categories you offer and set a price for each category.',
     };
   }
   if (key === 'physiotherapist') {
     return {
       title: 'Physiotherapy Skills',
-      hint: 'Choose therapy types and rehabilitation services you offer, then add your price (₹) for each on the right.',
+      hint: 'Select the therapy categories you offer and set a price for each category.',
     };
   }
   if (['nurse', 'nursing care'].includes(key)) {
@@ -270,10 +270,14 @@ export function isHealthcareProfession(professionLabel: string): boolean {
 }
 
 export function isPackagePricingProfession(professionLabel: string): boolean {
-  // No professions currently use the package pricing flow.
-  // Doctor home visit and physiotherapist now use inline skill pricing (same as Nurse).
   void professionLabel;
   return false;
+}
+
+/** Price is set on the parent group/folder, not on individual leaf skills. */
+export function isParentGroupPricingProfession(professionLabel: string): boolean {
+  const key = normalizeLabel(professionLabel);
+  return ['doctor home visit', 'physiotherapist'].includes(key);
 }
 
 const EDUCATION_PROFESSIONS = [

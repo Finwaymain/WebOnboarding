@@ -385,6 +385,10 @@ export default function WalletPage() {
       if (typeof window !== 'undefined') {
         (window as any).refreshWalletData = () => fetchData(true);
       }
+      const autoRefreshTimer = setInterval(() => {
+        fetchData(true);
+      }, 10000);
+      return () => clearInterval(autoRefreshTimer);
     }
   }, [mounted, fetchData]);
 
@@ -861,37 +865,89 @@ export default function WalletPage() {
                 ) : (
                   <div className="space-y-2.5">
                     {historyList.map((tx, idx) => {
-                      const amountStr = String(tx.amount || tx.transaction_amount || tx.montant || '0');
-                      const isNegative = amountStr.includes('-') || tx.category_title?.toLowerCase().includes('debited');
+                      const amountRaw = String(tx.amount || tx.transaction_amount || tx.montant || '0').replace('-', '');
+                      const desc = (tx.description || tx.category_title || tx.categoryTitle || '').toLowerCase();
+                      const deductionType = String(tx.deduction_type ?? '');
                       
+                      const isNegative = deductionType === '0' || 
+                                         deductionType === 'debit' ||
+                                         tx.type === 'debit' || 
+                                         String(tx.amount || '').includes('-') ||
+                                         desc.includes('transferred to') ||
+                                         desc.includes('debited') ||
+                                         desc.includes('withdraw') ||
+                                         desc.includes('paid to');
+
+                      const categoryTitle = tx.category_title || tx.categoryTitle || tx.libelle || (isNegative ? 'Money Transfer' : 'Money Received');
+                      
+                      // Extract User Name
+                      let userName = tx.counterparty || tx.user_name || tx.customer_name || tx.name || '';
+                      if (!userName) {
+                        if (desc.includes('from ')) {
+                          userName = desc.split('from ')[1]?.split(' ')[0] || '';
+                        } else if (desc.includes('to ')) {
+                          userName = desc.split('to ')[1]?.split(' ')[0] || '';
+                        }
+                      }
+                      if (!userName) {
+                        userName = isDriver ? (isNegative ? 'Customer / Recipient' : 'Customer') : (isNegative ? 'Merchant / Recipient' : 'Sender User');
+                      }
+
+                      // Extract Business Name
+                      const businessName = tx.business_name || tx.vendor_name || tx.store_name || tx.company || 'Fiinway Business';
+
                       return (
                         <div
                           key={tx.id || idx}
-                          onClick={() => setSelectedTx(tx)}
-                          className={`${themeClasses.cardBg} rounded-2xl p-3.5 flex items-center justify-between cursor-pointer transition-all active:scale-[0.99]`}
+                          onClick={() => setSelectedTx({
+                            ...tx,
+                            parsedUserName: userName,
+                            parsedBusinessName: businessName,
+                            parsedCategoryTitle: categoryTitle,
+                            parsedIsNegative: isNegative,
+                            parsedAmountStr: amountRaw,
+                          })}
+                          className={`${themeClasses.cardBg} rounded-2xl p-3.5 flex items-center justify-between cursor-pointer transition-all active:scale-[0.99] border hover:border-[#6AA720]/40 shadow-sm`}
                         >
                           <div className="flex items-center gap-3">
-                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                              isNegative ? 'bg-rose-500/10 text-rose-500' : 'bg-[#6AA720]/10 text-[#6AA720]'
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                              isNegative ? 'bg-red-500/10 text-red-600' : 'bg-emerald-600/15 text-[#15803D]'
                             }`}>
-                              {isNegative ? <ArrowUpRightIcon className="w-4 h-4" /> : <ArrowDownLeftIcon className="w-4 h-4" />}
+                              {isNegative ? <ArrowUpRightIcon className="w-5 h-5 text-red-600" /> : <ArrowDownLeftIcon className="w-5 h-5 text-[#15803D]" />}
                             </div>
-                            <div>
+                            <div className="space-y-0.5">
                               <h4 className={`text-xs font-bold ${themeClasses.textMain}`}>
-                                {tx.category_title || tx.categoryTitle || tx.libelle || 'Wallet Transaction'}
+                                {categoryTitle}
                               </h4>
-                              <p className={`text-[11px] ${themeClasses.textMuted}`}>
+                              
+                              {/* USER NAME & BUSINESS NAME */}
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
+                                <span className="font-semibold text-slate-700 dark:text-slate-200">
+                                  User: <span className="font-normal">{userName}</span>
+                                </span>
+                                <span className="text-slate-300 dark:text-slate-600">•</span>
+                                <span className="font-semibold text-slate-700 dark:text-slate-200">
+                                  Business: <span className="font-normal text-[#6AA720]">{businessName}</span>
+                                </span>
+                              </div>
+
+                              <p className={`text-[10.5px] ${themeClasses.textMuted}`}>
                                 {tx.creer || tx.created_at || tx.formattedDate || 'Recently'}
                               </p>
                             </div>
                           </div>
 
-                          <div className="text-right">
-                            <p className={`text-xs font-extrabold ${isNegative ? 'text-rose-500' : 'text-[#6AA720]'}`}>
-                              {isNegative ? '-' : '+'}{formatCurrency(amountStr.replace('-', ''))}
+                          <div className="text-right shrink-0">
+                            {/* DEDUCTION AMOUNT IN RED (-), RECEIVE MONEY IN DARK GREEN (+) */}
+                            <p className={`text-xs font-extrabold ${isNegative ? 'text-red-600' : 'text-[#15803D]'}`}>
+                              {isNegative ? '-' : '+'}{formatCurrency(amountRaw)}
                             </p>
-                            <span className={`text-[10px] font-semibold ${themeClasses.textMuted} uppercase tracking-wider`}>
-                              {tx.payment_method || tx.paymentMethod || tx.libelle || 'Wallet'}
+                            
+                            {/* DEDUCT FROM (SMART VALUE) */}
+                            <span className={`text-[9.5px] font-bold block mt-0.5 uppercase tracking-wider ${
+                              isNegative ? 'text-red-500/90' : 'text-[#15803D]'
+                            }`}>
+                              {isNegative ? 'SMART VALUE (-)' : 'SMART VALUE (+)'}
                             </span>
                           </div>
                         </div>
@@ -1123,45 +1179,74 @@ export default function WalletPage() {
       {/* TRANSACTION RECEIPT MODAL */}
       {selectedTx && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className={`w-full max-w-sm ${themeClasses.modalBg} border rounded-3xl p-6 space-y-4 shadow-2xl`}>
+          <div className={`w-full max-w-sm ${themeClasses.modalBg} border rounded-3xl p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in duration-150`}>
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-              <h3 className={`text-sm font-bold ${themeClasses.textMain}`}>Transaction Receipt</h3>
+              <div className="flex items-center gap-2">
+                <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
+                  selectedTx.parsedIsNegative ? 'bg-red-500/10 text-red-600' : 'bg-emerald-600/15 text-[#15803D]'
+                }`}>
+                  {selectedTx.parsedIsNegative ? <ArrowUpRightIcon className="w-3.5 h-3.5 text-red-600" /> : <ArrowDownLeftIcon className="w-3.5 h-3.5 text-[#15803D]" />}
+                </div>
+                <h3 className={`text-sm font-bold ${themeClasses.textMain}`}>Transaction Receipt</h3>
+              </div>
               <button onClick={() => setSelectedTx(null)} className={themeClasses.textMuted}>
                 <XIcon className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="text-center py-2">
-              <span className={`text-xs ${themeClasses.textMuted} font-medium`}>Amount</span>
-              <h2 className="text-2xl font-black text-[#6AA720] mt-0.5">
-                {formatCurrency(selectedTx.amount || selectedTx.transaction_amount || selectedTx.montant || '0')}
+            <div className="text-center py-2.5 bg-slate-50 dark:bg-slate-950/50 rounded-2xl p-3 border border-slate-200/60 dark:border-slate-800">
+              <span className={`text-[11px] ${themeClasses.textMuted} font-semibold uppercase tracking-wider`}>
+                {selectedTx.parsedIsNegative ? 'Deducted From Smart Value' : 'Credited To Smart Value'}
+              </span>
+              <h2 className={`text-2xl font-black mt-1 ${selectedTx.parsedIsNegative ? 'text-red-600' : 'text-[#15803D]'}`}>
+                {selectedTx.parsedIsNegative ? '-' : '+'}{formatCurrency(selectedTx.parsedAmountStr || selectedTx.amount || '0')}
               </h2>
             </div>
 
             <div className="space-y-2 text-xs">
               <div className="flex justify-between py-1.5 border-b border-slate-200 dark:border-slate-800">
-                <span className={themeClasses.textMuted}>Category</span>
-                <span className={`font-semibold ${themeClasses.textMain}`}>{selectedTx.category_title || selectedTx.categoryTitle || 'Wallet'}</span>
+                <span className={themeClasses.textMuted}>User Name</span>
+                <span className={`font-bold ${themeClasses.textMain}`}>{selectedTx.parsedUserName || selectedTx.counterparty || 'User'}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-slate-200 dark:border-slate-800">
+                <span className={themeClasses.textMuted}>Business Name</span>
+                <span className="font-bold text-[#6AA720]">{selectedTx.parsedBusinessName || 'Fiinway Business'}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-slate-200 dark:border-slate-800">
+                <span className={themeClasses.textMuted}>Category / Service</span>
+                <span className={`font-semibold ${themeClasses.textMain}`}>{selectedTx.parsedCategoryTitle || selectedTx.category_title || 'Wallet'}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-slate-200 dark:border-slate-800">
+                <span className={themeClasses.textMuted}>Wallet Source</span>
+                <span className={`font-bold ${selectedTx.parsedIsNegative ? 'text-red-600' : 'text-[#15803D]'}`}>
+                  Smart Value Wallet
+                </span>
               </div>
               <div className="flex justify-between py-1.5 border-b border-slate-200 dark:border-slate-800">
                 <span className={themeClasses.textMuted}>Payment Method</span>
-                <span className={`font-semibold ${themeClasses.textMain}`}>{selectedTx.payment_method || selectedTx.paymentMethod || 'Wallet'}</span>
+                <span className={`font-semibold ${themeClasses.textMain}`}>{selectedTx.payment_method || selectedTx.paymentMethod || 'Smart Value Wallet'}</span>
               </div>
               <div className="flex justify-between py-1.5 border-b border-slate-200 dark:border-slate-800">
                 <span className={themeClasses.textMuted}>Status</span>
-                <span className="font-semibold text-[#6AA720] uppercase">{selectedTx.payment_status || 'Success'}</span>
+                <span className="font-bold text-[#15803D] uppercase bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  {selectedTx.payment_status || 'Success'}
+                </span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-slate-200 dark:border-slate-800">
+                <span className={themeClasses.textMuted}>Txn ID</span>
+                <span className="font-mono text-[11px] text-slate-600 dark:text-slate-400">{selectedTx.id || selectedTx.txn_id || selectedTx.transaction_id || `TXN_${Date.now()}`}</span>
               </div>
               <div className="flex justify-between py-1.5">
-                <span className={themeClasses.textMuted}>Date</span>
+                <span className={themeClasses.textMuted}>Date & Time</span>
                 <span className={`font-semibold ${themeClasses.textMain}`}>{selectedTx.creer || selectedTx.created_at || 'N/A'}</span>
               </div>
             </div>
 
             <button
               onClick={() => setSelectedTx(null)}
-              className={`w-full py-2.5 ${isDark ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-800'} text-xs font-bold rounded-xl transition-colors`}
+              className="w-full py-3 bg-[#6AA720] hover:bg-[#5b921b] text-white text-xs font-bold rounded-xl shadow-md transition-colors uppercase tracking-wider"
             >
-              Close
+              Close Receipt
             </button>
           </div>
         </div>

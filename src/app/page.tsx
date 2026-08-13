@@ -8,6 +8,7 @@ import {
   getProfessionSkillHeading,
   isHealthcareProfession,
   isPackagePricingProfession,
+  isParentGroupPricingProfession,
   normalizeLabel,
   PACKAGE_GROUP_LABELS,
   resolveNodeIcon,
@@ -287,12 +288,34 @@ function OnboardingForm() {
 
             const catalog = result.data.home_service_catalog || [];
             const leafNodes = collectLeafSkillNodes(catalog);
+
+            // Helper to search ALL nodes (including parent/subfolder nodes) by label.
+            // Used to restore prices for Doctor/Physio where price is on the subfolder, not leaf.
+            const findAnyNodeByLabel = (nodes: any[], label: string): any | null => {
+              const target = normalizeLabel(label);
+              for (const node of nodes) {
+                if (normalizeLabel(node.libelle) === target) return node;
+                if (node.children?.length) {
+                  const found = findAnyNodeByLabel(node.children, label);
+                  if (found) return found;
+                }
+              }
+              return null;
+            };
+
             const restoredPrices: Record<number, string> = {};
             loadedItems.forEach((item: { name: string; price: string }) => {
-              const node = leafNodes.find(
+              if (!item.price) return;
+              // Try leaf nodes first (Nurse, Lab Technician, etc.)
+              let node: any = leafNodes.find(
                 (leaf) => normalizeLabel(leaf.libelle) === normalizeLabel(item.name)
               );
-              if (node && item.price) {
+              // If not found as a leaf, search all nodes —
+              // Doctor/Physio stores prices on subfolder nodes, not leaves.
+              if (!node) {
+                node = findAnyNodeByLabel(catalog, item.name);
+              }
+              if (node) {
                 restoredPrices[node.id] = item.price;
               }
             });
@@ -380,9 +403,22 @@ function OnboardingForm() {
   const isInlineSkillPricingFlow = () =>
     usesInlineSkillPricing(businessType?.libelle || '', skillCatalogForDisplay);
 
+  const isParentGroupPricingFlow = () => isParentGroupPricingProfession(businessType?.libelle || '');
+
   const commissionLabel = formatAdminCommission(adminCommission);
 
   const buildServiceItemsPayload = () => {
+    if (isParentGroupPricingFlow()) {
+      return selectedSkillIds
+        .map((skillId) => {
+          const node = findSkillNodeById(skillCatalogForDisplay, skillId);
+          const price = skillPrices[skillId];
+          if (!node) return null;
+          return { name: node.libelle, price: price?.trim() || '' };
+        })
+        .filter(Boolean) as { name: string; price: string }[];
+    }
+
     if (isInlineSkillPricingFlow()) {
       return selectedSkillIds
         .map((skillId) => {
@@ -458,17 +494,48 @@ function OnboardingForm() {
 
   const isLeafSkillNode = (node: any) => !node?.has_children && (!node?.children || node.children.length === 0);
 
+  const isProfessionRootNode = (node: any) =>
+    Boolean(businessType?.libelle && normalizeLabel(node.libelle) === normalizeLabel(businessType.libelle));
+
+  const findParentSubfolderNode = (nodes: any[], targetId: number, currentParent: any | null = null): any | null => {
+    for (const node of nodes) {
+      if (node.id === targetId) {
+        if (currentParent && isProfessionRootNode(currentParent)) return null;
+        return currentParent;
+      }
+      if (node.children?.length) {
+        const found = findParentSubfolderNode(node.children, targetId, node);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
   const toggleSkillSelection = (skillId: number) => {
     setSelectedSkillIds((prev) => {
-      if (prev.includes(skillId)) {
+      const isSelected = prev.includes(skillId);
+      if (isSelected) {
         setSkillPrices((prices) => {
           const next = { ...prices };
           delete next[skillId];
           return next;
         });
+        const node = findSkillNodeById(skillCatalogForDisplay, skillId);
+        if (node && node.children?.length) {
+          const childIds = collectLeafSkillNodes(node.children).map((c) => c.id);
+          return prev.filter((id) => id !== skillId && !childIds.includes(id));
+        }
         return prev.filter((id) => id !== skillId);
+      } else {
+        const next = [...prev, skillId];
+        if (isParentGroupPricingFlow()) {
+          const parentSubfolder = findParentSubfolderNode(skillCatalogForDisplay, skillId);
+          if (parentSubfolder && !next.includes(parentSubfolder.id)) {
+            next.push(parentSubfolder.id);
+          }
+        }
+        return next;
       }
-      return [...prev, skillId];
     });
   };
 
@@ -485,6 +552,73 @@ function OnboardingForm() {
       const hasChildren = node.children && node.children.length > 0;
       const isLeaf = isLeafSkillNode(node);
       const isSelected = selectedSkillIds.includes(node.id);
+
+      // Top profession root container (e.g. "Doctor Home Visit"):
+      // Render its subfolders directly without a checkbox or price field on the root itself.
+      if (hasChildren && isProfessionRootNode(node)) {
+        return (
+          <div key={node.id} className="space-y-2">
+            {renderSkillNodes(node.children, depth + 1)}
+          </div>
+        );
+      }
+
+      // Subfolder category (e.g. "Child Doctor", "Diabetes Doctor"):
+      // Shows Checkbox + Price Tag Input + Expand Arrow + Sub-skills inside
+      if (isParentGroupPricingFlow() && hasChildren) {
+        const expanded = expandedSkillGroups[node.id] ?? true;
+        const showPriceField = isSelected;
+        return (
+          <div key={node.id} className="mb-3">
+            <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-colors ${isSelected ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-200'}`}>
+              <label className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => toggleSkillSelection(node.id)}
+                  className="w-5 h-5 accent-emerald-600 shrink-0"
+                />
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className="text-base shrink-0" aria-hidden>{resolveNodeIcon(node)}</span>
+                  <span className="text-sm font-semibold text-slate-800 flex-1 leading-snug">{node.libelle}</span>
+                </span>
+              </label>
+              {showPriceField && (
+                <div className="w-[88px] shrink-0">
+                  <div className="relative">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-semibold">{(typeof window !== 'undefined' && (window as any).CURRENCY_SYMBOL) || '₹'}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="Price"
+                      value={skillPrices[node.id] || ''}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => updateSkillPrice(node.id, e.target.value)}
+                      className="w-full bg-white border border-slate-200 text-slate-800 rounded-lg pl-5 pr-2 py-2 text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => toggleSkillGroup(node.id)}
+                className="p-1 shrink-0 text-slate-500 hover:text-slate-700"
+                aria-label="toggle"
+              >
+                <svg className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+              </button>
+            </div>
+            {expanded && (
+              <div className="mt-1.5 ml-4 pl-3 border-l-2 border-slate-100 space-y-1.5">
+                {renderSkillNodes(node.children, depth + 1)}
+              </div>
+            )}
+          </div>
+        );
+      }
 
       if (hasChildren) {
         const expanded = expandedSkillGroups[node.id] ?? depth === 0;
@@ -514,26 +648,27 @@ function OnboardingForm() {
 
       if (!isLeaf) return null;
 
-      const showPriceField = isInlineSkillPricingFlow() && isSelected;
+      // In parent-group pricing mode, leaf skills are checkable but have NO individual price input
+      const showPriceField = !isParentGroupPricingFlow() && isInlineSkillPricingFlow() && isSelected;
 
       return (
         <div
           key={node.id}
-          className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-colors ${isSelected ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-200'}`}
+          className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-colors ${isSelected ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-200'}`}
         >
           <label className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer">
             <input
               type="checkbox"
               checked={isSelected}
               onChange={() => toggleSkillSelection(node.id)}
-              className="w-5 h-5 accent-emerald-600 shrink-0"
+              className="w-4 h-4 accent-emerald-600 shrink-0"
             />
-            <span className="text-sm font-medium text-slate-800 flex-1 leading-snug">{node.libelle}</span>
+            <span className="text-xs font-medium text-slate-800 flex-1 leading-snug">{node.libelle}</span>
           </label>
           {showPriceField && (
             <div className="w-[88px] shrink-0">
               <div className="relative">
-                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-semibold">{(typeof window !== 'undefined' && (window as any).CURRENCY_SYMBOL) || ''}</span>
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-semibold">{(typeof window !== 'undefined' && (window as any).CURRENCY_SYMBOL) || '₹'}</span>
                 <input
                   type="number"
                   min="0"
@@ -542,7 +677,7 @@ function OnboardingForm() {
                   value={skillPrices[node.id] || ''}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => updateSkillPrice(node.id, e.target.value)}
-                  className="w-full bg-white border border-slate-200 text-slate-800 rounded-lg pl-5 pr-2 py-2 text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  className="w-full bg-white border border-slate-200 text-slate-800 rounded-lg pl-5 pr-2 py-1.5 text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 />
               </div>
             </div>
@@ -570,7 +705,17 @@ function OnboardingForm() {
   const canProceedToStep2 = () => {
     if (!primaryCategory || !businessType) return false;
     if (isHomeServicesCategory() && selectedSkillIds.length === 0) return false;
-    if (isInlineSkillPricingFlow()) {
+    if (isParentGroupPricingFlow()) {
+      const selectedSubfolders = selectedSkillIds
+        .map((id) => findSkillNodeById(skillCatalogForDisplay, id))
+        .filter((node) => node && node.children?.length > 0 && !isProfessionRootNode(node));
+
+      const allSubfoldersPriced = selectedSubfolders.every((node) => {
+        const price = parseFloat(skillPrices[node.id] || '');
+        return !isNaN(price) && price >= 0 && skillPrices[node.id]?.trim() !== '';
+      });
+      if (!allSubfoldersPriced) return false;
+    } else if (isInlineSkillPricingFlow()) {
       const allPriced = selectedSkillIds.every((skillId) => {
         const price = parseFloat(skillPrices[skillId] || '');
         return !isNaN(price) && price >= 0 && skillPrices[skillId]?.trim() !== '';
