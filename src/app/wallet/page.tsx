@@ -876,13 +876,18 @@ export default function WalletPage() {
                                          desc.includes('transferred to') ||
                                          desc.includes('debited') ||
                                          desc.includes('withdraw') ||
+                                         desc.includes('purchased') ||
+                                         desc.includes('subscription') ||
+                                         desc.includes('admission') ||
+                                         desc.includes('fee') ||
+                                         desc.includes('deduct') ||
                                          desc.includes('paid to');
 
                       const categoryTitle = tx.category_title || tx.categoryTitle || tx.libelle || (isNegative ? 'Money Transfer' : 'Money Received');
                       
                       // Extract User Name
-                      let userName = tx.counterparty || tx.user_name || tx.customer_name || tx.name || '';
-                      if (!userName) {
+                      let userName = tx.counterparty_name || tx.counterpartyName || tx.counterparty || tx.user_name || tx.customer_name || tx.name || '';
+                      if (!userName || userName.toLowerCase() === 'customer') {
                         if (desc.includes('from ')) {
                           userName = desc.split('from ')[1]?.split(' ')[0] || '';
                         } else if (desc.includes('to ')) {
@@ -893,7 +898,7 @@ export default function WalletPage() {
                         userName = isDriver ? (isNegative ? 'Customer / Recipient' : 'Customer') : (isNegative ? 'Merchant / Recipient' : 'Sender User');
                       }
 
-                      // Extract Business Name
+                      // Extract Business Name for Receipt Modal
                       const businessName = tx.business_name || tx.vendor_name || tx.store_name || tx.company || 'Fiinway Business';
 
                       return (
@@ -920,16 +925,10 @@ export default function WalletPage() {
                                 {categoryTitle}
                               </h4>
                               
-                              {/* USER NAME & BUSINESS NAME */}
-                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
-                                <span className="font-semibold text-slate-700 dark:text-slate-200">
-                                  User: <span className="font-normal">{userName}</span>
-                                </span>
-                                <span className="text-slate-300 dark:text-slate-600">•</span>
-                                <span className="font-semibold text-slate-700 dark:text-slate-200">
-                                  Business: <span className="font-normal text-[#6AA720]">{businessName}</span>
-                                </span>
-                              </div>
+                              {/* USER NAME WITH HIGHLIGHTED TEXT COLOR */}
+                              <p className="text-[11px] font-bold text-slate-900 dark:text-slate-100">
+                                User: <span className="font-semibold text-[#6AA720] dark:text-[#88c437]">{userName}</span>
+                              </p>
 
                               <p className={`text-[10.5px] ${themeClasses.textMuted}`}>
                                 {tx.creer || tx.created_at || tx.formattedDate || 'Recently'}
