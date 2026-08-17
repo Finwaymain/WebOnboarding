@@ -242,7 +242,7 @@ function MoreContent() {
 
     return (
       <div className="animate-in fade-in slide-in-from-bottom-2 duration-700">
-        <div className="mb-8 relative">
+        <div className="mb-6 relative">
           <input 
             type="text" 
             placeholder={driverId ? "Search your services..." : "Search for services..."} 
@@ -251,6 +251,26 @@ function MoreContent() {
             className="w-full bg-white border border-slate-200/60 rounded-2xl py-4 pl-12 pr-4 text-[15px] font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 transition-all shadow-[0_2px_12px_rgb(0,0,0,0.02)]"
           />
           <svg className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+        </div>
+
+        {/* Medical Cashback Card Interactive Banner */}
+        <div 
+          onClick={() => window.location.href = `/onboarding/medical-cashback?accesstoken=${token || ""}&driver_id=${driverId || ""}&user_id=${userId || ""}`}
+          className="mb-6 p-4 rounded-3xl bg-gradient-to-br from-[#0F172A] via-[#1E3A8A] to-[#0F172A] text-white shadow-lg cursor-pointer hover:scale-[1.01] transition-all flex items-center justify-between group border border-blue-900/40"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-2xl border border-white/20">
+              🏥
+            </div>
+            <div>
+              <span className="text-[10px] font-black tracking-widest uppercase text-blue-300">Fiinway Healthcare</span>
+              <h3 className="text-sm font-extrabold text-white">Medical Cashback Card</h3>
+              <p className="text-[11px] text-slate-300 font-medium">Claim up to ₹15,000 / Quarterly • Instant Wallet Credit</p>
+            </div>
+          </div>
+          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white group-hover:bg-white group-hover:text-slate-900 transition-all text-sm font-bold">
+            →
+          </div>
         </div>
 
         {loading ? (

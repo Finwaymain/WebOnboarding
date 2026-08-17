@@ -873,6 +873,7 @@ export default function WalletPage() {
                                          deductionType === 'debit' ||
                                          tx.type === 'debit' || 
                                          String(tx.amount || '').includes('-') ||
+                                         desc.includes('marketplace purchase') ||
                                          desc.includes('transferred to') ||
                                          desc.includes('debited') ||
                                          desc.includes('withdraw') ||
@@ -883,19 +884,30 @@ export default function WalletPage() {
                                          desc.includes('deduct') ||
                                          desc.includes('paid to');
 
-                      const categoryTitle = tx.category_title || tx.categoryTitle || tx.libelle || (isNegative ? 'Money Transfer' : 'Money Received');
+                      let categoryTitle = tx.category_title || tx.categoryTitle || tx.libelle;
+                      if (!categoryTitle || categoryTitle === 'Wallet Transaction') {
+                        if (desc.includes('medical card purchase')) categoryTitle = 'Medical Card Purchase';
+                        else if (desc.includes('medical cashback')) categoryTitle = 'Medical Cashback Credited';
+                        else if (desc.includes('marketplace purchase')) categoryTitle = 'Marketplace Purchase';
+                        else if (desc.includes('marketplace sale')) categoryTitle = 'Marketplace Sale';
+                        else categoryTitle = isNegative ? 'Money Transfer' : 'Money Received';
+                      }
                       
                       // Extract User Name
                       let userName = tx.counterparty_name || tx.counterpartyName || tx.counterparty || tx.user_name || tx.customer_name || tx.name || '';
-                      if (!userName || userName.toLowerCase() === 'customer') {
-                        if (desc.includes('from ')) {
+                      if (!userName || userName.toLowerCase() === 'customer' || userName === 'Fiinway User' || userName === 'Marketplace') {
+                        if (desc.includes('marketplace purchase')) {
+                          userName = tx.description ? tx.description.replace('Marketplace Purchase:', '').trim() : 'Marketplace Item';
+                        } else if (desc.includes('marketplace sale')) {
+                          userName = tx.description ? tx.description.replace('Marketplace Sale:', '').trim() : 'Marketplace Order';
+                        } else if (desc.includes('from ')) {
                           userName = desc.split('from ')[1]?.split(' ')[0] || '';
                         } else if (desc.includes('to ')) {
                           userName = desc.split('to ')[1]?.split(' ')[0] || '';
                         }
                       }
                       if (!userName) {
-                        userName = isDriver ? (isNegative ? 'Customer / Recipient' : 'Customer') : (isNegative ? 'Merchant / Recipient' : 'Sender User');
+                        userName = isDriver ? (isNegative ? 'Admin Panel' : 'Customer') : (isNegative ? 'Merchant / Recipient' : 'Sender User');
                       }
 
                       // Extract Business Name for Receipt Modal
@@ -926,7 +938,7 @@ export default function WalletPage() {
                               </h4>
                               
                               {/* USER NAME WITH HIGHLIGHTED TEXT COLOR */}
-                              <p className="text-[11px] font-bold text-slate-900 dark:text-slate-100">
+                              <p className="text-[11px] font-bold text-slate-900 dark:text-slate-900">
                                 User: <span className="font-semibold text-[#6AA720] dark:text-[#88c437]">{userName}</span>
                               </p>
 
@@ -946,7 +958,7 @@ export default function WalletPage() {
                             <span className={`text-[9.5px] font-bold block mt-0.5 uppercase tracking-wider ${
                               isNegative ? 'text-red-500/90' : 'text-[#15803D]'
                             }`}>
-                              {isNegative ? 'SMART VALUE (-)' : 'SMART VALUE (+)'}
+                             {isNegative ? 'SMART VALUE :' : 'SMART VALUE'}
                             </span>
                           </div>
                         </div>
@@ -1207,20 +1219,12 @@ export default function WalletPage() {
                 <span className={themeClasses.textMuted}>User Name</span>
                 <span className={`font-bold ${themeClasses.textMain}`}>{selectedTx.parsedUserName || selectedTx.counterparty || 'User'}</span>
               </div>
-              <div className="flex justify-between py-1.5 border-b border-slate-200 dark:border-slate-800">
-                <span className={themeClasses.textMuted}>Business Name</span>
-                <span className="font-bold text-[#6AA720]">{selectedTx.parsedBusinessName || 'Fiinway Business'}</span>
-              </div>
+            
               <div className="flex justify-between py-1.5 border-b border-slate-200 dark:border-slate-800">
                 <span className={themeClasses.textMuted}>Category / Service</span>
                 <span className={`font-semibold ${themeClasses.textMain}`}>{selectedTx.parsedCategoryTitle || selectedTx.category_title || 'Wallet'}</span>
               </div>
-              <div className="flex justify-between py-1.5 border-b border-slate-200 dark:border-slate-800">
-                <span className={themeClasses.textMuted}>Wallet Source</span>
-                <span className={`font-bold ${selectedTx.parsedIsNegative ? 'text-red-600' : 'text-[#15803D]'}`}>
-                  Smart Value Wallet
-                </span>
-              </div>
+             
               <div className="flex justify-between py-1.5 border-b border-slate-200 dark:border-slate-800">
                 <span className={themeClasses.textMuted}>Payment Method</span>
                 <span className={`font-semibold ${themeClasses.textMain}`}>{selectedTx.payment_method || selectedTx.paymentMethod || 'Smart Value Wallet'}</span>

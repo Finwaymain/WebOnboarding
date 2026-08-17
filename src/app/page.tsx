@@ -449,6 +449,104 @@ function OnboardingForm() {
     return null;
   };
 
+  const getPriceLabelInfo = (profName?: string, grpName?: string): { label: string; placeholder: string } => {
+    const p = (profName || businessType?.libelle || '').toLowerCase();
+    const g = (grpName || selectedHomeGroup?.name || primaryCategory?.libelle || '').toLowerCase();
+    const text = `${p} ${g}`;
+
+    // 1. PER DAY RATE (Outdoor services construction service, Personal home assistant, Pet service)
+    if (
+      text.includes('outdoor') ||
+      text.includes('construction') ||
+      text.includes('personal home assistant') ||
+      text.includes('home assistant') ||
+      text.includes('pet service') ||
+      text.includes('pet care') ||
+      text.includes('dog walker') ||
+      text.includes('mason') ||
+      text.includes('welder') ||
+      text.includes('gardener') ||
+      text.includes('cook') ||
+      text.includes('maid') ||
+      text.includes('caretaker') ||
+      text.includes('housekeeper')
+    ) {
+      return { label: 'PER DAY RATE', placeholder: 'PER DAY RATE' };
+    }
+
+    // 2. Sqft Rate (Interior and renovation, Furniture service)
+    if (
+      text.includes('interior') ||
+      text.includes('renovation') ||
+      text.includes('furniture') ||
+      text.includes('flooring') ||
+      text.includes('tiler') ||
+      text.includes('pop') ||
+      text.includes('false ceiling') ||
+      text.includes('carpenter') ||
+      text.includes('sofa')
+    ) {
+      return { label: 'Sqft Rate', placeholder: 'Sqft Rate' };
+    }
+
+    // 3. installation price (Security and safety, Smart home services)
+    if (
+      text.includes('security') ||
+      text.includes('safety') ||
+      text.includes('smart home') ||
+      text.includes('cctv') ||
+      text.includes('automation') ||
+      text.includes('biometric') ||
+      text.includes('fire safety')
+    ) {
+      return { label: 'installation price', placeholder: 'installation price' };
+    }
+
+    // 4. Rate Per Pice (Laundry and textile)
+    if (
+      text.includes('laundry') ||
+      text.includes('textile') ||
+      text.includes('ironing') ||
+      text.includes('dry clean') ||
+      text.includes('washing') ||
+      text.includes('tailor') ||
+      text.includes('alteration')
+    ) {
+      return { label: 'Rate Per Pice', placeholder: 'Rate Per Pice' };
+    }
+
+    // 5. Monthly Fees (Education Service)
+    if (
+      text.includes('education') ||
+      text.includes('tutor') ||
+      text.includes('coaching') ||
+      text.includes('teacher') ||
+      text.includes('tuition')
+    ) {
+      return { label: 'Monthly Fees', placeholder: 'Monthly Fees' };
+    }
+
+    // 6. My Fees (Health service: Nurse, Doctor, Physiotherapist - EXCLUDING lab technician & ambulance)
+    if (
+      !text.includes('lab') &&
+      !text.includes('technician') &&
+      !text.includes('ambulance') &&
+      !text.includes('driver') &&
+      (
+        text.includes('health') ||
+        text.includes('nurse') ||
+        text.includes('doctor') ||
+        text.includes('physiotherapist') ||
+        text.includes('physio')
+      )
+    ) {
+      return { label: 'My Fees', placeholder: 'My Fees' };
+    }
+
+    // Default: Price (No change for drivers, lab technician, ambulance, etc.)
+    return { label: 'Price', placeholder: 'Price' };
+  };
+
   const findSkillPathLabels = (nodes: any[], targetId: number, trail: string[] = []): string[] | null => {
     for (const node of nodes) {
       const nextTrail = [...trail, node.libelle];
@@ -591,7 +689,7 @@ function OnboardingForm() {
                       type="number"
                       min="0"
                       step="1"
-                      placeholder="Price"
+                      placeholder={getPriceLabelInfo(node.libelle).placeholder}
                       value={skillPrices[node.id] || ''}
                       onClick={(e) => e.stopPropagation()}
                       onChange={(e) => updateSkillPrice(node.id, e.target.value)}
@@ -673,7 +771,7 @@ function OnboardingForm() {
                   type="number"
                   min="0"
                   step="1"
-                  placeholder="Price"
+                  placeholder={getPriceLabelInfo(node.libelle).placeholder}
                   value={skillPrices[node.id] || ''}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => updateSkillPrice(node.id, e.target.value)}
@@ -748,10 +846,50 @@ function OnboardingForm() {
   };
 
   const isTransportOrDeliveryCategory = () => {
-    const label = (primaryCategory?.libelle || '').toLowerCase();
-    return (label.includes('transport') && label.includes('mobility'))
-      || (label.includes('delivery') && label.includes('logistics'));
+    return !isHomeServicesCategory();
   };
+
+  // Deduplicate adminDocs by normalized title so each document type (e.g. Aadhaar) is requested only once and shop photos are excluded for Transport & Delivery
+  const uniqueAdminDocs = useMemo(() => {
+    const seen = new Set<string>();
+    return adminDocs
+      .map((doc) => {
+        if (!doc || !doc.title) return null;
+        const titleLower = doc.title.toLowerCase().trim();
+        if (titleLower.includes('aadhaar') || titleLower.includes('aadhar')) {
+          return { ...doc, title: 'Aadhaar Card' };
+        }
+        return doc;
+      })
+      .filter((doc): doc is any => {
+        if (!doc || !doc.title) return false;
+        const rawTitle = doc.title.toLowerCase().trim();
+
+        // Exclude Shop/Store photos for Transport & Delivery
+        if (rawTitle.includes('shop') || rawTitle.includes('store')) {
+          return false;
+        }
+
+        // Exclude Bank Passbook/Cheque (handled in KYC tab)
+        if (rawTitle.includes('bank') || rawTitle.includes('passbook') || rawTitle.includes('cheque')) {
+          return false;
+        }
+
+        let key = rawTitle
+          .replace(/licence/g, 'license')
+          .replace(/aadhar/g, 'aadhaar');
+
+        if (key.includes('aadhaar')) {
+          key = 'aadhaar';
+        }
+
+        if (seen.has(key)) {
+          return false;
+        }
+        seen.add(key);
+        return true;
+      });
+  }, [adminDocs]);
 
   const handleHomeDocChange = (key: string, file: File | null) => {
     if (file) {
@@ -1467,7 +1605,7 @@ function OnboardingForm() {
                   )}
                   {isInlineSkillPricingFlow() && (
                     <div className="flex items-center justify-end gap-2 mb-2 px-1">
-                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Price</span>
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{getPriceLabelInfo().label}</span>
                     </div>
                   )}
                   <div className="space-y-2">
@@ -1623,12 +1761,12 @@ function OnboardingForm() {
                           />
                         </div>
                         <div>
-                          {index === 0 && <label className="block text-[10px] font-semibold text-gray-600 mb-1">Price</label>}
+                          {index === 0 && <label className="block text-[10px] font-semibold text-gray-600 mb-1">{getPriceLabelInfo().label}</label>}
                           <input
                             type="number"
                             min="0"
                             step="1"
-                            placeholder="500"
+                            placeholder={getPriceLabelInfo().placeholder}
                             value={service.price}
                             onChange={(e) => updateServiceItem(service.id, 'price', e.target.value)}
                             className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-xl px-3 py-2.5 text-sm font-medium"
@@ -1835,7 +1973,7 @@ function OnboardingForm() {
 
                   {isTransportOrDeliveryCategory() ? (
                     <div className="space-y-3">
-                      {adminDocs.map(doc => {
+                      {uniqueAdminDocs.map(doc => {
                         const file = documents[`doc_${doc.id}`];
                         return (
                           <div key={doc.id} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between group hover:border-gray-300 transition-colors">

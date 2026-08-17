@@ -271,14 +271,31 @@ function DashboardContent() {
           </div>
         )}
 
+        {/* Referral & Partner Earnings Banner */}
+        <button
+          onClick={() => goTo(`/onboarding/referral?accesstoken=${token || ""}&driver_id=${driverId || ""}`)}
+          className="w-full mt-4 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-2xl p-4 text-white shadow-md flex items-center justify-between active:scale-[0.99] transition-transform text-left"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white text-lg font-black shrink-0">
+              🤝
+            </div>
+            <div>
+              <p className="text-[14px] font-bold text-white leading-tight">Referral Dashboard & Partner Income</p>
+              <p className="text-[11px] text-emerald-100 mt-0.5">View Consumer & Business Referral Earnings</p>
+            </div>
+          </div>
+          <svg className="w-5 h-5 text-white/80 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7"></path></svg>
+        </button>
+
         {/* Quick actions */}
         <div className="mt-6">
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">Quick Actions</p>
           <div className="grid grid-cols-4 gap-3">
             <QuickAction label="My Services" icon="briefcase" onClick={() => goTo(`/onboarding/more?accesstoken=${token}&driver_id=${driverId}`)} />
             <QuickAction label="Bookings" icon="calendar" onClick={() => goTo(`/onboarding/more?accesstoken=${token}&driver_id=${driverId}`)} />
-            <QuickAction label="Wallet" icon="wallet" onClick={() => showToast("Coming soon")} />
-            <QuickAction label="Documents" icon="doc" onClick={() => showToast("Coming soon")} />
+            <QuickAction label="Referral" icon="user" onClick={() => goTo(`/onboarding/referral?accesstoken=${token}&driver_id=${driverId}`)} />
+            <QuickAction label="Earnings" icon="wallet" onClick={() => goTo(`/onboarding/referral?accesstoken=${token}&driver_id=${driverId}`)} />
           </div>
         </div>
       </div>
@@ -288,8 +305,8 @@ function DashboardContent() {
         <div className="max-w-md mx-auto flex items-center justify-between">
           <NavItem label="Home" icon="home" active />
           <NavItem label="Jobs" icon="briefcase" onClick={() => goTo(`/onboarding/more?accesstoken=${token}&driver_id=${driverId}`)} />
-          <NavItem label="Earnings" icon="wallet" onClick={() => showToast("Coming soon")} />
-          <NavItem label="Profile" icon="user" onClick={() => showToast("Coming soon")} />
+          <NavItem label="Earnings" icon="wallet" onClick={() => goTo(`/onboarding/referral?accesstoken=${token}&driver_id=${driverId}`)} />
+          <NavItem label="Profile" icon="user" onClick={() => goTo(`/onboarding/more?accesstoken=${token}&driver_id=${driverId}`)} />
         </div>
       </div>
 
