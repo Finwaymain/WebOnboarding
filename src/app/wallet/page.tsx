@@ -291,9 +291,12 @@ export default function WalletPage() {
       if (amtRes.ok) {
         const amtData = await amtRes.json();
         if (amtData.data) {
-          setWalletAmount(Number(amtData.data.amount || amtData.data.wallet_amount || 0));
-          setEarnAmount(Number(amtData.data.earn_amount || amtData.data.earning || 0));
-          setTotalEarn(String(amtData.data.total_earnings || amtData.data.total_earn || '0'));
+          const wAmt = Number(amtData.data.amount || amtData.data.wallet_amount || 0);
+          const eAmt = Number(amtData.data.earn_amount || amtData.data.earning || 0);
+          const tAmt = String(amtData.data.total_earnings || amtData.data.total_earn || '0');
+          setWalletAmount(wAmt > 0 ? wAmt : (Number(tAmt) > 0 ? Number(tAmt) : eAmt));
+          setEarnAmount(eAmt);
+          setTotalEarn(tAmt);
           amtFetched = true;
         }
       }

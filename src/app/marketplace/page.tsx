@@ -892,8 +892,8 @@ export default function MarketplacePage() {
 
   const handleConfirmMPinPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!mPinInput || mPinInput.length < 4) {
-      setMPinError('Please enter your complete 4-digit or 6-digit Wallet M-PIN');
+    if (!mPinInput || mPinInput.length !== 4) {
+      setMPinError('Please enter your 4-digit Wallet M-PIN');
       return;
     }
     setMPinError('');
@@ -2744,8 +2744,8 @@ export default function MarketplacePage() {
                         <div className="flex items-center gap-2.5">
                           <input type="radio" name="payMethod" checked={paymentMethod === 'wallet'} onChange={() => setPaymentMethod('wallet')} className="text-[#047857]" />
                           <div>
-                            <p className="text-xs font-bold text-slate-900">Fiinway Wallet Balance</p>
-                            <p className="text-[10px] text-slate-500">Available: ₹{walletBalance.toLocaleString()}</p>
+                            <p className="text-xs font-bold text-slate-900">Pay &amp; Get Cashback</p>
+                            <p className="text-[10px] text-slate-500">Smart Value Wallet • Available: ₹{walletBalance.toLocaleString()}</p>
                           </div>
                         </div>
                         <Wallet className="w-4 h-4 text-[#047857]" />
@@ -2990,15 +2990,15 @@ export default function MarketplacePage() {
             <form onSubmit={handleConfirmMPinPayment} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 text-center">
-                  Enter Your Wallet M-PIN
+                  Enter 4-Digit Wallet M-PIN
                 </label>
                 <input
                   type="password"
-                  maxLength={6}
+                  maxLength={4}
                   autoFocus
                   placeholder="••••"
                   value={mPinInput}
-                  onChange={(e) => setMPinInput(e.target.value.replace(/\D/g, ''))}
+                  onChange={(e) => setMPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
                   className="w-full text-center tracking-[0.5em] text-2xl font-extrabold bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 focus:border-[#047857] rounded-2xl py-3 text-slate-900 dark:text-white focus:outline-none transition-all"
                 />
               </div>
@@ -3021,7 +3021,7 @@ export default function MarketplacePage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={verifyingMPin || mPinInput.length < 4}
+                  disabled={verifyingMPin || mPinInput.length !== 4}
                   className="py-3 bg-[#047857] hover:bg-[#035e44] text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-700/20 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {verifyingMPin ? (

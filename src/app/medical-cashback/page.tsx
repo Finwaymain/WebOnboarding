@@ -1523,9 +1523,9 @@ function MedicalCashbackContent() {
                 <label className="text-xs font-bold text-slate-800 block mb-1.5">Enter 4-Digit Wallet M-PIN</label>
                 <input
                   type="password"
-                  maxLength={6}
+                  maxLength={4}
                   value={mPin}
-                  onChange={(e) => setMPin(e.target.value)}
+                  onChange={(e) => setMPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
                   placeholder="••••"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-center text-lg font-mono font-bold tracking-widest text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:outline-none"
                 />
@@ -1549,7 +1549,7 @@ function MedicalCashbackContent() {
               <button
                 type="button"
                 onClick={() => executePurchaseCardApi(mPin)}
-                disabled={isProcessingPayment || !mPin}
+                disabled={isProcessingPayment || !mPin || mPin.length !== 4}
                 className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-xs py-3 rounded-xl shadow-xs transition-all"
               >
                 {isProcessingPayment ? 'Verifying...' : 'Confirm & Pay'}
