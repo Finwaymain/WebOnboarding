@@ -7,6 +7,7 @@ interface AadhaarModalProps {
   isOpen?: boolean;
   userId?: string | null;
   driverId?: string | null;
+  userCat?: string | null;
   token?: string | null;
   phone?: string | null;
   apiBase?: string;
@@ -18,6 +19,7 @@ export default function AadhaarRegistrationModal({
   isOpen = true,
   userId,
   driverId,
+  userCat,
   token,
   phone,
   apiBase = "/api/v1",
@@ -63,6 +65,8 @@ export default function AadhaarRegistrationModal({
         driver_id: driverId || "",
         id_user: userId || "",
         id_conducteur: driverId || "",
+        user_cat: userCat || "",
+        user_type: userCat || "",
         phone: phone || "",
         accesstoken: token || "",
         aadhar_number: cleanAadhaar,

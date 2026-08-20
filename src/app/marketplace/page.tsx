@@ -2982,9 +2982,9 @@ export default function MarketplacePage() {
             </div>
 
             <div className="bg-emerald-50 dark:bg-emerald-950/40 p-3.5 rounded-2xl border border-emerald-200/60 dark:border-emerald-800/40 text-center space-y-1">
-              <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider block">Confirm Wallet Payment</span>
+              <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider block">Pay Via Smart Value</span>
               <p className="text-xl font-extrabold text-[#047857] dark:text-emerald-400">₹{cartTotal.toLocaleString()}</p>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">Deducted from Fiinway Smart Value Wallet</p>
+              
             </div>
 
             <form onSubmit={handleConfirmMPinPayment} className="space-y-4">

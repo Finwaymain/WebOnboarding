@@ -15,7 +15,12 @@ import {
   Share2,
   Copy,
   Check,
-  Clock
+  Clock,
+  X,
+  MessageCircle,
+  Send,
+  MessageSquare,
+  ExternalLink
 } from "lucide-react";
 import AadhaarRegistrationModal from "../../components/AadhaarRegistrationModal";
 
@@ -27,6 +32,7 @@ function ReferralDashboardContent() {
   const [token, setToken] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [driverId, setDriverId] = useState<string | null>(null);
+  const [userCat, setUserCat] = useState<string | null>(null);
   const [phone, setPhone] = useState<string | null>(null);
 
   // Navigation mode: "home" (Main Partner & Earn Screen) or "dashboard" (2-tab Partner Dashboard)
@@ -37,6 +43,7 @@ function ReferralDashboardContent() {
   const [toast, setToast] = useState<string>("");
   const [copied, setCopied] = useState<boolean>(false);
   const [showAadhaarModal, setShowAadhaarModal] = useState<boolean>(false);
+  const [showShareModal, setShowShareModal] = useState<boolean>(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -44,6 +51,7 @@ function ReferralDashboardContent() {
       setToken(params.get("accesstoken") || searchParams.get("accesstoken"));
       setUserId(params.get("user_id") || searchParams.get("user_id") || params.get("id_user"));
       setDriverId(params.get("driver_id") || searchParams.get("driver_id") || params.get("id_driver"));
+      setUserCat(params.get("user_cat") || searchParams.get("user_cat") || params.get("user_type") || searchParams.get("user_type"));
       setPhone(params.get("phone") || searchParams.get("phone") || params.get("mobile"));
 
       const defaultView = params.get("view") || searchParams.get("view");
@@ -59,6 +67,7 @@ function ReferralDashboardContent() {
       const apiBase = getApiBase();
       let uId = userId;
       let dId = driverId;
+      let uCat = userCat;
       let tok = token;
       let ph = phone;
 
@@ -66,11 +75,12 @@ function ReferralDashboardContent() {
         const p = new URLSearchParams(window.location.search);
         uId = uId || p.get("user_id") || p.get("id_user");
         dId = dId || p.get("driver_id") || p.get("id_driver");
+        uCat = uCat || p.get("user_cat") || p.get("user_type");
         tok = tok || p.get("accesstoken");
         ph = ph || p.get("phone") || p.get("mobile");
       }
 
-      const queryStr = `user_id=${uId || ""}&driver_id=${dId || ""}&phone=${encodeURIComponent(ph || "")}&accesstoken=${encodeURIComponent(tok || "")}&apikey=${encodeURIComponent(API_KEY)}`;
+      const queryStr = `user_id=${uId || ""}&driver_id=${dId || ""}&user_cat=${uCat || ""}&phone=${encodeURIComponent(ph || "")}&accesstoken=${encodeURIComponent(tok || "")}&apikey=${encodeURIComponent(API_KEY)}`;
       const res = await fetch(`${apiBase}/referral-dashboard-stats?${queryStr}`, {
         headers: { apikey: API_KEY, accesstoken: tok || "" },
       });
@@ -78,7 +88,7 @@ function ReferralDashboardContent() {
       if (json.success === "success" && json.data) {
         setStats(json.data);
         const isVerified = json.data.aadhar_submitted === true || 
-          (json.data.aadhar_number && json.data.aadhar_number.toString().trim().length >= 4);
+          (json.data.aadhar_number && json.data.aadhar_number.toString().trim().length === 12);
 
         if (!isVerified) {
           setShowAadhaarModal(true);
@@ -91,7 +101,7 @@ function ReferralDashboardContent() {
     } finally {
       setLoading(false);
     }
-  }, [userId, driverId, token, phone]);
+  }, [userId, driverId, userCat, token, phone]);
 
   useEffect(() => {
     fetchReferralStats();
@@ -99,7 +109,7 @@ function ReferralDashboardContent() {
 
   const handleOpenDashboard = () => {
     const isVerified = stats?.aadhar_submitted === true || 
-      (stats?.aadhar_number && stats.aadhar_number.toString().trim().length >= 4);
+      (stats?.aadhar_number && stats.aadhar_number.toString().trim().length === 12);
 
     if (!isVerified) {
       showToast("Aadhaar verification is compulsory to access Partner Dashboard!");
@@ -117,6 +127,7 @@ function ReferralDashboardContent() {
       aadhar_submitted: true,
     }));
     showToast("Aadhaar verified and linked successfully!");
+    fetchReferralStats();
   };
 
   const showToast = (msg: string) => {
@@ -124,40 +135,80 @@ function ReferralDashboardContent() {
     setTimeout(() => setToast(""), 2200);
   };
 
-  // Immediate effective partner code calculation
-  const rawCode = stats?.referral_code;
-  let effectiveId = userId || driverId;
-  if (typeof window !== "undefined" && !effectiveId) {
-    const p = new URLSearchParams(window.location.search);
-    effectiveId = p.get("user_id") || p.get("id_user") || p.get("driver_id") || p.get("id_driver");
-  }
-
-  const referralCode = (rawCode && rawCode !== "---" && rawCode !== "Loading...")
-    ? rawCode
-    : (effectiveId ? (driverId ? `FIINB${String(effectiveId).padStart(4, "0")}` : `FIINU${String(effectiveId).padStart(4, "0")}`) : "FIINU1001");
-
+  const referralCode = stats?.referral_code || "Loading...";
   const walletBalance = stats?.wallet_balance ?? 0;
 
   const handleCopyCode = () => {
+    if (!referralCode || referralCode === "Loading..." || referralCode === "---") return;
     navigator.clipboard.writeText(referralCode);
     setCopied(true);
     showToast("Partner code copied to clipboard!");
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleShare = () => {
-    const shareUrl = stats?.share_url || `https://fiinway.com/ref/${referralCode}`;
+  const shareUrl = stats?.share_url || (referralCode && referralCode !== "Loading..." && referralCode !== "---" ? `https://api.fiinway.com/ref/${referralCode}` : "https://api.fiinway.com/ref/FIINWAY");
+  const shareText = `🚀 Join the Fiinway Partner Program!\n\nUse my exclusive Partner Code *${referralCode}* to get instant cashback & discounts on your rides and orders.\n\n📲 Download app & enter code:\n${shareUrl}`;
 
-    if (navigator.share) {
+  const handleShare = () => {
+    if (!referralCode || referralCode === "Loading..." || referralCode === "---") return;
+    setShowShareModal(true);
+  };
+
+  const handleNativeShare = () => {
+    if (typeof window !== "undefined" && (window as any).AppBridge) {
+      try {
+        (window as any).AppBridge.postMessage(JSON.stringify({
+          action: "share",
+          type: "share",
+          title: "Join Fiinway Partner Program",
+          text: shareText,
+          url: shareUrl,
+        }));
+        return;
+      } catch (_) {}
+    }
+
+    if (typeof navigator !== "undefined" && navigator.share) {
       navigator.share({
         title: "Join Fiinway Partner Program",
-        text: `Use my Fiinway partner code ${referralCode} to earn instant rewards!`,
+        text: shareText,
         url: shareUrl,
       }).catch(() => {});
     } else {
-      navigator.clipboard.writeText(shareUrl);
+      navigator.clipboard.writeText(shareText);
       showToast("Partner link copied to clipboard!");
     }
+  };
+
+  const handleShareWhatsApp = () => {
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
+    if (typeof window !== "undefined") {
+      window.open(url, "_blank");
+    }
+  };
+
+  const handleShareTelegram = () => {
+    const url = `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`;
+    if (typeof window !== "undefined") {
+      window.open(url, "_blank");
+    }
+  };
+
+  const handleShareSMS = () => {
+    const url = `sms:?body=${encodeURIComponent(shareText)}`;
+    if (typeof window !== "undefined") {
+      window.location.href = url;
+    }
+  };
+
+  const handleCopyShareLink = () => {
+    navigator.clipboard.writeText(shareUrl);
+    showToast("Share link copied to clipboard!");
+  };
+
+  const handleCopyShareMessage = () => {
+    navigator.clipboard.writeText(shareText);
+    showToast("Invite message copied to clipboard!");
   };
 
   const handleBack = () => {
@@ -171,6 +222,22 @@ function ReferralDashboardContent() {
       }
     }
   };
+
+  if (loading && !stats) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4 animate-bounce">
+          <ShieldCheck className="w-8 h-8" />
+        </div>
+        <h3 className="text-base font-bold text-slate-800">Loading Partner Dashboard...</h3>
+        <p className="text-xs text-slate-500 mt-1">Please wait while we verify and load your partner profile.</p>
+        <div className="mt-6 flex items-center gap-2 text-emerald-600 font-semibold text-xs">
+          <div className="w-2 h-2 rounded-full bg-emerald-600 animate-ping" />
+          Securing connection
+        </div>
+      </div>
+    );
+  }
 
   const consumer = stats?.consumer || {
     total_referrals: 0,
@@ -761,10 +828,113 @@ function ReferralDashboardContent() {
         <AadhaarRegistrationModal
           userId={userId}
           driverId={driverId}
+          userCat={userCat}
           phone={phone}
           token={token}
+          apiKey={API_KEY}
           onSuccess={handleAadhaarSuccess}
         />
+      )}
+
+      {/* Share Partner Link Popup Modal */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/70 backdrop-blur-xs transition-opacity animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl border border-slate-100 relative space-y-5 animate-in slide-in-from-bottom-8 sm:zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                  <Share2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 leading-none">Share Partner Link</h3>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">Invite partners & earn lifelong rewards</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowShareModal(false)}
+                className="p-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Link Box */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">Your Referral Link</span>
+              <div className="flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2">
+                <span className="text-xs font-mono font-semibold text-slate-700 truncate select-all">
+                  {shareUrl}
+                </span>
+                <button
+                  onClick={handleCopyShareLink}
+                  className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors shrink-0"
+                  title="Copy Link"
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* 1-Tap Share Options Grid */}
+            <div className="space-y-2">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">Share via</span>
+              <div className="grid grid-cols-3 gap-2.5 text-center">
+                {/* WhatsApp Button */}
+                <button
+                  onClick={handleShareWhatsApp}
+                  className="bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/30 text-[#128C7E] rounded-2xl p-3 flex flex-col items-center gap-1.5 transition-all active:scale-95 shadow-2xs"
+                >
+                  <div className="w-8 h-8 rounded-full bg-[#25D366] text-white flex items-center justify-center text-base shadow-xs">
+                    💬
+                  </div>
+                  <span className="text-[11px] font-bold">WhatsApp</span>
+                </button>
+
+                {/* Telegram Button */}
+                <button
+                  onClick={handleShareTelegram}
+                  className="bg-[#0088cc]/10 hover:bg-[#0088cc]/20 border border-[#0088cc]/30 text-[#0088cc] rounded-2xl p-3 flex flex-col items-center gap-1.5 transition-all active:scale-95 shadow-2xs"
+                >
+                  <div className="w-8 h-8 rounded-full bg-[#0088cc] text-white flex items-center justify-center text-sm shadow-xs">
+                    <Send className="w-4 h-4" />
+                  </div>
+                  <span className="text-[11px] font-bold">Telegram</span>
+                </button>
+
+                {/* SMS Button */}
+                <button
+                  onClick={handleShareSMS}
+                  className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-700 rounded-2xl p-3 flex flex-col items-center gap-1.5 transition-all active:scale-95 shadow-2xs"
+                >
+                  <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center text-sm shadow-xs">
+                    <MessageSquare className="w-4 h-4" />
+                  </div>
+                  <span className="text-[11px] font-bold">SMS</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-2 pt-1">
+              <button
+                onClick={handleNativeShare}
+                className="w-full bg-primary hover:bg-primaryDark text-white font-bold text-xs py-3.5 rounded-2xl shadow-xs flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
+              >
+                <ExternalLink className="w-4 h-4" /> More Share Options
+              </button>
+
+              <button
+                onClick={handleCopyShareMessage}
+                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-3 rounded-2xl flex items-center justify-center gap-2 transition-colors"
+              >
+                <Copy className="w-3.5 h-3.5" /> Copy Full Invite Message
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
