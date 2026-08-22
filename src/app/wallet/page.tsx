@@ -131,6 +131,14 @@ function AlertIcon({ className = "w-5 h-5" }: { className?: string }) {
   );
 }
 
+function InvoiceIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  );
+}
+
 function readUrlParams() {
   if (typeof window === 'undefined') {
     return { 
@@ -512,8 +520,25 @@ export default function WalletPage() {
   // Handle Add/Edit Bank Submission in Web Modal
   const handleBankSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bankName || !accountNo || !holderName) {
+    const cleanBank = bankName.trim();
+    const cleanAcc = accountNo.trim();
+    const cleanIfsc = ifscCode.trim().toUpperCase();
+
+    if (!cleanBank || !cleanAcc || !holderName) {
       showToast("Please fill all required bank fields", "error");
+      return;
+    }
+
+    if (!/^[a-zA-Z\s]+$/.test(cleanBank)) {
+      showToast("Bank name must contain only letters and spaces", "error");
+      return;
+    }
+    if (!/^[0-9]{8,22}$/.test(cleanAcc)) {
+      showToast("Account number must contain only numbers (9-18 digits)", "error");
+      return;
+    }
+    if (!/^[A-Z0-9]{11}$/.test(cleanIfsc)) {
+      showToast("IFSC code must be 11 alphanumeric characters (e.g. SBIN0001234)", "error");
       return;
     }
 
@@ -524,11 +549,12 @@ export default function WalletPage() {
         headers: apiHeaders,
         body: JSON.stringify({
           driver_id: userId,
-          bank_name: bankName,
+          bank_name: cleanBank,
           branch_name: branchName,
           holder_name: holderName,
-          account_no: accountNo,
-          other_info: ifscCode,
+          account_no: cleanAcc,
+          other_info: cleanIfsc,
+          ifsc_code: cleanIfsc,
         }),
       });
       const data = await res.json();
@@ -550,6 +576,20 @@ export default function WalletPage() {
     const num = Number(val || 0);
     const sym = typeof window !== 'undefined' && (window as any).CURRENCY_SYMBOL !== undefined ? (window as any).CURRENCY_SYMBOL : '';
     return `${sym}${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const handleDownloadInvoice = (tx: any) => {
+    const txId = tx.id || tx.transaction_id || tx.txn_id || tx.ride_id || tx.booking_id || Date.now();
+    const rideId = tx.ride_id || tx.id_ride || tx.booking_id || '';
+    const amount = tx.parsedAmountStr || String(tx.amount || tx.transaction_amount || tx.montant || '0').replace('-', '');
+    const title = encodeURIComponent(tx.parsedCategoryTitle || tx.category_title || tx.categoryTitle || tx.libelle || tx.description || 'Wallet Transaction');
+    const user = encodeURIComponent(tx.parsedUserName || tx.counterparty_name || tx.user_name || tx.customer_name || 'Customer');
+    const date = encodeURIComponent(tx.creer || tx.created_at || tx.formattedDate || new Date().toISOString());
+    const method = encodeURIComponent(tx.payment_method || tx.paymentMethod || (tx.parsedIsNegative ? 'Smart Value Debit' : 'Smart Value Credit'));
+    const isDebit = tx.parsedIsNegative ? '1' : '0';
+    
+    const invoiceUrl = `/invoice/${txId}/download?ride_id=${rideId}&amount=${amount}&title=${title}&user_name=${user}&date=${date}&payment_method=${method}&is_debit=${isDebit}`;
+    window.open(invoiceUrl, '_blank');
   };
 
   // Theme-dependent style classes with exact Flutter Green (#6AA720)
@@ -919,30 +959,32 @@ export default function WalletPage() {
                       return (
                         <div
                           key={tx.id || idx}
-                          onClick={() => setSelectedTx({
-                            ...tx,
-                            parsedUserName: userName,
-                            parsedBusinessName: businessName,
-                            parsedCategoryTitle: categoryTitle,
-                            parsedIsNegative: isNegative,
-                            parsedAmountStr: amountRaw,
-                          })}
-                          className={`${themeClasses.cardBg} rounded-2xl p-3.5 flex items-center justify-between cursor-pointer transition-all active:scale-[0.99] border hover:border-[#6AA720]/40 shadow-sm`}
+                          className={`${themeClasses.cardBg} rounded-2xl p-3.5 flex items-center justify-between transition-all border hover:border-[#6AA720]/40 shadow-sm`}
                         >
-                          <div className="flex items-center gap-3">
+                          <div 
+                            onClick={() => setSelectedTx({
+                              ...tx,
+                              parsedUserName: userName,
+                              parsedBusinessName: businessName,
+                              parsedCategoryTitle: categoryTitle,
+                              parsedIsNegative: isNegative,
+                              parsedAmountStr: amountRaw,
+                            })}
+                            className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer active:scale-[0.99]"
+                          >
                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                               isNegative ? 'bg-red-500/10 text-red-600' : 'bg-emerald-600/15 text-[#15803D]'
                             }`}>
                               {isNegative ? <ArrowUpRightIcon className="w-5 h-5 text-red-600" /> : <ArrowDownLeftIcon className="w-5 h-5 text-[#15803D]" />}
                             </div>
-                            <div className="space-y-0.5">
-                              <h4 className={`text-xs font-bold ${themeClasses.textMain}`}>
+                            <div className="space-y-0.5 min-w-0 pr-1">
+                              <h4 className={`text-xs font-bold ${themeClasses.textMain} truncate`}>
                                 {categoryTitle}
                               </h4>
                               
-                              {/* USER NAME WITH HIGHLIGHTED TEXT COLOR */}
-                              <p className="text-[11px] font-bold text-slate-900 dark:text-slate-900">
-                                User: <span className="font-semibold text-[#6AA720] dark:text-[#88c437]">{userName}</span>
+                              {/* CONTEXTUAL TO / FROM USER NAME */}
+                              <p className="text-[11px] font-bold text-slate-900 dark:text-slate-900 truncate">
+                                {isNegative ? 'To: ' : 'From: '}<span className="font-semibold text-[#6AA720] dark:text-[#88c437]">{userName}</span>
                               </p>
 
                               <p className={`text-[10.5px] ${themeClasses.textMuted}`}>
@@ -951,18 +993,54 @@ export default function WalletPage() {
                             </div>
                           </div>
 
-                          <div className="text-right shrink-0">
-                            {/* DEDUCTION AMOUNT IN RED (-), RECEIVE MONEY IN DARK GREEN (+) */}
-                            <p className={`text-xs font-extrabold ${isNegative ? 'text-red-600' : 'text-[#15803D]'}`}>
-                              {isNegative ? '-' : '+'}{formatCurrency(amountRaw)}
-                            </p>
-                            
-                            {/* DEDUCT FROM (SMART VALUE) */}
-                            <span className={`text-[9.5px] font-bold block mt-0.5 uppercase tracking-wider ${
-                              isNegative ? 'text-red-500/90' : 'text-[#15803D]'
-                            }`}>
-                             {isNegative ? 'SMART VALUE :' : 'SMART VALUE'}
-                            </span>
+                          <div className="flex items-center gap-2.5 shrink-0">
+                            <div 
+                              onClick={() => setSelectedTx({
+                                ...tx,
+                                parsedUserName: userName,
+                                parsedBusinessName: businessName,
+                                parsedCategoryTitle: categoryTitle,
+                                parsedIsNegative: isNegative,
+                                parsedAmountStr: amountRaw,
+                              })}
+                              className="text-right cursor-pointer"
+                            >
+                              {/* DEDUCTION AMOUNT IN RED (-), RECEIVE MONEY IN DARK GREEN (+) */}
+                              <p className={`text-xs font-extrabold ${isNegative ? 'text-red-600' : 'text-[#15803D]'}`}>
+                                {isNegative ? '-' : '+'}{formatCurrency(amountRaw)}
+                              </p>
+                              
+                              {/* DEDUCT FROM (SMART VALUE) */}
+                              <span className={`text-[9.5px] font-bold block mt-0.5 uppercase tracking-wider ${
+                                isNegative ? 'text-red-500/90' : 'text-[#15803D]'
+                              }`}>
+                               {isNegative ? 'SMART VALUE :' : 'SMART VALUE'}
+                              </span>
+                            </div>
+
+                            {/* INVOICE DOWNLOAD ICON BUTTON */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownloadInvoice({
+                                  ...tx,
+                                  parsedUserName: userName,
+                                  parsedBusinessName: businessName,
+                                  parsedCategoryTitle: categoryTitle,
+                                  parsedIsNegative: isNegative,
+                                  parsedAmountStr: amountRaw,
+                                });
+                              }}
+                              title="Download Official Fiinway Invoice"
+                              className={`p-2 rounded-xl border flex items-center justify-center transition-all ${
+                                isDark 
+                                  ? 'bg-slate-800/80 border-slate-700 text-[#88c437] hover:bg-[#6AA720]/20 hover:border-[#6AA720]' 
+                                  : 'bg-[#6AA720]/10 border-[#6AA720]/30 text-[#6AA720] hover:bg-[#6AA720] hover:text-white'
+                              } shadow-sm active:scale-95`}
+                            >
+                              <InvoiceIcon className="w-4 h-4" />
+                            </button>
                           </div>
                         </div>
                       );
@@ -1144,9 +1222,9 @@ export default function WalletPage() {
             <form onSubmit={handleBankSubmit} className="space-y-3">
               <input
                 type="text"
-                placeholder="Bank Name"
+                placeholder="Bank Name (Words only)"
                 value={bankName}
-                onChange={(e) => setBankName(e.target.value)}
+                onChange={(e) => setBankName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
                 className={`w-full ${themeClasses.inputBg} border rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-[#6AA720]`}
               />
               <input
@@ -1160,22 +1238,25 @@ export default function WalletPage() {
                 type="text"
                 placeholder="Account Holder Name"
                 value={holderName}
-                onChange={(e) => setHolderName(e.target.value)}
+                onChange={(e) => setHolderName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
                 className={`w-full ${themeClasses.inputBg} border rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-[#6AA720]`}
               />
               <input
                 type="text"
-                placeholder="Account Number"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="Account Number (Numbers only)"
                 value={accountNo}
-                onChange={(e) => setAccountNo(e.target.value)}
-                className={`w-full ${themeClasses.inputBg} border rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-[#6AA720]`}
+                onChange={(e) => setAccountNo(e.target.value.replace(/[^0-9]/g, ''))}
+                className={`w-full ${themeClasses.inputBg} border rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-[#6AA720] font-mono`}
               />
               <input
                 type="text"
-                placeholder="IFSC Code"
+                maxLength={11}
+                placeholder="IFSC Code (11 characters e.g. SBIN0001234)"
                 value={ifscCode}
-                onChange={(e) => setIfscCode(e.target.value)}
-                className={`w-full ${themeClasses.inputBg} border rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-[#6AA720]`}
+                onChange={(e) => setIfscCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11))}
+                className={`w-full ${themeClasses.inputBg} border rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-[#6AA720] font-mono uppercase`}
               />
 
               <button
@@ -1219,7 +1300,7 @@ export default function WalletPage() {
 
             <div className="space-y-2 text-xs">
               <div className="flex justify-between py-1.5 border-b border-slate-200 dark:border-slate-800">
-                <span className={themeClasses.textMuted}>User Name</span>
+                <span className={themeClasses.textMuted}>{selectedTx.parsedIsNegative ? 'To' : 'From'}</span>
                 <span className={`font-bold ${themeClasses.textMain}`}>{selectedTx.parsedUserName || selectedTx.counterparty || 'User'}</span>
               </div>
             
@@ -1240,7 +1321,14 @@ export default function WalletPage() {
               </div>
               <div className="flex justify-between py-1.5 border-b border-slate-200 dark:border-slate-800">
                 <span className={themeClasses.textMuted}>Txn ID</span>
-                <span className="font-mono text-[11px] text-slate-600 dark:text-slate-400">{selectedTx.id || selectedTx.txn_id || selectedTx.transaction_id || `TXN_${Date.now()}`}</span>
+                <span className="font-mono text-[11px] text-slate-600 dark:text-slate-400">
+                  {(() => {
+                    const raw = String(selectedTx.id || selectedTx.txn_id || selectedTx.transaction_id || '');
+                    if (!raw) return '0000001';
+                    if (!isNaN(Number(raw))) return raw.padStart(7, '0');
+                    return raw;
+                  })()}
+                </span>
               </div>
               <div className="flex justify-between py-1.5">
                 <span className={themeClasses.textMuted}>Date & Time</span>
@@ -1248,12 +1336,23 @@ export default function WalletPage() {
               </div>
             </div>
 
-            <button
-              onClick={() => setSelectedTx(null)}
-              className="w-full py-3 bg-[#6AA720] hover:bg-[#5b921b] text-white text-xs font-bold rounded-xl shadow-md transition-colors uppercase tracking-wider"
-            >
-              Close Receipt
-            </button>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => handleDownloadInvoice(selectedTx)}
+                className="flex-1 py-3 bg-[#6AA720] hover:bg-[#5b921b] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 uppercase tracking-wider"
+              >
+                <InvoiceIcon className="w-4 h-4" />
+                <span>Invoice PDF</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedTx(null)}
+                className="px-4 py-3 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl transition-colors uppercase tracking-wider"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

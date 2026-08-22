@@ -1146,6 +1146,25 @@ function OnboardingForm() {
       return;
     }
 
+    if (bankName || accountNo || ifscCode) {
+      const cleanBank = bankName.trim();
+      const cleanAcc = accountNo.trim();
+      const cleanIfsc = ifscCode.trim().toUpperCase();
+
+      if (!/^[a-zA-Z\s]+$/.test(cleanBank)) {
+        setError("Bank name must contain only letters and spaces (no numbers or special characters).");
+        return;
+      }
+      if (!/^[0-9]{8,22}$/.test(cleanAcc)) {
+        setError("Account number must contain only numeric digits (9 to 18 digits).");
+        return;
+      }
+      if (!/^[A-Z0-9]{11}$/.test(cleanIfsc)) {
+        setError("IFSC code must be 11 alphanumeric characters (e.g. SBIN0001234).");
+        return;
+      }
+    }
+
     setLoading(true);
     setError("");
 
@@ -2096,29 +2115,32 @@ function OnboardingForm() {
                       <input
                         type="text"
                         value={bankName}
-                        onChange={e => setBankName(e.target.value)}
+                        onChange={e => setBankName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
                         className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-600 focus:outline-none"
-                        placeholder="e.g. State Bank of India"
+                        placeholder="e.g. State Bank of India (Words only)"
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-gray-700 mb-1">Account Number</label>
                       <input
                         type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={accountNo}
-                        onChange={e => setAccountNo(e.target.value)}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-600 focus:outline-none"
-                        placeholder="Enter Account Number"
+                        onChange={e => setAccountNo(e.target.value.replace(/[^0-9]/g, ''))}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-600 focus:outline-none font-mono"
+                        placeholder="Enter Account Number (Numbers only)"
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-gray-700 mb-1">IFSC Code</label>
                       <input
                         type="text"
+                        maxLength={11}
                         value={ifscCode}
-                        onChange={e => setIfscCode(e.target.value.toUpperCase())}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-600 focus:outline-none"
-                        placeholder="e.g. SBIN0001234"
+                        onChange={e => setIfscCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11))}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-600 focus:outline-none uppercase font-mono"
+                        placeholder="e.g. SBIN0001234 (11 characters)"
                       />
                     </div>
                   </div>
