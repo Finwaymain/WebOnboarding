@@ -589,7 +589,7 @@ export default function WalletPage() {
     const isDebit = tx.parsedIsNegative ? '1' : '0';
     
     const invoiceUrl = `/invoice/${txId}/download?ride_id=${rideId}&amount=${amount}&title=${title}&user_name=${user}&date=${date}&payment_method=${method}&is_debit=${isDebit}`;
-    window.open(invoiceUrl, '_blank');
+    window.location.href = invoiceUrl;
   };
 
   // Theme-dependent style classes with exact Flutter Green (#6AA720)
@@ -972,8 +972,8 @@ export default function WalletPage() {
                             })}
                             className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer active:scale-[0.99]"
                           >
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                              isNegative ? 'bg-red-500/10 text-red-600' : 'bg-emerald-600/15 text-[#15803D]'
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                              isNegative ? 'bg-red-500/10 text-red-600' : 'bg-emerald-500/10 text-[#15803D]'
                             }`}>
                               {isNegative ? <ArrowUpRightIcon className="w-5 h-5 text-red-600" /> : <ArrowDownLeftIcon className="w-5 h-5 text-[#15803D]" />}
                             </div>
@@ -981,19 +981,13 @@ export default function WalletPage() {
                               <h4 className={`text-xs font-bold ${themeClasses.textMain} truncate`}>
                                 {categoryTitle}
                               </h4>
-                              
-                              {/* CONTEXTUAL TO / FROM USER NAME */}
-                              <p className="text-[11px] font-bold text-slate-900 dark:text-slate-900 truncate">
-                                {isNegative ? 'To: ' : 'From: '}<span className="font-semibold text-[#6AA720] dark:text-[#88c437]">{userName}</span>
-                              </p>
-
-                              <p className={`text-[10.5px] ${themeClasses.textMuted}`}>
+                              <p className={`text-[11px] ${themeClasses.textMuted}`}>
                                 {tx.creer || tx.created_at || tx.formattedDate || 'Recently'}
                               </p>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2.5 shrink-0">
+                          <div className="flex items-center gap-3 shrink-0">
                             <div 
                               onClick={() => setSelectedTx({
                                 ...tx,
@@ -1005,20 +999,12 @@ export default function WalletPage() {
                               })}
                               className="text-right cursor-pointer"
                             >
-                              {/* DEDUCTION AMOUNT IN RED (-), RECEIVE MONEY IN DARK GREEN (+) */}
-                              <p className={`text-xs font-extrabold ${isNegative ? 'text-red-600' : 'text-[#15803D]'}`}>
+                              <p className={`text-sm font-extrabold ${isNegative ? 'text-red-600' : 'text-[#15803D]'}`}>
                                 {isNegative ? '-' : '+'}{formatCurrency(amountRaw)}
                               </p>
-                              
-                              {/* DEDUCT FROM (SMART VALUE) */}
-                              <span className={`text-[9.5px] font-bold block mt-0.5 uppercase tracking-wider ${
-                                isNegative ? 'text-red-500/90' : 'text-[#15803D]'
-                              }`}>
-                               {isNegative ? 'SMART VALUE :' : 'SMART VALUE'}
-                              </span>
                             </div>
 
-                            {/* INVOICE DOWNLOAD ICON BUTTON */}
+                            {/* INVOICE DOWNLOAD BUTTON */}
                             <button
                               type="button"
                               onClick={(e) => {
@@ -1032,10 +1018,10 @@ export default function WalletPage() {
                                   parsedAmountStr: amountRaw,
                                 });
                               }}
-                              title="Download Official Fiinway Invoice"
-                              className={`p-2 rounded-xl border flex items-center justify-center transition-all ${
+                              title="Invoice PDF"
+                              className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all ${
                                 isDark 
-                                  ? 'bg-slate-800/80 border-slate-700 text-[#88c437] hover:bg-[#6AA720]/20 hover:border-[#6AA720]' 
+                                  ? 'bg-slate-800/90 border-slate-700 text-[#88c437] hover:bg-[#6AA720]/20 hover:border-[#6AA720]' 
                                   : 'bg-[#6AA720]/10 border-[#6AA720]/30 text-[#6AA720] hover:bg-[#6AA720] hover:text-white'
                               } shadow-sm active:scale-95`}
                             >

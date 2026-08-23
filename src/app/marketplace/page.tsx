@@ -112,8 +112,34 @@ export default function MarketplacePage() {
   const [walletBalance, setWalletBalance] = useState<number>(0);
 
   // Delivery City Selector Modal
-  const [selectedCity, setSelectedCity] = useState<string>('Lucknow, UP');
+  const [selectedCity, setSelectedCity] = useState<string>('Kolkata, WB');
   const [isCityModalOpen, setIsCityModalOpen] = useState<boolean>(false);
+  const [citySearchQuery, setCitySearchQuery] = useState<string>('');
+
+  // Cart Toast / Non-Intrusive Notification State
+  const [cartToast, setCartToast] = useState<{ show: boolean; message: string; productName: string; price: number } | null>(null);
+
+  // Popular Cities List
+  const popularCities = [
+    { name: 'Kolkata, WB', state: 'West Bengal' },
+    { name: 'Howrah, WB', state: 'West Bengal' },
+    { name: 'Siliguri, WB', state: 'West Bengal' },
+    { name: 'Durgapur, WB', state: 'West Bengal' },
+    { name: 'Delhi NCR', state: 'Delhi' },
+    { name: 'Mumbai, MH', state: 'Maharashtra' },
+    { name: 'Bengaluru, KA', state: 'Karnataka' },
+    { name: 'Hyderabad, TS', state: 'Telangana' },
+    { name: 'Chennai, TN', state: 'Tamil Nadu' },
+    { name: 'Pune, MH', state: 'Maharashtra' },
+    { name: 'Ahmedabad, GJ', state: 'Gujarat' },
+    { name: 'Patna, BR', state: 'Bihar' },
+    { name: 'Jaipur, RJ', state: 'Rajasthan' },
+    { name: 'Lucknow, UP', state: 'Uttar Pradesh' },
+    { name: 'Ranchi, JH', state: 'Jharkhand' },
+    { name: 'Bhubaneswar, OD', state: 'Odisha' },
+    { name: 'Guwahati, AS', state: 'Assam' },
+    { name: 'Chandigarh', state: 'Punjab' },
+  ];
 
   // Buyer Catalog State
   const [products, setProducts] = useState<Product[]>([]);
@@ -138,12 +164,12 @@ export default function MarketplacePage() {
   const [checkoutStep, setCheckoutStep] = useState<'cart' | 'checkout' | 'success'>('cart');
 
   // Editable Delivery Address State During Order Checkout
-  const [deliveryAddress, setDeliveryAddress] = useState<string>('44, Park Road, Hazratganj, Lucknow, Uttar Pradesh - 226001');
+  const [deliveryAddress, setDeliveryAddress] = useState<string>('Park Street, Kolkata, West Bengal - 700016');
   const [contactName, setContactName] = useState<string>('Valued Customer');
   const [isEditingAddress, setIsEditingAddress] = useState<boolean>(false);
-  const [editStreetAddress, setEditStreetAddress] = useState<string>('44, Park Road, Hazratganj');
-  const [editCity, setEditCity] = useState<string>('Lucknow');
-  const [editPincode, setEditPincode] = useState<string>('226001');
+  const [editStreetAddress, setEditStreetAddress] = useState<string>('Park Street');
+  const [editCity, setEditCity] = useState<string>('Kolkata');
+  const [editPincode, setEditPincode] = useState<string>('700016');
   const [editPhone, setEditPhone] = useState<string>('9876543210');
 
   const [deliveryOption, setDeliveryOption] = useState<'standard' | 'express'>('standard');
@@ -354,6 +380,13 @@ export default function MarketplacePage() {
 
       phone = urlParams.get('phone') || urlParams.get('user_phone') || '';
       name = urlParams.get('name') || urlParams.get('user_name') || '';
+
+      const cityParam = urlParams.get('city') || urlParams.get('location') || urlParams.get('user_city') || localStorage.getItem('fiinway_selected_city');
+      if (cityParam) {
+        setSelectedCity(cityParam);
+      } else {
+        setSelectedCity('Kolkata, WB');
+      }
 
       if (token) localStorage.setItem('accesstoken', token);
       if (uid) localStorage.setItem('user_id', uid);
@@ -650,7 +683,7 @@ export default function MarketplacePage() {
   };
 
   // Cart Management
-  const addToCart = (product: Product) => {
+  const addToCart = (product: Product, openCheckout = false) => {
     setCart(prev => {
       const existing = prev.find(item => item.product.id === product.id);
       if (existing) {
@@ -658,8 +691,21 @@ export default function MarketplacePage() {
       }
       return [...prev, { product, quantity: 1, selected: true }];
     });
-    setCheckoutStep('cart');
-    setIsCartOpen(true);
+
+    if (openCheckout) {
+      setCheckoutStep('checkout');
+      setIsCartOpen(true);
+    } else {
+      setCartToast({
+        show: true,
+        message: `Added to cart!`,
+        productName: product.title,
+        price: product.price,
+      });
+      setTimeout(() => {
+        setCartToast(null);
+      }, 3500);
+    }
   };
 
   const updateCartQty = (productId: number, delta: number) => {
@@ -1188,8 +1234,8 @@ export default function MarketplacePage() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans pb-24">
 
-      {/* TOP FLOATING NAVIGATION BAR - CLEAN & STREAMLINED */}
-      <div className="bg-white border-b border-slate-200 px-4 py-2.5 shadow-2xs sticky top-0 z-30">
+      {/* TOP FLOATING NAVIGATION BAR - SAFE AREA & HIGH CONTRAST */}
+      <div className="bg-white border-b border-slate-200 px-4 pt-[max(env(safe-area-inset-top),0.625rem)] pb-2.5 shadow-2xs sticky top-0 z-30">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-2">
           {activeTab !== 'home' ? (
             /* UNIVERSAL BACK BUTTON ON ALL SUB-PAGES */
@@ -1948,10 +1994,10 @@ export default function MarketplacePage() {
                 </span>
               </div>
 
-              {/* Aaj Ka Overview (Today Overview - 4 Grid Boxes matching Screenshot 1) */}
+              {/* Today's Overview (4 Grid Boxes) */}
               <div className="space-y-1.5 pt-0.5">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-extrabold text-slate-900">Aaj Ka Overview</h3>
+                  <h3 className="text-xs font-extrabold text-slate-900">Today&apos;s Overview</h3>
                   <button onClick={() => setSellerTab('my_ads')} className="text-[11px] font-bold text-indigo-700 hover:underline">View All</button>
                 </div>
                 <div className="grid grid-cols-4 gap-1.5 text-center">
@@ -3034,6 +3080,316 @@ export default function MarketplacePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* FLOATING ADD-TO-CART SNACKBAR / TOAST */}
+      {cartToast && (
+        <div className="fixed bottom-20 left-4 right-4 z-45 max-w-md mx-auto animate-slide-up">
+          <div className="bg-slate-900/95 text-white backdrop-blur-md px-4 py-3 rounded-2xl shadow-2xl border border-slate-700/60 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold truncate text-white">{cartToast.productName}</p>
+                <p className="text-[10px] text-emerald-400 font-semibold">{cartToast.message} • ₹{cartToast.price.toLocaleString()}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setCartToast(null);
+                setCheckoutStep('cart');
+                setIsCartOpen(true);
+              }}
+              className="bg-[#047857] hover:bg-[#065f46] text-white text-xs font-bold px-3 py-1.5 rounded-xl shrink-0 flex items-center gap-1 shadow-xs"
+            >
+              <span>View Cart</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ADVANCED FILTER & SORT MODAL */}
+      {isFilterModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="w-full max-w-lg bg-white rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-2xl animate-slide-up sm:animate-in overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-[#047857]">
+                  <SlidersHorizontal className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Filter &amp; Sort Products</h3>
+                  <p className="text-[10px] text-slate-500">Refine your marketplace browsing</p>
+                </div>
+              </div>
+              <button onClick={() => setIsFilterModalOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
+              {/* 1. Sort Order */}
+              <div className="space-y-2">
+                <label className="font-bold text-slate-900 block">Sort Order</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'default', label: 'Default / Featured' },
+                    { id: 'newest', label: '✨ Newest Listings' },
+                    { id: 'price_asc', label: 'Price: Low to High' },
+                    { id: 'price_desc', label: 'Price: High to Low' },
+                  ].map(opt => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setSortOrder(opt.id as any)}
+                      className={`p-2.5 rounded-xl border text-left font-semibold transition-all ${
+                        sortOrder === opt.id
+                          ? 'bg-emerald-50 text-[#047857] border-emerald-300 ring-1 ring-emerald-400'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 2. Price Range */}
+              <div className="space-y-2">
+                <label className="font-bold text-slate-900 block">Price Range</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'all', label: 'All Prices' },
+                    { id: 'under_1k', label: 'Under ₹1,000' },
+                    { id: '1k_5k', label: '₹1,000 - ₹5,000' },
+                    { id: '5k_20k', label: '₹5,000 - ₹20,000' },
+                    { id: 'above_20k', label: 'Above ₹20,000' },
+                  ].map(pr => (
+                    <button
+                      key={pr.id}
+                      type="button"
+                      onClick={() => setPriceFilter(pr.id as any)}
+                      className={`p-2.5 rounded-xl border text-left font-semibold transition-all ${
+                        priceFilter === pr.id
+                          ? 'bg-emerald-50 text-[#047857] border-emerald-300 ring-1 ring-emerald-400'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {pr.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. Condition */}
+              <div className="space-y-2">
+                <label className="font-bold text-slate-900 block">Item Condition</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['All', 'New', 'Used'] as const).map(cond => (
+                    <button
+                      key={cond}
+                      type="button"
+                      onClick={() => setConditionFilter(cond)}
+                      className={`p-2.5 rounded-xl border text-center font-semibold transition-all ${
+                        conditionFilter === cond
+                          ? 'bg-emerald-50 text-[#047857] border-emerald-300 ring-1 ring-emerald-400'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {cond === 'All' ? 'All Items' : cond === 'New' ? 'Brand New' : 'Gently Used'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 4. Delivery Method */}
+              <div className="space-y-2">
+                <label className="font-bold text-slate-900 block">Delivery Method</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'all', label: 'All Modes' },
+                    { id: 'pan_india', label: 'Courier Delivery' },
+                    { id: 'local', label: 'Self Direct Pickup' },
+                  ].map(del => (
+                    <button
+                      key={del.id}
+                      type="button"
+                      onClick={() => setDeliveryFilter(del.id as any)}
+                      className={`p-2.5 rounded-xl border text-center font-semibold transition-all ${
+                        deliveryFilter === del.id
+                          ? 'bg-emerald-50 text-[#047857] border-emerald-300 ring-1 ring-emerald-400'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {del.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 5. Categories Filter */}
+              <div className="space-y-2">
+                <label className="font-bold text-slate-900 block">Categories</label>
+                <div className="grid grid-cols-3 gap-2 max-h-44 overflow-y-auto pr-1">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategory(null)}
+                    className={`p-2 rounded-xl border text-center font-semibold transition-all ${
+                      selectedCategory === null
+                        ? 'bg-emerald-50 text-[#047857] border-emerald-300 ring-1 ring-emerald-400'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    🏷️ All Categories
+                  </button>
+                  {categories.map(cat => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setSelectedCategory(cat.id)}
+                      className={`p-2 rounded-xl border text-center font-semibold truncate transition-all ${
+                        selectedCategory === cat.id
+                          ? 'bg-emerald-50 text-[#047857] border-emerald-300 ring-1 ring-emerald-400'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {cat.icon || '📦'} {cat.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-200 bg-slate-50/50 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition-all"
+              >
+                Reset All
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsFilterModalOpen(false)}
+                className="flex-1 bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5"
+              >
+                <span>Apply Filters ({filteredProducts.length} Results)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CITY & LOCATION SELECTOR MODAL */}
+      {isCityModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-2xl animate-slide-up sm:animate-in overflow-hidden">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-[#047857]">
+                  <MapPin className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Select Your City / Location</h3>
+                  <p className="text-[10px] text-slate-500">Find marketplace products near you</p>
+                </div>
+              </div>
+              <button onClick={() => setIsCityModalOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3 flex-1 overflow-y-auto">
+              {/* City Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search city or district..."
+                  value={citySearchQuery}
+                  onChange={(e) => setCitySearchQuery(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-[#047857]"
+                />
+              </div>
+
+              {/* Use Current GPS Location Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof navigator !== 'undefined' && navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                      async (pos) => {
+                        try {
+                          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`);
+                          if (res.ok) {
+                            const data = await res.json();
+                            const city = data.address?.city || data.address?.town || data.address?.state_district || 'Kolkata';
+                            const state = data.address?.state ? data.address.state.slice(0, 2).toUpperCase() : 'WB';
+                            const fullLoc = `${city}, ${state}`;
+                            setSelectedCity(fullLoc);
+                            localStorage.setItem('fiinway_selected_city', fullLoc);
+                            setIsCityModalOpen(false);
+                            return;
+                          }
+                        } catch (e) {
+                          // fallback
+                        }
+                        setSelectedCity('Kolkata, WB');
+                        localStorage.setItem('fiinway_selected_city', 'Kolkata, WB');
+                        setIsCityModalOpen(false);
+                      },
+                      () => {
+                        setSelectedCity('Kolkata, WB');
+                        localStorage.setItem('fiinway_selected_city', 'Kolkata, WB');
+                        setIsCityModalOpen(false);
+                      }
+                    );
+                  }
+                }}
+                className="w-full flex items-center justify-between p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[#047857] hover:bg-emerald-100 transition-all font-bold text-xs"
+              >
+                <div className="flex items-center gap-2">
+                  <Navigation className="w-4 h-4" />
+                  <span>Use Current Device Location</span>
+                </div>
+                <span className="text-[10px] bg-[#047857] text-white px-2 py-0.5 rounded-full font-semibold">GPS</span>
+              </button>
+
+              {/* Popular Cities Grid */}
+              <div className="space-y-1.5 pt-1">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Cities &amp; Locations</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {popularCities
+                    .filter(c => citySearchQuery === '' || c.name.toLowerCase().includes(citySearchQuery.toLowerCase()) || c.state.toLowerCase().includes(citySearchQuery.toLowerCase()))
+                    .map(city => (
+                      <button
+                        key={city.name}
+                        type="button"
+                        onClick={() => {
+                          setSelectedCity(city.name);
+                          localStorage.setItem('fiinway_selected_city', city.name);
+                          setIsCityModalOpen(false);
+                        }}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          selectedCity === city.name
+                            ? 'bg-emerald-50 text-[#047857] border-emerald-300 font-bold'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        <p className="text-xs font-bold">{city.name}</p>
+                        <p className="text-[10px] text-slate-400">{city.state}</p>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
