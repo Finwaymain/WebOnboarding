@@ -398,8 +398,21 @@ export default function WalletPage() {
       }
       const autoRefreshTimer = setInterval(() => {
         fetchData(true);
-      }, 10000);
-      return () => clearInterval(autoRefreshTimer);
+      }, 3000);
+
+      const onFocus = () => fetchData(true);
+      const onVisibilityChange = () => {
+        if (document.visibilityState === 'visible') fetchData(true);
+      };
+
+      window.addEventListener('focus', onFocus);
+      document.addEventListener('visibilitychange', onVisibilityChange);
+
+      return () => {
+        clearInterval(autoRefreshTimer);
+        window.removeEventListener('focus', onFocus);
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      };
     }
   }, [mounted, fetchData]);
 

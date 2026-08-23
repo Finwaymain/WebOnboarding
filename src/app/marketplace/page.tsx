@@ -361,6 +361,24 @@ export default function MarketplacePage() {
     let uType = 'user';
 
     if (typeof window !== 'undefined') {
+      if (typeof document !== 'undefined') {
+        let metaTheme = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement;
+        if (!metaTheme) {
+          metaTheme = document.createElement('meta');
+          metaTheme.name = 'theme-color';
+          document.head.appendChild(metaTheme);
+        }
+        metaTheme.content = '#ffffff';
+
+        let metaStatus = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]') as HTMLMetaElement;
+        if (!metaStatus) {
+          metaStatus = document.createElement('meta');
+          metaStatus.name = 'apple-mobile-web-app-status-bar-style';
+          document.head.appendChild(metaStatus);
+        }
+        metaStatus.content = 'default';
+      }
+
       const urlParams = new URLSearchParams(window.location.search);
       token = urlParams.get('accesstoken') || urlParams.get('token') || urlParams.get('access_token') || localStorage.getItem('accesstoken') || '';
       
@@ -720,6 +738,28 @@ export default function MarketplacePage() {
 
   const removeCartItem = (productId: number) => {
     setCart(prev => prev.filter(item => item.product.id !== productId));
+  };
+
+  const clearAllCart = () => {
+    if (cart.length === 0) return;
+    if (window.confirm("Are you sure you want to remove all items from your cart?")) {
+      setCart([]);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('fiinway_marketplace_cart');
+      }
+    }
+  };
+
+  // Accurate Discount Percentage Helper
+  const getDiscountPercentage = (price: number, originalPrice?: number, explicitDiscount?: number): number => {
+    if (originalPrice && originalPrice > price) {
+      const calculated = Math.round(((originalPrice - price) / originalPrice) * 100);
+      return Math.max(0, Math.min(99, calculated));
+    }
+    if (explicitDiscount && explicitDiscount > 0) {
+      return Math.max(0, Math.min(99, Math.round(explicitDiscount)));
+    }
+    return 0;
   };
 
   // Cart Calculations
@@ -1462,6 +1502,15 @@ export default function MarketplacePage() {
                           {prod.condition}
                         </span>
 
+                        {(() => {
+                          const disc = getDiscountPercentage(prod.price, prod.original_price, prod.discount_percentage);
+                          return disc > 0 ? (
+                            <span className="absolute top-2 left-16 bg-rose-600 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded shadow-2xs">
+                              {disc}% OFF
+                            </span>
+                          ) : null;
+                        })()}
+
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1484,9 +1533,9 @@ export default function MarketplacePage() {
                         </p>
 
                         <div className="flex items-center justify-between pt-1.5 border-t border-slate-100 mt-1">
-                          <div className="flex items-baseline gap-1">
+                          <div className="flex items-baseline gap-1.5 flex-wrap">
                             <span className="text-xs font-bold text-[#047857]">₹{prod.price.toLocaleString()}</span>
-                            {prod.original_price && (
+                            {prod.original_price && prod.original_price > prod.price && (
                               <span className="text-[10px] text-slate-400 line-through">₹{prod.original_price.toLocaleString()}</span>
                             )}
                           </div>
@@ -1581,9 +1630,14 @@ export default function MarketplacePage() {
                   alt={selectedProduct.title}
                   className="w-full h-full object-cover"
                 />
-                <span className="absolute top-3 left-3 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-2xs">
-                  -{selectedProduct.discount_percentage || 15}% OFF
-                </span>
+                {(() => {
+                  const disc = getDiscountPercentage(selectedProduct.price, selectedProduct.original_price, selectedProduct.discount_percentage);
+                  return disc > 0 ? (
+                    <span className="absolute top-3 left-3 bg-rose-600 text-white text-[11px] font-extrabold px-2.5 py-1 rounded-lg shadow-sm">
+                      {disc}% OFF
+                    </span>
+                  ) : null;
+                })()}
                 <span className={`absolute top-3 right-3 text-[10px] font-bold px-2.5 py-0.5 rounded text-white shadow-2xs ${
                   selectedProduct.condition === 'New' ? 'bg-[#047857]' : 'bg-amber-600'
                 }`}>
@@ -1610,10 +1664,20 @@ export default function MarketplacePage() {
               <div className="space-y-2">
                 <h1 className="text-lg font-bold text-slate-900">{selectedProduct.title}</h1>
 
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-bold text-[#047857]">₹{selectedProduct.price.toLocaleString()}</span>
-                  {selectedProduct.original_price && (
-                    <span className="text-sm text-slate-400 line-through">₹{selectedProduct.original_price.toLocaleString()}</span>
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-2xl font-black text-[#047857]">₹{selectedProduct.price.toLocaleString()}</span>
+                  {selectedProduct.original_price && selectedProduct.original_price > selectedProduct.price && (
+                    <>
+                      <span className="text-sm text-slate-400 line-through font-semibold">₹{selectedProduct.original_price.toLocaleString()}</span>
+                      {(() => {
+                        const disc = getDiscountPercentage(selectedProduct.price, selectedProduct.original_price, selectedProduct.discount_percentage);
+                        return disc > 0 ? (
+                          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                            Save ₹{(selectedProduct.original_price - selectedProduct.price).toLocaleString()} ({disc}% OFF)
+                          </span>
+                        ) : null;
+                      })()}
+                    </>
                   )}
                 </div>
 
@@ -2438,20 +2502,46 @@ export default function MarketplacePage() {
                   )}
                 </div>
 
-                <h3 className="text-sm font-bold text-slate-900 border-b pb-2 pt-2">2. Pricing, Stock & Description</h3>
-                <div className="grid grid-cols-2 gap-2">
+                <h3 className="text-sm font-bold text-slate-900 border-b pb-2 pt-2">2. Pricing, MRP & Stock</h3>
+                <div className="grid grid-cols-3 gap-2">
                   <div>
                     <label className="text-xs font-semibold text-slate-700">Selling Price (₹) *</label>
                     <input
                       type="number"
                       placeholder="e.g. 25000"
                       value={newPrice}
-                      onChange={e => setNewPrice(e.target.value)}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setNewPrice(val);
+                        const p = parseFloat(val) || 0;
+                        const orig = parseFloat(newOriginalPrice) || 0;
+                        if (orig > p && p > 0) {
+                          setNewDiscountPercent(Math.round(((orig - p) / orig) * 100).toString());
+                        }
+                      }}
+                      className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#047857]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700">Original MRP (₹)</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 30000"
+                      value={newOriginalPrice}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setNewOriginalPrice(val);
+                        const orig = parseFloat(val) || 0;
+                        const p = parseFloat(newPrice) || 0;
+                        if (orig > p && p > 0) {
+                          setNewDiscountPercent(Math.round(((orig - p) / orig) * 100).toString());
+                        }
+                      }}
                       className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:ring-2 focus:ring-[#047857]"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-700">Available Stock Qty *</label>
+                    <label className="text-xs font-semibold text-slate-700">Stock Qty *</label>
                     <input
                       type="number"
                       min="1"
@@ -2462,6 +2552,15 @@ export default function MarketplacePage() {
                     />
                   </div>
                 </div>
+
+                {parseFloat(newOriginalPrice) > parseFloat(newPrice) && parseFloat(newPrice) > 0 && (
+                  <div className="bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl flex items-center justify-between text-xs">
+                    <span className="text-emerald-800 font-semibold">Calculated Discount:</span>
+                    <span className="font-extrabold text-[#047857]">
+                      {Math.round(((parseFloat(newOriginalPrice) - parseFloat(newPrice)) / parseFloat(newOriginalPrice)) * 100)}% OFF (Save ₹{(parseFloat(newOriginalPrice) - parseFloat(newPrice)).toLocaleString()})
+                    </span>
+                  </div>
+                )}
 
                 <div>
                   <label className="text-xs font-semibold text-slate-700">Description</label>
@@ -2664,9 +2763,20 @@ export default function MarketplacePage() {
                   </>
                 )}
               </div>
-              <button onClick={() => setIsCartOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {checkoutStep === 'cart' && cart.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearAllCart}
+                    className="text-[11px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors"
+                  >
+                    <Trash2 className="w-3 h-3" /> Clear All
+                  </button>
+                )}
+                <button onClick={() => setIsCartOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
