@@ -82,7 +82,7 @@ function SmartValueContent() {
         if (amtData.data) {
           const wAmt = Number(amtData.data.amount || amtData.data.wallet_amount || 0);
           const eAmt = Number(amtData.data.earn_amount || amtData.data.total_earnings || 0);
-          setBalance(wAmt > 0 ? wAmt : eAmt);
+          setBalance(wAmt);
           setEarnings(eAmt);
           fetched = true;
         }
