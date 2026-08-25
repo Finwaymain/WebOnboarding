@@ -879,6 +879,7 @@ function ReferralDashboardContent() {
           userCat={userCat}
           phone={phone}
           token={token}
+          apiBase={getApiBase()}
           apiKey={API_KEY}
           onSuccess={handleAadhaarSuccess}
         />
