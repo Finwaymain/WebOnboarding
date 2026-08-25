@@ -27,6 +27,35 @@ import AadhaarRegistrationModal from "../../components/AadhaarRegistrationModal"
 const API_KEY = "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=";
 const getApiBase = () => (typeof window !== "undefined" ? `${window.location.origin}/api/v1` : "https://api.fiinway.com/api/v1");
 
+function readUrlParams() {
+  if (typeof window === "undefined") {
+    return {
+      token: null,
+      userId: null,
+      driverId: null,
+      userCat: null,
+      phone: null,
+      view: "home" as "home" | "dashboard",
+    };
+  }
+  const params = new URLSearchParams(window.location.search);
+  const driverId = params.get("driver_id") || params.get("id_driver") || localStorage.getItem("driver_id");
+  const userId = params.get("user_id") || params.get("id_user") || localStorage.getItem("user_id");
+  const userCat = params.get("user_cat") || params.get("user_type") || (driverId && !userId ? "driver" : "customer") || localStorage.getItem("user_cat");
+  const token = params.get("accesstoken") || params.get("token") || localStorage.getItem("accesstoken");
+  const phone = params.get("phone") || params.get("mobile") || localStorage.getItem("phone");
+  const viewParam = params.get("view");
+  const view = (viewParam === "dashboard") ? "dashboard" : "home";
+
+  if (driverId) localStorage.setItem("driver_id", driverId);
+  if (userId) localStorage.setItem("user_id", userId);
+  if (userCat) localStorage.setItem("user_cat", userCat);
+  if (token) localStorage.setItem("accesstoken", token);
+  if (phone) localStorage.setItem("phone", phone);
+
+  return { token, userId, driverId, userCat, phone, view };
+}
+
 function ReferralDashboardContent() {
   const searchParams = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
@@ -46,47 +75,77 @@ function ReferralDashboardContent() {
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      setToken(params.get("accesstoken") || searchParams.get("accesstoken"));
-      setUserId(params.get("user_id") || searchParams.get("user_id") || params.get("id_user"));
-      setDriverId(params.get("driver_id") || searchParams.get("driver_id") || params.get("id_driver"));
-      setUserCat(params.get("user_cat") || searchParams.get("user_cat") || params.get("user_type") || searchParams.get("user_type"));
-      setPhone(params.get("phone") || searchParams.get("phone") || params.get("mobile"));
-
-      const defaultView = params.get("view") || searchParams.get("view");
-      if (defaultView === "dashboard") {
-        setViewMode("dashboard");
-      }
+    const parsed = readUrlParams();
+    setToken(parsed.token);
+    setUserId(parsed.userId);
+    setDriverId(parsed.driverId);
+    setUserCat(parsed.userCat);
+    setPhone(parsed.phone);
+    if (parsed.view === "dashboard") {
+      setViewMode("dashboard");
     }
+
+    try {
+      const cached = localStorage.getItem("fiinway_partner_stats");
+      if (cached) {
+        setStats(JSON.parse(cached));
+      }
+    } catch (_) {}
   }, [searchParams]);
 
   const fetchReferralStats = useCallback(async () => {
     try {
       setLoading(true);
       const apiBase = getApiBase();
-      let uId = userId;
-      let dId = driverId;
-      let uCat = userCat;
-      let tok = token;
-      let ph = phone;
+      const parsed = readUrlParams();
+      const uId = userId || parsed.userId || "";
+      const dId = driverId || parsed.driverId || "";
+      const uCat = userCat || parsed.userCat || (dId ? "driver" : "customer");
+      const tok = token || parsed.token || "";
+      const ph = phone || parsed.phone || "";
 
-      if (typeof window !== "undefined") {
-        const p = new URLSearchParams(window.location.search);
-        uId = uId || p.get("user_id") || p.get("id_user");
-        dId = dId || p.get("driver_id") || p.get("id_driver");
-        uCat = uCat || p.get("user_cat") || p.get("user_type");
-        tok = tok || p.get("accesstoken");
-        ph = ph || p.get("phone") || p.get("mobile");
+      const queryStr = `user_id=${encodeURIComponent(uId)}&driver_id=${encodeURIComponent(dId)}&id_user=${encodeURIComponent(uId)}&id_driver=${encodeURIComponent(dId)}&user_cat=${encodeURIComponent(uCat)}&user_type=${encodeURIComponent(uCat)}&phone=${encodeURIComponent(ph)}&accesstoken=${encodeURIComponent(tok)}&apikey=${encodeURIComponent(API_KEY)}`;
+      
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "apikey": API_KEY,
+        "accesstoken": tok,
+        "user_id": uId,
+        "driver_id": dId,
+        "user_type": uCat,
+      };
+
+      const payload = {
+        user_id: uId,
+        id_user: uId,
+        driver_id: dId,
+        id_driver: dId,
+        user_cat: uCat,
+        user_type: uCat,
+        phone: ph,
+        accesstoken: tok,
+      };
+
+      let res = await fetch(`${apiBase}/referral-dashboard-stats?${queryStr}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        res = await fetch(`${apiBase}/referral-dashboard-stats?${queryStr}`, {
+          method: "GET",
+          headers,
+        });
       }
 
-      const queryStr = `user_id=${uId || ""}&driver_id=${dId || ""}&user_cat=${uCat || ""}&phone=${encodeURIComponent(ph || "")}&accesstoken=${encodeURIComponent(tok || "")}&apikey=${encodeURIComponent(API_KEY)}`;
-      const res = await fetch(`${apiBase}/referral-dashboard-stats?${queryStr}`, {
-        headers: { apikey: API_KEY, accesstoken: tok || "" },
-      });
       const json = await res.json();
       if (json.success === "success" && json.data) {
         setStats(json.data);
+        try {
+          localStorage.setItem("fiinway_partner_stats", JSON.stringify(json.data));
+        } catch (_) {}
+
         const isVerified = json.data.aadhar_submitted === true || 
           (json.data.aadhar_number && json.data.aadhar_number.toString().trim().length === 12);
 
@@ -135,17 +194,19 @@ function ReferralDashboardContent() {
     setTimeout(() => setToast(""), 2200);
   };
 
+  const isDriver = (userCat === "driver" || userCat === "conducteur" || Boolean(driverId));
+  const fallbackPrefix = isDriver ? "FIINB" : "FIINC";
   const fallbackCode = userId 
-    ? `FIIN${String(userId).padStart(6, '0').slice(-6)}` 
+    ? `${fallbackPrefix}${String(userId).padStart(6, '0').slice(-6)}` 
     : driverId 
-      ? `FIIN${String(driverId).padStart(6, '0').slice(-6)}` 
+      ? `${fallbackPrefix}${String(driverId).padStart(6, '0').slice(-6)}` 
       : phone 
-        ? `FIIN${String(phone).slice(-4)}` 
-        : "FIINWAY";
+        ? `${fallbackPrefix}${String(phone).slice(-6)}` 
+        : "";
 
   const referralCode = (stats?.referral_code && stats.referral_code !== "Loading..." && stats.referral_code !== "---") 
     ? stats.referral_code 
-    : fallbackCode;
+    : (fallbackCode || "Fetching...");
 
   const walletBalance = stats?.wallet_balance ?? 0;
 
