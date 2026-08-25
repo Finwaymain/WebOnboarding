@@ -98,11 +98,11 @@ function ReferralDashboardContent() {
       setLoading(true);
       const apiBase = getApiBase();
       const parsed = readUrlParams();
-      let uId = userId || parsed.userId || "";
-      let dId = driverId || parsed.driverId || "";
-      let uCat = userCat || parsed.userCat || (dId ? "driver" : "customer");
-      let tok = token || parsed.token || "";
-      let ph = phone || parsed.phone || "";
+      const uId = userId || parsed.userId || "";
+      const dId = driverId || parsed.driverId || "";
+      const uCat = userCat || parsed.userCat || (dId ? "driver" : "customer");
+      const tok = token || parsed.token || "";
+      const ph = phone || parsed.phone || "";
 
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -113,46 +113,6 @@ function ReferralDashboardContent() {
         "user_type": uCat,
       };
 
-      // Step 1: Query marketplace/user-profile (matching Marketplace & Wallet reference)
-      try {
-        const profParams = new URLSearchParams();
-        if (dId) profParams.set("driver_id", dId);
-        if (uId) profParams.set("user_id", uId);
-        if (uCat) profParams.set("user_type", uCat);
-        if (tok) profParams.set("accesstoken", tok);
-        if (ph) profParams.set("phone", ph);
-
-        const profRes = await fetch(`/api/v1/marketplace/user-profile?${profParams.toString()}`, { headers });
-        if (profRes.ok) {
-          const profJson = await profRes.json();
-          if (profJson?.data && profJson.data.id) {
-            const pData = profJson.data;
-            if (pData.id) {
-              if (pData.user_type === "driver") {
-                dId = String(pData.id);
-                uCat = "driver";
-              } else {
-                uId = String(pData.id);
-                uCat = "customer";
-              }
-            }
-            if (pData.referral_code) {
-              setStats((prev: any) => ({
-                ...(prev || {}),
-                referral_code: pData.referral_code,
-                share_url: `https://api.fiinway.com/ref/${pData.referral_code}`,
-                wallet_balance: pData.amount ?? (prev?.wallet_balance || 0),
-                user_name: pData.name || prev?.user_name,
-                user_id: pData.id || prev?.user_id,
-              }));
-            }
-          }
-        }
-      } catch (profErr) {
-        console.warn("UserProfile fetch note in referral:", profErr);
-      }
-
-      // Step 2: Query referral-dashboard-stats
       const queryStr = `user_id=${encodeURIComponent(uId)}&driver_id=${encodeURIComponent(dId)}&id_user=${encodeURIComponent(uId)}&id_driver=${encodeURIComponent(dId)}&user_cat=${encodeURIComponent(uCat)}&user_type=${encodeURIComponent(uCat)}&phone=${encodeURIComponent(ph)}&accesstoken=${encodeURIComponent(tok)}&apikey=${encodeURIComponent(API_KEY)}`;
 
       const payload = {
@@ -181,10 +141,7 @@ function ReferralDashboardContent() {
 
       const json = await res.json();
       if (json.success === "success" && json.data) {
-        setStats((prev: any) => ({
-          ...(prev || {}),
-          ...json.data,
-        }));
+        setStats(json.data);
         try {
           localStorage.setItem("fiinway_partner_stats", JSON.stringify(json.data));
         } catch (_) {}
