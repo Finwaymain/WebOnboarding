@@ -459,8 +459,13 @@ export default function WalletPage() {
   // Handle Top-Up Submission in Web Modal
   const handleTopUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!topUpAmount || Number(topUpAmount) <= 0) {
-      showToast("Please enter a valid amount", "error");
+    const numAmt = Number(topUpAmount);
+    if (!topUpAmount || isNaN(numAmt) || numAmt < 10) {
+      showToast("Minimum top-up amount is ₹10", "error");
+      return;
+    }
+    if (numAmt > 50000) {
+      showToast("Maximum top-up amount per transaction is ₹50,000", "error");
       return;
     }
 
@@ -471,7 +476,7 @@ export default function WalletPage() {
         body: JSON.stringify({
           id_user: userId,
           cat_user: isDriver ? 'driver' : 'user',
-          amount: topUpAmount,
+          amount: numAmt,
           transaction_id: `WEB_${Date.now()}`,
           paymethod: selectedPayMethod,
         }),

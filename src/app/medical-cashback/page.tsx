@@ -66,6 +66,10 @@ function MedicalCashbackContent() {
   const [mPin, setMPin] = useState('');
   const [mPinError, setMPinError] = useState('');
 
+  // Plan Details & Benefits Modal State
+  const [showPlanBenefitsModal, setShowPlanBenefitsModal] = useState(false);
+  const [showPlanDetailsModal, setShowPlanDetailsModal] = useState(false);
+
   // Step 4 Claim Form
   const [prescriptionFile, setPrescriptionFile] = useState<string | null>(null);
   const [diagnosticFile, setDiagnosticFile] = useState<string | null>(null);
@@ -367,6 +371,24 @@ function MedicalCashbackContent() {
         fetchUserData(token, userId, driverId);
         showAlert('Your Healthcare Cashback Card has been activated successfully!', 'success', 'Card Activated 🎉');
       } else {
+        const isInsufficient = data.error_code === 'INSUFFICIENT_BALANCE' || (data.error && data.error.toLowerCase().includes('insufficient'));
+        if (isInsufficient) {
+          setShowMPinModal(false);
+          const qParams = new URLSearchParams();
+          if (token) qParams.set('accesstoken', token);
+          if (userId) qParams.set('user_id', userId);
+          if (driverId) qParams.set('driver_id', driverId);
+          showAlert(
+            'Your Smart Value wallet balance is insufficient for this plan. Please top up your wallet balance.',
+            'error',
+            'Insufficient Wallet Balance',
+            () => {
+              window.location.href = `/onboarding/wallet?${qParams.toString()}`;
+            }
+          );
+          return;
+        }
+
         if (showMPinModal) {
           setMPinError(data.error || 'Incorrect M-PIN or payment failed.');
         } else {
@@ -376,7 +398,7 @@ function MedicalCashbackContent() {
     } catch (err) {
       console.error(err);
       setShowMPinModal(false);
-      setStep('my_card');
+      showAlert('Payment request failed or timed out. Please verify your connection.', 'error', 'Error');
     } finally {
       setIsProcessingPayment(false);
     }
@@ -389,10 +411,22 @@ function MedicalCashbackContent() {
       });
       return;
     }
-    if (!claimAmount || parseFloat(claimAmount) <= 0) {
+    const numAmount = parseFloat(claimAmount);
+    if (!claimAmount || isNaN(numAmount) || numAmount <= 0) {
       showAlert('Please enter a valid cashback expense amount.', 'warning', 'Invalid Amount');
       return;
     }
+
+    const remainingLimit = activeCardData ? (parseFloat(activeCardData.remaining_amount) || parseFloat(activeCardData.claim_limit) || 0) : 0;
+    if (remainingLimit > 0 && numAmount > remainingLimit) {
+      showAlert(
+        `Claim amount ₹${numAmount.toLocaleString('en-IN')} cannot exceed your card's remaining claim limit of ₹${remainingLimit.toLocaleString('en-IN')}.`,
+        'warning',
+        'Claim Limit Exceeded'
+      );
+      return;
+    }
+
     setIsSubmittingClaim(true);
     try {
       // Use FormData for multipart so files actually upload
@@ -750,10 +784,16 @@ function MedicalCashbackContent() {
 
           {/* Buttons: Plan Benefits / Plan Details */}
           <div className="grid grid-cols-2 gap-2.5 mb-5">
-            <button className="bg-white hover:bg-slate-50 text-slate-800 font-extrabold text-xs py-2.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-center gap-1.5">
+            <button 
+              onClick={() => setShowPlanBenefitsModal(true)}
+              className="bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-800 font-extrabold text-xs py-2.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-center gap-1.5 transition-all"
+            >
               <Award className="w-4 h-4 text-blue-600" /> Plan Benefits
             </button>
-            <button className="bg-white hover:bg-slate-50 text-slate-800 font-extrabold text-xs py-2.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-center gap-1.5">
+            <button 
+              onClick={() => setShowPlanDetailsModal(true)}
+              className="bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-800 font-extrabold text-xs py-2.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-center gap-1.5 transition-all"
+            >
               <Info className="w-4 h-4 text-blue-600" /> Plan Details
             </button>
           </div>
@@ -1593,6 +1633,126 @@ function MedicalCashbackContent() {
               }`}
             >
               {alertState.buttonText || 'Understand & Proceed'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: PLAN BENEFITS BREAKDOWN */}
+      {/* ========================================================================= */}
+      {showPlanBenefitsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full shadow-2xl border border-slate-100 text-left animate-in zoom-in-95 duration-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center">
+                  <Award className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 leading-tight">Plan Benefits</h3>
+                  <p className="text-[10px] text-slate-500 font-semibold">{activeCardData?.card_type || selectedPlan?.title || 'Fiinway Medical Care'}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowPlanBenefitsModal(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold transition-all"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+              {[
+                { title: '100% Medical Cashback Claim', desc: 'Direct claim settlement to your Smart Value wallet balance.' },
+                { title: 'Prescription & Pharmacy Coverage', desc: 'Cashback on doctor-prescribed medicines and chemist bills.' },
+                { title: 'Diagnostic Lab Tests & Scans', desc: 'Cashback on blood tests, MRI, CT scans, X-rays, and pathology reports.' },
+                { title: 'OPD & Doctor Consultation Cashback', desc: 'Cashback reimbursement for specialist and general clinic visits.' },
+                { title: 'Instant 1-Tap Digital Verification', desc: 'Upload cash memo, prescription, and diagnostics with quick approval.' },
+                { title: '365 Days Guaranteed Validity', desc: 'Full 1-year coverage from the date of card activation.' },
+              ].map((item, idx) => (
+                <div key={idx} className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-slate-800 leading-tight">{item.title}</p>
+                    <p className="text-[11px] text-slate-500 font-medium leading-snug mt-0.5">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setShowPlanBenefitsModal(false)}
+              className="w-full bg-[#1E3A8A] hover:bg-[#1e293b] text-white font-extrabold text-xs py-3 rounded-xl shadow-md transition-all"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: PLAN DETAILS SPECIFICATIONS */}
+      {/* ========================================================================= */}
+      {showPlanDetailsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full shadow-2xl border border-slate-100 text-left animate-in zoom-in-95 duration-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                  <Info className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 leading-tight">Plan Specifications</h3>
+                  <p className="text-[10px] text-slate-500 font-semibold">{activeCardData?.card_type || selectedPlan?.title || 'Fiinway Medical Care'}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowPlanDetailsModal(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold transition-all"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between py-1.5 border-b border-slate-100">
+                <span className="text-slate-500 font-semibold">Card Plan Name</span>
+                <span className="font-extrabold text-slate-900">{activeCardData?.card_type || selectedPlan?.title || 'Gold Care'}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-slate-100">
+                <span className="text-slate-500 font-semibold">Total Claim Limit</span>
+                <span className="font-extrabold text-emerald-600">₹{(activeCardData?.claim_limit || selectedPlan?.claimLimit || 0).toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-slate-100">
+                <span className="text-slate-500 font-semibold">Remaining Claim Balance</span>
+                <span className="font-extrabold text-blue-600">₹{(activeCardData?.remaining_amount ?? activeCardData?.claim_limit ?? 0).toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-slate-100">
+                <span className="text-slate-500 font-semibold">Card Price Paid</span>
+                <span className="font-extrabold text-slate-900">₹{activeCardData?.price || selectedPlan?.price || '—'}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-slate-100">
+                <span className="text-slate-500 font-semibold">Linked Aadhaar</span>
+                <span className="font-mono font-bold text-slate-700">{activeCardData?.aadhaar_number ? `•••• •••• ${String(activeCardData.aadhaar_number).slice(-4)}` : 'Verified'}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-slate-100">
+                <span className="text-slate-500 font-semibold">Validity Period</span>
+                <span className="font-bold text-slate-800">365 Days (1 Year)</span>
+              </div>
+              <div className="flex justify-between py-1.5">
+                <span className="text-slate-500 font-semibold">Status</span>
+                <span className="font-extrabold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full text-[10px]">
+                  {activeCardData?.status ? activeCardData.status.toUpperCase() : 'ACTIVE'}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowPlanDetailsModal(false)}
+              className="w-full bg-[#1E3A8A] hover:bg-[#1e293b] text-white font-extrabold text-xs py-3 rounded-xl shadow-md transition-all"
+            >
+              Close
             </button>
           </div>
         </div>
