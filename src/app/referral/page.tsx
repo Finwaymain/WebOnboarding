@@ -195,18 +195,9 @@ function ReferralDashboardContent() {
   };
 
   const isDriver = (userCat === "driver" || userCat === "conducteur" || Boolean(driverId));
-  const fallbackPrefix = isDriver ? "FIINB" : "FIINC";
-  const fallbackCode = userId 
-    ? `${fallbackPrefix}${String(userId).padStart(6, '0').slice(-6)}` 
-    : driverId 
-      ? `${fallbackPrefix}${String(driverId).padStart(6, '0').slice(-6)}` 
-      : phone 
-        ? `${fallbackPrefix}${String(phone).slice(-6)}` 
-        : "";
-
   const referralCode = (stats?.referral_code && stats.referral_code !== "Loading..." && stats.referral_code !== "---") 
     ? stats.referral_code 
-    : (fallbackCode || "Fetching...");
+    : (loading ? "Loading..." : (stats?.referral_code || ""));
 
   const walletBalance = stats?.wallet_balance ?? 0;
 
