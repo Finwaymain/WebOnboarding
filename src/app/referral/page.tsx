@@ -39,19 +39,29 @@ function readUrlParams() {
     };
   }
   const params = new URLSearchParams(window.location.search);
-  const driverId = params.get("driver_id") || params.get("id_driver") || localStorage.getItem("driver_id");
-  const userId = params.get("user_id") || params.get("id_user") || localStorage.getItem("user_id");
-  const userCat = params.get("user_cat") || params.get("user_type") || (driverId && !userId ? "driver" : "customer") || localStorage.getItem("user_cat");
-  const token = params.get("accesstoken") || params.get("token") || localStorage.getItem("accesstoken");
-  const phone = params.get("phone") || params.get("mobile") || localStorage.getItem("phone");
+  const rawDriverId = params.get("driver_id") || params.get("id_driver") || params.get("id_conducteur");
+  const rawUserId = params.get("user_id") || params.get("id_user") || params.get("userId") || params.get("id");
+  const explicitCat = params.get("user_cat") || params.get("user_type");
+  
+  const token = params.get("accesstoken") || params.get("token") || params.get("access_token");
+  const phone = params.get("phone") || params.get("mobile");
   const viewParam = params.get("view");
   const view = (viewParam === "dashboard") ? "dashboard" : "home";
 
-  if (driverId) localStorage.setItem("driver_id", driverId);
-  if (userId) localStorage.setItem("user_id", userId);
-  if (userCat) localStorage.setItem("user_cat", userCat);
-  if (token) localStorage.setItem("accesstoken", token);
-  if (phone) localStorage.setItem("phone", phone);
+  let driverId: string | null = null;
+  let userId: string | null = null;
+  let userCat: string | null = null;
+
+  if (explicitCat === "driver" || explicitCat === "conducteur" || explicitCat === "business" || explicitCat === "provider" || (rawDriverId && !rawUserId)) {
+    driverId = rawDriverId || rawUserId;
+    userCat = "driver";
+  } else if (rawUserId || explicitCat === "customer" || explicitCat === "user" || explicitCat === "consumer") {
+    userId = rawUserId || rawDriverId;
+    userCat = "customer";
+  } else if (rawDriverId) {
+    driverId = rawDriverId;
+    userCat = "driver";
+  }
 
   return { token, userId, driverId, userCat, phone, view };
 }
@@ -84,13 +94,6 @@ function ReferralDashboardContent() {
     if (parsed.view === "dashboard") {
       setViewMode("dashboard");
     }
-
-    try {
-      const cached = localStorage.getItem("fiinway_partner_stats");
-      if (cached) {
-        setStats(JSON.parse(cached));
-      }
-    } catch (_) {}
   }, [searchParams]);
 
   const fetchReferralStats = useCallback(async () => {
