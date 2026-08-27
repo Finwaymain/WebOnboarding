@@ -359,9 +359,9 @@ export default function WalletPage() {
         }
       }
 
-      // 3. Driver Bank Details & Withdrawals List
-      if (isDriver && userId) {
-        const bankRes = await fetch(`/api/v1/bank-details?driver_id=${userId}`, { headers: apiHeaders });
+      // 3. Bank Details & Withdrawals List (For both Driver and User)
+      if (userId) {
+        const bankRes = await fetch(`/api/v1/bank-details?driver_id=${userId}&user_id=${userId}&user_type=${params.userType}`, { headers: apiHeaders });
         if (bankRes.ok) {
           const bankData = await bankRes.json();
           if (bankData.success === 'success' && bankData.data) {
@@ -374,7 +374,7 @@ export default function WalletPage() {
           }
         }
 
-        const withRes = await fetch(`/api/v1/withdrawals-list?driver_id=${userId}`, { headers: apiHeaders });
+        const withRes = await fetch(`/api/v1/withdrawals-list?driver_id=${userId}&user_id=${userId}&user_type=${params.userType}`, { headers: apiHeaders });
         if (withRes.ok) {
           const withData = await withRes.json();
           if (withData.success === 'success' && Array.isArray(withData.data)) {
@@ -436,21 +436,17 @@ export default function WalletPage() {
   };
 
   const handleWithdrawClick = () => {
-    const handled = triggerNativeAction('withdraw');
-    if (!handled) {
-      setShowWithdrawModal(true);
-    }
+    setShowWithdrawModal(true);
   };
 
   const handleBankClick = () => {
-    const handled = triggerNativeAction('bank');
-    if (!handled) {
-      setShowBankModal(true);
-    }
+    setShowBankModal(true);
   };
 
+  const handlePayoutClick = () => {
+    setShowWithdrawModal(true);
+  };
   const handleTransferClick = () => triggerNativeAction('transfer');
-  const handlePayoutClick = () => triggerNativeAction('payout');
   const handleScanClick = () => triggerNativeAction('scan');
   const handleMyQrClick = () => triggerNativeAction('my_qr');
   const handleAccountDetailsClick = () => triggerNativeAction('account_details');
@@ -514,6 +510,10 @@ export default function WalletPage() {
         headers: apiHeaders,
         body: JSON.stringify({
           driver_id: userId,
+          user_id: userId,
+          id_user: userId,
+          id_conducteur: userId,
+          user_type: params.userType,
           amount: withdrawAmount,
           note: withdrawNote,
         }),
@@ -567,6 +567,9 @@ export default function WalletPage() {
         headers: apiHeaders,
         body: JSON.stringify({
           driver_id: userId,
+          user_id: userId,
+          id_user: userId,
+          user_type: params.userType,
           bank_name: cleanBank,
           branch_name: branchName,
           holder_name: holderName,
@@ -677,18 +680,16 @@ export default function WalletPage() {
           >
             History
           </button>
-          {isDriver && (
-            <button
-              onClick={() => setActiveTab('withdraw')}
-              className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all text-center ${
-                activeTab === 'withdraw'
-                  ? 'bg-[#6AA720] text-white shadow-md font-bold'
-                  : `${themeClasses.textMuted} hover:text-slate-800`
-              }`}
-            >
-              Withdraw
-            </button>
-          )}
+          <button
+            onClick={() => setActiveTab('withdraw')}
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all text-center ${
+              activeTab === 'withdraw'
+                ? 'bg-[#6AA720] text-white shadow-md font-bold'
+                : `${themeClasses.textMuted} hover:text-slate-800`
+            }`}
+          >
+            Withdraw
+          </button>
         </div>
 
         {/* Circular Refresh Button */}
@@ -746,21 +747,12 @@ export default function WalletPage() {
                     TOP UP
                   </button>
 
-                  {isDriver ? (
-                    <button
-                      onClick={handleWithdrawClick}
-                      className="py-3.5 px-4 bg-[#2C5282] hover:bg-[#2b4c77] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-[0.98]"
-                    >
-                      WITHDRAW
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleTransferClick}
-                      className={`py-3.5 px-4 ${isDark ? 'bg-slate-800 text-white border-slate-700' : 'bg-slate-800 text-white border-slate-800'} font-bold text-xs uppercase tracking-wider rounded-xl border shadow-md transition-all active:scale-[0.98]`}
-                    >
-                      TRANSFER
-                    </button>
-                  )}
+                  <button
+                    onClick={handleWithdrawClick}
+                    className="py-3.5 px-4 bg-[#2C5282] hover:bg-[#2b4c77] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-[0.98]"
+                  >
+                    WITHDRAW
+                  </button>
                 </div>
 
                 {/* Account & Card Details Shortcut */}
@@ -1054,8 +1046,8 @@ export default function WalletPage() {
               </div>
             )}
 
-            {/* WITHDRAWALS TAB (Driver Only) */}
-            {activeTab === 'withdraw' && isDriver && (
+            {/* WITHDRAWALS TAB */}
+            {activeTab === 'withdraw' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className={`text-sm font-semibold ${themeClasses.textMain}`}>Withdrawal Requests</h3>
@@ -1159,27 +1151,85 @@ export default function WalletPage() {
         </div>
       )}
 
-      {/* FALLBACK WEB MODAL: WITHDRAW */}
-      {showWithdrawModal && isDriver && (
+      {/* WEB MODAL: WITHDRAW & PAYOUT */}
+      {showWithdrawModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className={`w-full max-w-lg ${themeClasses.modalBg} border rounded-t-3xl sm:rounded-3xl p-6 space-y-5 shadow-2xl`}>
+          <div className={`w-full max-w-lg ${themeClasses.modalBg} border rounded-t-3xl sm:rounded-3xl p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto`}>
             <div className="flex items-center justify-between">
-              <h3 className={`text-base font-bold ${themeClasses.textMain}`}>Withdraw Funds</h3>
+              <div>
+                <h3 className={`text-base font-bold ${themeClasses.textMain}`}>Withdrawal & Payout</h3>
+                <p className={`text-xs ${themeClasses.textMuted}`}>Request payout to your linked bank account</p>
+              </div>
               <button onClick={() => setShowWithdrawModal(false)} className={themeClasses.textMuted}>
                 <XIcon className="w-5 h-5" />
               </button>
             </div>
 
+            {/* Bank Account Selection / Status Card */}
+            <div className={`p-4 ${themeClasses.inputBg} border rounded-2xl space-y-3`}>
+              <div className="flex items-center justify-between">
+                <span className={`text-xs font-bold uppercase tracking-wider ${themeClasses.textMuted}`}>Receiving Bank Account</span>
+                {bankDetails?.account_no ? (
+                  <span className="text-[10px] font-bold bg-[#6AA720]/15 text-[#6AA720] px-2.5 py-0.5 rounded-full border border-[#6AA720]/30">
+                    Linked Account
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold bg-amber-500/15 text-amber-500 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                    No Account Linked
+                  </span>
+                )}
+              </div>
+
+              {bankDetails?.account_no ? (
+                <div className="space-y-1">
+                  <p className={`text-sm font-extrabold ${themeClasses.textMain}`}>
+                    {bankDetails.bank_name || 'Bank Account'}
+                  </p>
+                  <p className={`text-xs ${themeClasses.textMuted}`}>
+                    Account No: <span className="font-mono font-semibold">{bankDetails.account_no}</span>
+                  </p>
+                  {bankDetails.holder_name && (
+                    <p className={`text-xs ${themeClasses.textMuted}`}>
+                      Holder: <span className="font-medium">{bankDetails.holder_name}</span>
+                    </p>
+                  )}
+                  {(bankDetails.other_info || bankDetails.ifsc_code) && (
+                    <p className={`text-xs ${themeClasses.textMuted}`}>
+                      IFSC: <span className="font-mono">{bankDetails.other_info || bankDetails.ifsc_code}</span>
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-amber-500 font-medium">
+                  Please add a bank account before submitting your payout request.
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBankModal(true);
+                }}
+                className="w-full py-2.5 px-3 bg-[#6AA720]/10 hover:bg-[#6AA720]/20 text-[#6AA720] border border-[#6AA720]/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+              >
+                <BuildingIcon className="w-4 h-4" />
+                <span>{bankDetails?.account_no ? "+ Add / Change Bank Account" : "+ Add Bank Account Now"}</span>
+              </button>
+            </div>
+
             <form onSubmit={handleWithdrawSubmit} className="space-y-4">
               <div>
-                <label className={`block text-xs font-semibold ${themeClasses.textMuted} mb-1.5`}>Withdrawal Amount</label>
+                <label className={`block text-xs font-semibold ${themeClasses.textMuted} mb-1.5`}>Withdrawal Amount (₹)</label>
                 <input
                   type="number"
-                  placeholder="Enter amount"
+                  placeholder="e.g. 500"
                   value={withdrawAmount}
                   onChange={(e) => setWithdrawAmount(e.target.value)}
                   className={`w-full ${themeClasses.inputBg} border rounded-xl px-4 py-3 text-lg font-bold focus:outline-none focus:border-[#6AA720]`}
                 />
+                <p className={`text-[11px] ${themeClasses.textMuted} mt-1`}>
+                  Available Balance: {formatCurrency(walletAmount)}
+                </p>
               </div>
 
               <div>
@@ -1193,83 +1243,100 @@ export default function WalletPage() {
                 />
               </div>
 
-              <div className={`p-3.5 ${themeClasses.inputBg} border rounded-xl text-xs space-y-1`}>
-                <span className={themeClasses.textMuted}>Receiving Bank Account:</span>
-                <p className={`font-bold ${themeClasses.textMain}`}>
-                  {bankDetails?.bank_name ? `${bankDetails.bank_name} (${bankDetails.account_no})` : 'No Bank Linked!'}
-                </p>
-              </div>
-
               <button
                 type="submit"
-                disabled={withdrawSubmitting}
-                className="w-full py-3.5 bg-[#6AA720] hover:bg-[#5b921b] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all disabled:opacity-50"
+                disabled={withdrawSubmitting || !bankDetails?.account_no}
+                className="w-full py-3.5 bg-[#6AA720] hover:bg-[#5b921b] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {withdrawSubmitting ? 'Submitting...' : 'Submit Request'}
+                {withdrawSubmitting ? 'Submitting Request...' : 'Submit Payout Request'}
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* FALLBACK WEB MODAL: BANK DETAILS */}
-      {showBankModal && isDriver && (
+      {/* WEB MODAL: BANK DETAILS */}
+      {showBankModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className={`w-full max-w-lg ${themeClasses.modalBg} border rounded-t-3xl sm:rounded-3xl p-6 space-y-5 shadow-2xl`}>
+          <div className={`w-full max-w-lg ${themeClasses.modalBg} border rounded-t-3xl sm:rounded-3xl p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto`}>
             <div className="flex items-center justify-between">
-              <h3 className={`text-base font-bold ${themeClasses.textMain}`}>Bank Details</h3>
+              <div>
+                <h3 className={`text-base font-bold ${themeClasses.textMain}`}>
+                  {bankDetails?.account_no ? 'Add / Update Bank Account' : 'Add Bank Account'}
+                </h3>
+                <p className={`text-xs ${themeClasses.textMuted}`}>Enter your bank account details for receiving payouts</p>
+              </div>
               <button onClick={() => setShowBankModal(false)} className={themeClasses.textMuted}>
                 <XIcon className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleBankSubmit} className="space-y-3">
-              <input
-                type="text"
-                placeholder="Bank Name (Words only)"
-                value={bankName}
-                onChange={(e) => setBankName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
-                className={`w-full ${themeClasses.inputBg} border rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-[#6AA720]`}
-              />
-              <input
-                type="text"
-                placeholder="Branch Name"
-                value={branchName}
-                onChange={(e) => setBranchName(e.target.value)}
-                className={`w-full ${themeClasses.inputBg} border rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-[#6AA720]`}
-              />
-              <input
-                type="text"
-                placeholder="Account Holder Name"
-                value={holderName}
-                onChange={(e) => setHolderName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
-                className={`w-full ${themeClasses.inputBg} border rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-[#6AA720]`}
-              />
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                placeholder="Account Number (Numbers only)"
-                value={accountNo}
-                onChange={(e) => setAccountNo(e.target.value.replace(/[^0-9]/g, ''))}
-                className={`w-full ${themeClasses.inputBg} border rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-[#6AA720] font-mono`}
-              />
-              <input
-                type="text"
-                maxLength={11}
-                placeholder="IFSC Code (11 characters e.g. SBIN0001234)"
-                value={ifscCode}
-                onChange={(e) => setIfscCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11))}
-                className={`w-full ${themeClasses.inputBg} border rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-[#6AA720] font-mono uppercase`}
-              />
+              <div>
+                <label className={`block text-[11px] font-semibold ${themeClasses.textMuted} mb-1`}>Bank Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. HDFC Bank, SBI, ICICI"
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
+                  className={`w-full ${themeClasses.inputBg} border rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-[#6AA720]`}
+                />
+              </div>
 
-              <button
-                type="submit"
-                disabled={bankSubmitting}
-                className="w-full py-3 bg-[#6AA720] hover:bg-[#5b921b] text-[#ffffff] font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all mt-2 disabled:opacity-50"
-              >
-                {bankSubmitting ? 'Saving...' : 'Save Bank Details'}
-              </button>
+              <div>
+                <label className={`block text-[11px] font-semibold ${themeClasses.textMuted} mb-1`}>Branch Name (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Connaught Place Branch"
+                  value={branchName}
+                  onChange={(e) => setBranchName(e.target.value)}
+                  className={`w-full ${themeClasses.inputBg} border rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-[#6AA720]`}
+                />
+              </div>
+
+              <div>
+                <label className={`block text-[11px] font-semibold ${themeClasses.textMuted} mb-1`}>Account Holder Name</label>
+                <input
+                  type="text"
+                  placeholder="Name as printed on passbook / cheque"
+                  value={holderName}
+                  onChange={(e) => setHolderName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
+                  className={`w-full ${themeClasses.inputBg} border rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-[#6AA720]`}
+                />
+              </div>
+
+              <div>
+                <label className={`block text-[11px] font-semibold ${themeClasses.textMuted} mb-1`}>Account Number</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="9 to 18 digits"
+                  value={accountNo}
+                  onChange={(e) => setAccountNo(e.target.value.replace(/[^0-9]/g, ''))}
+                  className={`w-full ${themeClasses.inputBg} border rounded-xl px-4 py-2.5 text-xs font-mono focus:outline-none focus:border-[#6AA720]`}
+                />
+              </div>
+
+              <div>
+                <label className={`block text-[11px] font-semibold ${themeClasses.textMuted} mb-1`}>IFSC Code</label>
+                <input
+                  type="text"
+                  placeholder="e.g. HDFC0001234"
+                  value={ifscCode}
+                  onChange={(e) => setIfscCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11))}
+                  className={`w-full ${themeClasses.inputBg} border rounded-xl px-4 py-2.5 text-xs font-mono uppercase focus:outline-none focus:border-[#6AA720]`}
+                />
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={bankSubmitting}
+                  className="w-full py-3.5 bg-[#6AA720] hover:bg-[#5b921b] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all disabled:opacity-50"
+                >
+                  {bankSubmitting ? 'Saving Bank Details...' : 'Save & Link Bank Account'}
+                </button>
+              </div>
             </form>
           </div>
         </div>
