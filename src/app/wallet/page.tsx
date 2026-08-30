@@ -151,18 +151,20 @@ function readUrlParams() {
     };
   }
   const params = new URLSearchParams(window.location.search);
-  const driverId = params.get('driver_id') || params.get('id_driver');
-  const userId = params.get('user_id') || params.get('id_user');
-  const userTypeParam = params.get('user_type') || (driverId ? 'driver' : 'user');
+  const driverId = params.get('driver_id') || params.get('id_driver') || params.get('id_conducteur');
+  const rawUserId = params.get('user_id') || params.get('id_user') || params.get('id_user_app');
+  const userTypeParam = params.get('user_type') || params.get('user_cat') || (driverId ? 'driver' : 'user');
+  const isDriverType = userTypeParam === 'driver';
+  const resolvedId = isDriverType ? (driverId || rawUserId) : (rawUserId || driverId);
   const themeParam = params.get('theme');
   const isDark = themeParam === 'dark' || themeParam === '1' || themeParam === 'true';
   const showHeader = params.get('show_header') === 'true' || params.get('show_app_bar') === 'true';
 
   return {
-    driverId,
-    userId: userId || driverId,
+    driverId: driverId || resolvedId,
+    userId: resolvedId,
     accesstoken: params.get('accesstoken'),
-    userType: (userTypeParam === 'user' ? 'user' : 'driver') as 'driver' | 'user',
+    userType: (isDriverType ? 'driver' : 'user') as 'driver' | 'user',
     isDark,
     showHeader,
   };
@@ -192,7 +194,7 @@ export default function WalletPage() {
   }, []);
 
   const isDriver = params.userType === 'driver';
-  const userId = isDriver ? params.driverId : params.userId;
+  const userId = params.userId || params.driverId;
   const accessToken = params.accesstoken;
   const isDark = params.isDark;
   const showHeader = params.showHeader;
@@ -260,6 +262,72 @@ export default function WalletPage() {
     return false;
   };
 
+  // Action Button Handlers (Native Bridge Primary, Web Modal Fallback)
+  const handleTopUpClick = () => {
+    const handled = triggerNativeAction('topup');
+    if (!handled) {
+      setShowTopUpModal(true);
+    }
+  };
+
+  const handleWithdrawClick = () => {
+    setActiveTab('withdraw');
+    const handled = triggerNativeAction('withdraw');
+    if (!handled) {
+      setShowWithdrawModal(true);
+    }
+  };
+
+  const handleBankClick = () => {
+    const handled = triggerNativeAction('bank');
+    if (!handled) {
+      setShowBankModal(true);
+    }
+  };
+
+  const handlePayoutClick = () => {
+    setActiveTab('withdraw');
+    const handled = triggerNativeAction('payout');
+    if (!handled) {
+      setShowWithdrawModal(true);
+    }
+  };
+
+  const handleAccountDetailsClick = () => {
+    const handled = triggerNativeAction('account_details');
+    if (!handled) {
+      setShowBankModal(true);
+    }
+  };
+
+  const handleTransferClick = () => {
+    const handled = triggerNativeAction('transfer');
+    if (!handled) {
+      showToast("Money Transfer feature available in Smart Value Web Wallet");
+    }
+  };
+
+  const handleScanClick = () => {
+    const handled = triggerNativeAction('scan');
+    if (!handled) {
+      showToast("QR Scanner feature available in Smart Value Web Wallet");
+    }
+  };
+
+  const handleMyQrClick = () => {
+    const handled = triggerNativeAction('my_qr');
+    if (!handled) {
+      showToast(`Smart Value Account ID: ${userId || 'N/A'}`);
+    }
+  };
+
+  const handleUpgradePlanClick = () => {
+    const handled = triggerNativeAction('upgrade_plan');
+    if (!handled) {
+      showToast("Standard Smart Value Membership Plan Active");
+    }
+  };
+
   // API Call Headers
   const apiHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -290,6 +358,7 @@ export default function WalletPage() {
           user_id: userId,
           id_user: userId,
           driver_id: userId,
+          id_conducteur: userId,
           user_type: isDriver ? 'driver' : 'customer',
           ac_no: userId,
         }),
@@ -311,7 +380,7 @@ export default function WalletPage() {
 
       // Fallback: GET /api/v1/wallet
       if (!amtFetched) {
-        const walletUrl = `/api/v1/wallet?id_user=${userId}&user_cat=${isDriver ? 'driver' : 'user'}`;
+        const walletUrl = `/api/v1/wallet?id_user=${userId}&driver_id=${userId}&user_cat=${isDriver ? 'driver' : 'user'}&user_type=${isDriver ? 'driver' : 'user'}`;
         const walletRes = await fetch(walletUrl, { headers: apiHeaders });
         if (walletRes.ok) {
           const wData = await walletRes.json();
@@ -427,31 +496,6 @@ export default function WalletPage() {
     );
   }
 
-  // Action Button Handlers
-  const handleTopUpClick = () => {
-    const handled = triggerNativeAction('topup');
-    if (!handled) {
-      setShowTopUpModal(true);
-    }
-  };
-
-  const handleWithdrawClick = () => {
-    setShowWithdrawModal(true);
-  };
-
-  const handleBankClick = () => {
-    setShowBankModal(true);
-  };
-
-  const handlePayoutClick = () => {
-    setShowWithdrawModal(true);
-  };
-  const handleTransferClick = () => triggerNativeAction('transfer');
-  const handleScanClick = () => triggerNativeAction('scan');
-  const handleMyQrClick = () => triggerNativeAction('my_qr');
-  const handleAccountDetailsClick = () => triggerNativeAction('account_details');
-  const handleUpgradePlanClick = () => triggerNativeAction('upgrade_plan');
-
   // Handle Top-Up Submission in Web Modal
   const handleTopUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -494,8 +538,13 @@ export default function WalletPage() {
   // Handle Withdrawal Submission in Web Modal
   const handleWithdrawSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!withdrawAmount || Number(withdrawAmount) <= 0) {
-      showToast("Please enter a valid amount", "error");
+    const reqAmt = Number(withdrawAmount);
+    if (!withdrawAmount || isNaN(reqAmt) || reqAmt <= 0) {
+      showToast("Please enter a valid withdrawal amount", "error");
+      return;
+    }
+    if (reqAmt > walletAmount) {
+      showToast(`Insufficient wallet balance! Requested ₹${reqAmt.toFixed(2)} exceeds your available balance of ₹${walletAmount.toFixed(2)}.`, "error");
       return;
     }
     if (!bankDetails || !bankDetails.account_no) {
@@ -741,15 +790,17 @@ export default function WalletPage() {
                 {/* Primary Action Buttons */}
                 <div className="grid grid-cols-2 gap-3">
                   <button
+                    type="button"
                     onClick={handleTopUpClick}
-                    className="py-3.5 px-4 bg-[#6AA720] hover:bg-[#5b921b] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-[0.98]"
+                    className="py-3.5 px-4 bg-[#6AA720] hover:bg-[#5b921b] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-[0.98] cursor-pointer"
                   >
                     TOP UP
                   </button>
 
                   <button
+                    type="button"
                     onClick={handleWithdrawClick}
-                    className="py-3.5 px-4 bg-[#2C5282] hover:bg-[#2b4c77] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-[0.98]"
+                    className="py-3.5 px-4 bg-[#2C5282] hover:bg-[#2b4c77] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-[0.98] cursor-pointer"
                   >
                     WITHDRAW
                   </button>
@@ -777,32 +828,36 @@ export default function WalletPage() {
                   <h3 className={`text-sm font-semibold ${themeClasses.textMain}`}>Quick Actions</h3>
                   <div className="grid grid-cols-4 gap-2.5">
                     <button 
+                      type="button"
                       onClick={handleTransferClick}
-                      className={`${themeClasses.cardBg} rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 transition-colors hover:border-[#6AA720]`}
+                      className={`${themeClasses.cardBg} rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 transition-colors hover:border-[#6AA720] cursor-pointer`}
                     >
                       <SendIcon className="w-5 h-5 text-[#6AA720]" />
                       <span className={`text-[11px] font-medium ${themeClasses.textMain}`}>Transfer</span>
                     </button>
 
                     <button 
+                      type="button"
                       onClick={handlePayoutClick}
-                      className={`${themeClasses.cardBg} rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 transition-colors hover:border-[#6AA720]`}
+                      className={`${themeClasses.cardBg} rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 transition-colors hover:border-[#6AA720] cursor-pointer`}
                     >
                       <BuildingIcon className="w-5 h-5 text-[#6AA720]" />
                       <span className={`text-[11px] font-medium ${themeClasses.textMain}`}>Payout</span>
                     </button>
 
                     <button 
+                      type="button"
                       onClick={handleScanClick}
-                      className={`${themeClasses.cardBg} rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 transition-colors hover:border-[#6AA720]`}
+                      className={`${themeClasses.cardBg} rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 transition-colors hover:border-[#6AA720] cursor-pointer`}
                     >
                       <QrCodeIcon className="w-5 h-5 text-[#6AA720]" />
                       <span className={`text-[11px] font-medium ${themeClasses.textMain}`}>Scan</span>
                     </button>
 
                     <button 
+                      type="button"
                       onClick={handleMyQrClick}
-                      className={`${themeClasses.cardBg} rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 transition-colors hover:border-[#6AA720]`}
+                      className={`${themeClasses.cardBg} rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 transition-colors hover:border-[#6AA720] cursor-pointer`}
                     >
                       <QrCodeIcon className="w-5 h-5 text-[#6AA720]" />
                       <span className={`text-[11px] font-medium ${themeClasses.textMain}`}>My QR</span>
