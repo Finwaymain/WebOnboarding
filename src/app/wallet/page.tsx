@@ -351,17 +351,24 @@ export default function WalletPage() {
     try {
       // 1. Fetch Wallet Balance & Earnings via show_wallet_amount endpoint
       const showWalletUrl = `/api/v1/show_wallet_amount/${isDriver ? 'driver' : 'smart-value'}`;
+      const payload: Record<string, any> = {
+        user_type: isDriver ? 'driver' : 'customer',
+        ac_no: userId,
+      };
+      if (isDriver) {
+        payload.driver_id = userId;
+        payload.id_driver = userId;
+        payload.id_conducteur = userId;
+      } else {
+        payload.user_id = userId;
+        payload.id_user = userId;
+        payload.id_user_app = userId;
+      }
+
       const amtRes = await fetch(showWalletUrl, {
         method: 'POST',
         headers: apiHeaders,
-        body: JSON.stringify({
-          user_id: userId,
-          id_user: userId,
-          driver_id: userId,
-          id_conducteur: userId,
-          user_type: isDriver ? 'driver' : 'customer',
-          ac_no: userId,
-        }),
+        body: JSON.stringify(payload),
       });
 
       let amtFetched = false;
@@ -380,7 +387,9 @@ export default function WalletPage() {
 
       // Fallback: GET /api/v1/wallet
       if (!amtFetched) {
-        const walletUrl = `/api/v1/wallet?id_user=${userId}&driver_id=${userId}&user_cat=${isDriver ? 'driver' : 'user'}&user_type=${isDriver ? 'driver' : 'user'}`;
+        const walletUrl = isDriver
+          ? `/api/v1/wallet?id_user=${userId}&driver_id=${userId}&user_cat=driver&user_type=driver`
+          : `/api/v1/wallet?id_user=${userId}&user_cat=user_app&user_type=customer`;
         const walletRes = await fetch(walletUrl, { headers: apiHeaders });
         if (walletRes.ok) {
           const wData = await walletRes.json();
