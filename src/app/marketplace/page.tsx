@@ -207,7 +207,12 @@ export default function MarketplacePage() {
 
   // Admin Configured Tax State
   const [taxName, setTaxName] = useState<string>('GST');
-  const [taxRate, setTaxRate] = useState<number>(10.7);
+  const [taxRate, setTaxRate] = useState<number>(30);
+  const [appliedTaxes, setAppliedTaxes] = useState<Array<{ id?: number, name: string, type?: string, rate?: number, rate_label: string, amount: number, label?: string }>>([
+    { name: 'GST', rate_label: '18%', amount: 18 },
+    { name: 'Platform Fee', rate_label: '10%', amount: 10 },
+    { name: 'UPI Handling', rate_label: '2%', amount: 2 },
+  ]);
 
   // Orders State
   const [buyerOrders, setBuyerOrders] = useState<Order[]>([]);
@@ -525,14 +530,21 @@ export default function MarketplacePage() {
   };
 
   // Fetch Active Taxes from Admin Panel (tj_tax via checkout-summary)
-  const fetchCheckoutTax = async () => {
+  const fetchCheckoutTax = async (sub?: number, payMethod?: string) => {
     try {
-      const res = await fetch('/api/v1/marketplace/checkout-summary');
+      const subVal = sub !== undefined ? sub : cartSubtotal;
+      const methodVal = payMethod || paymentMethod || 'wallet';
+      const res = await fetch(`/api/v1/marketplace/checkout-summary?price=${subVal > 0 ? subVal : 100}&quantity=1&payment_method=${methodVal}`);
       if (res.ok) {
         const json = await res.json();
-        if (json.data && json.data.tax) {
-          setTaxName(json.data.tax.name || 'GST');
-          setTaxRate(parseFloat(json.data.tax.rate || '10.7'));
+        if (json.data) {
+          if (json.data.taxes && Array.isArray(json.data.taxes) && json.data.taxes.length > 0) {
+            setAppliedTaxes(json.data.taxes);
+          }
+          if (json.data.tax) {
+            setTaxName(json.data.tax.name || 'Taxes');
+            setTaxRate(parseFloat(json.data.tax.rate || '30'));
+          }
         }
       }
     } catch (err) {
@@ -829,7 +841,25 @@ export default function MarketplacePage() {
   const selectedCartItems = cart.filter(i => i.selected);
   const cartSubtotal = selectedCartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
   const deliveryFee = deliveryOption === 'express' ? 99 : 0;
-  const taxAmount = Math.round(((cartSubtotal * taxRate) / 100) * 100) / 100;
+
+  const computedTaxes = (appliedTaxes && appliedTaxes.length > 0)
+    ? appliedTaxes.map(t => {
+        const isPercent = (t.type || '').toLowerCase().includes('percent') || (!t.type && t.rate_label && t.rate_label.includes('%'));
+        const rVal = t.rate !== undefined ? t.rate : parseFloat(t.rate_label.replace(/[^0-9.]/g, '') || '0');
+        const amt = isPercent ? Math.round(((cartSubtotal * rVal) / 100) * 100) / 100 : rVal;
+        return {
+          ...t,
+          rate: rVal,
+          amount: amt,
+        };
+      })
+    : [
+        { name: 'GST', rate_label: '18%', amount: Math.round(((cartSubtotal * 18) / 100) * 100) / 100 },
+        { name: 'Platform Fee', rate_label: '10%', amount: Math.round(((cartSubtotal * 10) / 100) * 100) / 100 },
+        { name: 'UPI Handling', rate_label: '2%', amount: Math.round(((cartSubtotal * 2) / 100) * 100) / 100 },
+      ];
+
+  const taxAmount = Math.round(computedTaxes.reduce((sum, t) => sum + t.amount, 0) * 100) / 100;
   const cartTotal = Math.max(0, Math.round((cartSubtotal + deliveryFee + taxAmount) * 100) / 100);
 
   // Address Save Handler During Checkout
@@ -3069,15 +3099,17 @@ export default function MarketplacePage() {
             </div>
 
             {cart.length > 0 && checkoutStep !== 'success' && (
-              <div className="p-4 border-t border-slate-200 space-y-2 bg-slate-50">
+              <div className="p-4 border-t border-slate-200 space-y-1.5 bg-slate-50">
                 <div className="flex justify-between text-xs text-slate-700">
                   <span>Subtotal</span>
                   <span className="font-bold text-slate-900">₹{cartSubtotal.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-xs text-indigo-700 font-semibold">
-                  <span>Taxes &amp; Govt Charges ({taxName} {taxRate}%):</span>
-                  <span className="font-bold">+₹{taxAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
+                {computedTaxes.map((tax, idx) => (
+                  <div key={idx} className="flex justify-between text-xs text-indigo-700 font-medium">
+                    <span>{tax.name} ({tax.rate_label}):</span>
+                    <span className="font-bold">+₹{tax.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                ))}
                 <div className="flex justify-between text-xs text-slate-600">
                   <span>Delivery Charges:</span>
                   <span className="font-bold text-emerald-600 uppercase text-[10px]">{deliveryFee > 0 ? `+₹${deliveryFee}` : 'Free Delivery'}</span>
@@ -3272,9 +3304,9 @@ export default function MarketplacePage() {
             </div>
 
             <div className="bg-emerald-50 dark:bg-emerald-950/40 p-3.5 rounded-2xl border border-emerald-200/60 dark:border-emerald-800/40 text-center space-y-1">
-              <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider block">Pay Via Smart Value</span>
-              <p className="text-xl font-extrabold text-[#047857] dark:text-emerald-400">₹{cartTotal.toLocaleString()}</p>
-              
+              <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider block">Pay Via Smart Value Wallet</span>
+              <p className="text-xl font-extrabold text-[#047857] dark:text-emerald-400">₹{cartTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              <p className="text-[10px] text-slate-500">Subtotal: ₹{cartSubtotal.toLocaleString()} + Taxes: ₹{taxAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
 
             <form onSubmit={handleConfirmMPinPayment} className="space-y-4">
