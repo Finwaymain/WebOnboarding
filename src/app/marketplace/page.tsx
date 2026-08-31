@@ -2728,12 +2728,29 @@ export default function MarketplacePage() {
                     </span>
                   </div>
 
+                  {/* 1. Prominent Seller Disclaimer Banner Placed Directly Above the 3 Fields */}
+                  <div className="bg-amber-50/95 border-2 border-amber-300 rounded-2xl p-3 text-[11px] text-amber-950 space-y-1.5 shadow-2xs">
+                    <div className="flex items-center gap-1.5 font-black text-amber-950">
+                      <span className="text-sm">⚠️</span>
+                      <span>Important Seller Pricing &amp; Delivery Notice:</span>
+                    </div>
+                    <ul className="text-amber-900 text-[11px] space-y-1 pl-4 list-disc leading-relaxed font-medium">
+                      <li>
+                        <strong>Include Delivery Charges:</strong> Please <u>include all delivery and shipping charges</u> in the Selling Price below. This is the final all-inclusive price buyers will pay.
+                      </li>
+                      <li>
+                        <strong>Admin Platform Commission ({adminCommissionRate}%):</strong> A platform commission of {adminCommissionRate}% will be deducted upon confirmed order delivery, and the remaining net payout will be credited to your wallet/bank.
+                      </li>
+                    </ul>
+                  </div>
+
+                  {/* 2. The 3 Fields: Selling Price, MRP, Stock */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    {/* 1. Selling Price Input */}
+                    {/* Selling Price Input */}
                     <div className="bg-slate-50/90 border-2 border-emerald-500/40 rounded-2xl p-2.5 relative focus-within:border-emerald-600 focus-within:bg-white transition-all shadow-2xs">
                       <div className="flex justify-between items-center mb-0.5">
                         <label className="text-[11px] font-bold text-slate-800">Selling Price *</label>
-                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded">Listed Price</span>
+                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded">All-Inclusive</span>
                       </div>
                       <div className="relative flex items-center">
                         <span className="text-sm font-black text-emerald-700 absolute left-2">₹</span>
@@ -2753,10 +2770,10 @@ export default function MarketplacePage() {
                           className="w-full bg-transparent pl-6 pr-1 py-1 text-xs font-black text-slate-900 focus:outline-none"
                         />
                       </div>
-                      <p className="text-[9px] text-slate-500 mt-0.5">Final amount charged to buyer</p>
+                      <p className="text-[9px] text-emerald-700 font-semibold mt-0.5">Includes product + delivery charges</p>
                     </div>
 
-                    {/* 2. Original MRP Input */}
+                    {/* Original MRP Input */}
                     <div className="bg-slate-50/90 border border-slate-200 rounded-2xl p-2.5 relative focus-within:border-slate-400 focus-within:bg-white transition-all">
                       <div className="flex justify-between items-center mb-0.5">
                         <label className="text-[11px] font-bold text-slate-700">Original MRP</label>
@@ -2783,7 +2800,7 @@ export default function MarketplacePage() {
                       <p className="text-[9px] text-slate-400 mt-0.5">Original showroom / box price</p>
                     </div>
 
-                    {/* 3. Stock Qty Input */}
+                    {/* Stock Qty Input */}
                     <div className="bg-slate-50/90 border border-slate-200 rounded-2xl p-2.5 relative focus-within:border-slate-400 focus-within:bg-white transition-all">
                       <div className="flex justify-between items-center mb-0.5">
                         <label className="text-[11px] font-bold text-slate-700">Available Stock *</label>
@@ -2845,19 +2862,6 @@ export default function MarketplacePage() {
                       </div>
                     </div>
                   )}
-
-                  {/* Clear Transparent Disclaimer Box */}
-                  <div className="bg-amber-50/90 border border-amber-200/90 rounded-xl p-2.5 text-[11px] text-amber-950 space-y-1">
-                    <div className="flex items-center gap-1.5 font-bold text-amber-950">
-                      <span className="text-xs">ℹ️</span>
-                      <span>Pricing &amp; Payout Policy:</span>
-                    </div>
-                    <ul className="text-amber-900 text-[10px] space-y-0.5 pl-4 list-disc leading-relaxed">
-                      <li><strong>Final Amount:</strong> The selling price entered above is the final listed amount charged to buyers.</li>
-                      <li><strong>Admin Commission ({adminCommissionRate}%):</strong> Fiinway deducts {adminCommissionRate}% platform fee upon order fulfillment and pays the net balance to your wallet/bank.</li>
-                      <li><strong>Delivery &amp; Taxes:</strong> Buyer delivery fees and applicable platform taxes are calculated automatically and added at checkout.</li>
-                    </ul>
-                  </div>
                 </div>
 
                 <div>
