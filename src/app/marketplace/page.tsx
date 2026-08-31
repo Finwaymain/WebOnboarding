@@ -968,18 +968,24 @@ export default function MarketplacePage() {
     setPlacingOrder(true);
     const activeUid = getActiveUserId();
     const activeToken = getActiveToken();
+    const activeUserType = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('user_type') || localStorage.getItem('user_type') || 'user') : 'user';
 
     try {
       const payload: Record<string, any> = {
         user_id: activeUid,
         driver_id: activeUid,
+        user_type: activeUserType,
         items: selectedCartItems.map(item => ({
           product_id: item.product.id,
           quantity: item.quantity,
         })),
         delivery_address: deliveryAddress,
         delivery_charge: deliveryFee,
+        tax_name: taxName,
+        tax_rate: taxRate,
         tax_amount: taxAmount,
+        subtotal: cartSubtotal,
+        total_amount: cartTotal,
         phone: userPhone || editPhone,
         contact_name: contactName,
         payment_method: payMethod,
@@ -997,8 +1003,10 @@ export default function MarketplacePage() {
         headers['user_id'] = activeUid;
         headers['driver_id'] = activeUid;
       }
+      headers['user_type'] = activeUserType;
+      if (userPhone || editPhone) headers['phone'] = userPhone || editPhone;
 
-      const res = await fetch(`/api/v1/marketplace/orders?user_id=${activeUid}&driver_id=${activeUid}&id_user=${activeUid}&accesstoken=${activeToken}`, {
+      const res = await fetch(`/api/v1/marketplace/orders?user_id=${activeUid}&driver_id=${activeUid}&id_user=${activeUid}&user_type=${activeUserType}&phone=${encodeURIComponent(userPhone || editPhone)}&accesstoken=${activeToken}`, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
@@ -3061,31 +3069,22 @@ export default function MarketplacePage() {
             </div>
 
             {cart.length > 0 && checkoutStep !== 'success' && (
-              <div className="p-4 border-t border-slate-200 space-y-2.5 bg-slate-50">
-                <div className="flex justify-between text-xs text-slate-600">
-                  <span>Item Subtotal ({selectedCartItems.length} item{selectedCartItems.length > 1 ? 's' : ''})</span>
+              <div className="p-4 border-t border-slate-200 space-y-2 bg-slate-50">
+                <div className="flex justify-between text-xs text-slate-700">
+                  <span>Subtotal</span>
                   <span className="font-bold text-slate-900">₹{cartSubtotal.toLocaleString()}</span>
                 </div>
-                {taxAmount > 0 && (
-                  <div className="flex justify-between text-xs text-indigo-700 font-medium">
-                    <span>Taxes &amp; Govt Charges ({taxName} {taxRate}%):</span>
-                    <span className="font-bold">+₹{taxAmount.toLocaleString()}</span>
-                  </div>
-                )}
-                {deliveryFee > 0 ? (
-                  <div className="flex justify-between text-xs text-slate-600">
-                    <span>Express Delivery:</span>
-                    <span className="font-bold">+₹{deliveryFee}</span>
-                  </div>
-                ) : (
-                  <div className="flex justify-between text-xs text-emerald-600 font-medium">
-                    <span>Delivery Charges:</span>
-                    <span className="font-bold uppercase text-[10px] bg-emerald-100 px-1.5 py-0.5 rounded">Free Delivery</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-sm font-black border-t border-slate-200 pt-2.5">
-                  <span className="text-slate-900">Total Payable Amount</span>
-                  <span className="text-[#047857] text-base">₹{cartTotal.toLocaleString()}</span>
+                <div className="flex justify-between text-xs text-indigo-700 font-semibold">
+                  <span>Taxes &amp; Govt Charges ({taxName} {taxRate}%):</span>
+                  <span className="font-bold">+₹{taxAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between text-xs text-slate-600">
+                  <span>Delivery Charges:</span>
+                  <span className="font-bold text-emerald-600 uppercase text-[10px]">{deliveryFee > 0 ? `+₹${deliveryFee}` : 'Free Delivery'}</span>
+                </div>
+                <div className="flex justify-between text-sm font-black border-t border-slate-200 pt-2 text-slate-900">
+                  <span>Grand Total</span>
+                  <span className="text-[#047857] text-base font-extrabold">₹{cartTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
 
                 {checkoutStep === 'cart' ? (
@@ -3101,7 +3100,7 @@ export default function MarketplacePage() {
                     disabled={placingOrder}
                     className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs py-3 rounded-xl shadow-xs"
                   >
-                    {placingOrder ? 'Processing Order...' : `Pay ₹${cartTotal.toLocaleString()} & Confirm`}
+                    {placingOrder ? 'Processing Order...' : `Pay ₹${cartTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} & Confirm`}
                   </button>
                 )}
               </div>
