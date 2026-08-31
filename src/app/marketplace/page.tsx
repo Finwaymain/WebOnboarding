@@ -255,6 +255,9 @@ export default function MarketplacePage() {
   const [submittingProduct, setSubmittingProduct] = useState<boolean>(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
+  const [adminCommissionRate, setAdminCommissionRate] = useState<number>(5);
+  const [adminCommissionType, setAdminCommissionType] = useState<string>('percentage');
+
   // M-PIN Security Modal States
   const [showMPinModal, setShowMPinModal] = useState<boolean>(false);
   const [mPinInput, setMPinInput] = useState<string>('');
@@ -567,8 +570,18 @@ export default function MarketplacePage() {
       const res = await fetch(`/api/v1/marketplace/checkout-summary?price=${subVal > 0 ? subVal : 100}&quantity=1&payment_method=${methodVal}`);
       if (res.ok) {
         const json = await res.json();
-        if (json.data && json.data.taxes && Array.isArray(json.data.taxes) && json.data.taxes.length > 0) {
-          setAppliedTaxes(json.data.taxes);
+        if (json.data) {
+          if (json.data.taxes && Array.isArray(json.data.taxes) && json.data.taxes.length > 0) {
+            setAppliedTaxes(json.data.taxes);
+          }
+          if (json.data.admin_commission) {
+            if (json.data.admin_commission.rate) {
+              setAdminCommissionRate(parseFloat(json.data.admin_commission.rate));
+            }
+            if (json.data.admin_commission.type) {
+              setAdminCommissionType(json.data.admin_commission.type);
+            }
+          }
         }
       }
     } catch (err) {
@@ -2702,65 +2715,150 @@ export default function MarketplacePage() {
                   )}
                 </div>
 
-                <h3 className="text-sm font-bold text-slate-900 border-b pb-2 pt-2">2. Pricing, MRP & Stock</h3>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700">Selling Price (₹) *</label>
-                    <input
-                      type="number"
-                      placeholder="e.g. 25000"
-                      value={newPrice}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setNewPrice(val);
-                        const p = parseFloat(val) || 0;
-                        const orig = parseFloat(newOriginalPrice) || 0;
-                        if (orig > p && p > 0) {
-                          setNewDiscountPercent(Math.round(((orig - p) / orig) * 100).toString());
-                        }
-                      }}
-                      className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#047857]"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700">Original MRP (₹)</label>
-                    <input
-                      type="number"
-                      placeholder="e.g. 30000"
-                      value={newOriginalPrice}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setNewOriginalPrice(val);
-                        const orig = parseFloat(val) || 0;
-                        const p = parseFloat(newPrice) || 0;
-                        if (orig > p && p > 0) {
-                          setNewDiscountPercent(Math.round(((orig - p) / orig) * 100).toString());
-                        }
-                      }}
-                      className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:ring-2 focus:ring-[#047857]"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700">Stock Qty *</label>
-                    <input
-                      type="number"
-                      min="1"
-                      placeholder="e.g. 10"
-                      value={newStock}
-                      onChange={e => setNewStock(e.target.value)}
-                      className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#047857]"
-                    />
-                  </div>
-                </div>
-
-                {parseFloat(newOriginalPrice) > parseFloat(newPrice) && parseFloat(newPrice) > 0 && (
-                  <div className="bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl flex items-center justify-between text-xs">
-                    <span className="text-emerald-800 font-semibold">Calculated Discount:</span>
-                    <span className="font-extrabold text-[#047857]">
-                      {Math.round(((parseFloat(newOriginalPrice) - parseFloat(newPrice)) / parseFloat(newOriginalPrice)) * 100)}% OFF (Save ₹{(parseFloat(newOriginalPrice) - parseFloat(newPrice)).toLocaleString()})
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <div>
+                      <h3 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
+                        <span>2. Pricing, MRP &amp; Stock</span>
+                      </h3>
+                      <p className="text-[11px] text-slate-500 font-medium">Set fair pricing and available stock for your product</p>
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md">
+                      Commission: {adminCommissionRate}%
                     </span>
                   </div>
-                )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {/* 1. Selling Price Input */}
+                    <div className="bg-slate-50/90 border-2 border-emerald-500/40 rounded-2xl p-2.5 relative focus-within:border-emerald-600 focus-within:bg-white transition-all shadow-2xs">
+                      <div className="flex justify-between items-center mb-0.5">
+                        <label className="text-[11px] font-bold text-slate-800">Selling Price *</label>
+                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded">Listed Price</span>
+                      </div>
+                      <div className="relative flex items-center">
+                        <span className="text-sm font-black text-emerald-700 absolute left-2">₹</span>
+                        <input
+                          type="number"
+                          placeholder="e.g. 2500"
+                          value={newPrice}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setNewPrice(val);
+                            const p = parseFloat(val) || 0;
+                            const orig = parseFloat(newOriginalPrice) || 0;
+                            if (orig > p && p > 0) {
+                              setNewDiscountPercent(Math.round(((orig - p) / orig) * 100).toString());
+                            }
+                          }}
+                          className="w-full bg-transparent pl-6 pr-1 py-1 text-xs font-black text-slate-900 focus:outline-none"
+                        />
+                      </div>
+                      <p className="text-[9px] text-slate-500 mt-0.5">Final amount charged to buyer</p>
+                    </div>
+
+                    {/* 2. Original MRP Input */}
+                    <div className="bg-slate-50/90 border border-slate-200 rounded-2xl p-2.5 relative focus-within:border-slate-400 focus-within:bg-white transition-all">
+                      <div className="flex justify-between items-center mb-0.5">
+                        <label className="text-[11px] font-bold text-slate-700">Original MRP</label>
+                        <span className="text-[9px] font-semibold text-slate-400">Optional</span>
+                      </div>
+                      <div className="relative flex items-center">
+                        <span className="text-xs font-bold text-slate-400 absolute left-2">₹</span>
+                        <input
+                          type="number"
+                          placeholder="e.g. 3500"
+                          value={newOriginalPrice}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setNewOriginalPrice(val);
+                            const orig = parseFloat(val) || 0;
+                            const p = parseFloat(newPrice) || 0;
+                            if (orig > p && p > 0) {
+                              setNewDiscountPercent(Math.round(((orig - p) / orig) * 100).toString());
+                            }
+                          }}
+                          className="w-full bg-transparent pl-6 pr-1 py-1 text-xs font-bold text-slate-700 focus:outline-none"
+                        />
+                      </div>
+                      <p className="text-[9px] text-slate-400 mt-0.5">Original showroom / box price</p>
+                    </div>
+
+                    {/* 3. Stock Qty Input */}
+                    <div className="bg-slate-50/90 border border-slate-200 rounded-2xl p-2.5 relative focus-within:border-slate-400 focus-within:bg-white transition-all">
+                      <div className="flex justify-between items-center mb-0.5">
+                        <label className="text-[11px] font-bold text-slate-700">Available Stock *</label>
+                        <span className="text-[9px] font-bold text-slate-600 bg-slate-200 px-1 py-0.5 rounded">Units</span>
+                      </div>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="e.g. 1"
+                        value={newStock}
+                        onChange={e => setNewStock(e.target.value)}
+                        className="w-full bg-transparent px-2 py-1 text-xs font-black text-slate-900 focus:outline-none"
+                      />
+                      <p className="text-[9px] text-slate-400 mt-0.5">Total units available for sale</p>
+                    </div>
+                  </div>
+
+                  {/* Calculated Discount Pill */}
+                  {parseFloat(newOriginalPrice) > parseFloat(newPrice) && parseFloat(newPrice) > 0 && (
+                    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 px-3 py-1.5 rounded-xl flex items-center justify-between text-xs shadow-2xs">
+                      <span className="text-emerald-900 font-bold flex items-center gap-1">
+                        🏷️ Buyer Discount:
+                      </span>
+                      <span className="font-extrabold text-[#047857] bg-white px-2 py-0.5 rounded-lg border border-emerald-200 shadow-2xs">
+                        {Math.round(((parseFloat(newOriginalPrice) - parseFloat(newPrice)) / parseFloat(newOriginalPrice)) * 100)}% OFF (Save ₹{(parseFloat(newOriginalPrice) - parseFloat(newPrice)).toLocaleString()})
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Live Earnings & Commission Calculator Card */}
+                  {parseFloat(newPrice) > 0 && (
+                    <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-3 shadow-sm space-y-2 border border-slate-700">
+                      <div className="flex items-center justify-between border-b border-slate-700 pb-1.5">
+                        <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                          💼 Live Payout Breakdown
+                        </span>
+                        <span className="text-[9px] font-semibold text-slate-300 bg-slate-800 border border-slate-700 px-1.5 py-0.5 rounded">
+                          Admin Commission: {adminCommissionRate}%
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 text-center pt-0.5">
+                        <div className="bg-slate-800/70 rounded-xl p-1.5 border border-slate-700/60">
+                          <p className="text-[9px] text-slate-400 font-medium">Selling Price</p>
+                          <p className="text-xs font-extrabold text-white mt-0.5">₹{parseFloat(newPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                        </div>
+                        <div className="bg-slate-800/70 rounded-xl p-1.5 border border-slate-700/60">
+                          <p className="text-[9px] text-rose-300 font-medium">Platform Fee ({adminCommissionRate}%)</p>
+                          <p className="text-xs font-extrabold text-rose-400 mt-0.5">
+                            -₹{(adminCommissionType === 'percentage' ? ((parseFloat(newPrice) * adminCommissionRate) / 100) : adminCommissionRate).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                        <div className="bg-emerald-950/70 rounded-xl p-1.5 border border-emerald-500/40">
+                          <p className="text-[9px] text-emerald-300 font-bold">Your Net Payout</p>
+                          <p className="text-xs font-black text-emerald-400 mt-0.5">
+                            ₹{(parseFloat(newPrice) - (adminCommissionType === 'percentage' ? ((parseFloat(newPrice) * adminCommissionRate) / 100) : adminCommissionRate)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Clear Transparent Disclaimer Box */}
+                  <div className="bg-amber-50/90 border border-amber-200/90 rounded-xl p-2.5 text-[11px] text-amber-950 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-amber-950">
+                      <span className="text-xs">ℹ️</span>
+                      <span>Pricing &amp; Payout Policy:</span>
+                    </div>
+                    <ul className="text-amber-900 text-[10px] space-y-0.5 pl-4 list-disc leading-relaxed">
+                      <li><strong>Final Amount:</strong> The selling price entered above is the final listed amount charged to buyers.</li>
+                      <li><strong>Admin Commission ({adminCommissionRate}%):</strong> Fiinway deducts {adminCommissionRate}% platform fee upon order fulfillment and pays the net balance to your wallet/bank.</li>
+                      <li><strong>Delivery &amp; Taxes:</strong> Buyer delivery fees and applicable platform taxes are calculated automatically and added at checkout.</li>
+                    </ul>
+                  </div>
+                </div>
 
                 <div>
                   <label className="text-xs font-semibold text-slate-700">Description</label>
