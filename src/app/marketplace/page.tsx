@@ -10,6 +10,34 @@ import {
   Building, CheckSquare, Edit, Share2, SlidersHorizontal, ArrowUpDown, ChevronLeft, Lock, Loader2
 } from 'lucide-react';
 
+export const normalizeImageUrl = (url?: string): string => {
+  if (!url) return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80';
+  let clean = url.trim();
+
+  if (clean.startsWith('data:image') || clean.startsWith('blob:')) {
+    return clean;
+  }
+
+  if (clean.includes('product_')) {
+    const filename = clean.split('/').pop()?.split('?')[0];
+    if (filename && filename.startsWith('product_')) {
+      return `https://api.fiinway.com/api/v1/marketplace/image/${filename}`;
+    }
+  }
+
+  if (clean.startsWith('http://localhost') || clean.startsWith('https://localhost') || clean.startsWith('http://127.0.0.1') || clean.startsWith('https://127.0.0.1')) {
+    clean = clean.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/, 'https://api.fiinway.com');
+  }
+  if (clean.startsWith('/assets/') || clean.startsWith('assets/') || clean.startsWith('public/')) {
+    const withoutPublic = clean.replace(/^public\//, '').replace(/^\/+/, '');
+    clean = `https://api.fiinway.com/${withoutPublic}`;
+  }
+  if (clean.startsWith('http://api.fiinway.com')) {
+    clean = clean.replace('http://api.fiinway.com', 'https://api.fiinway.com');
+  }
+  return clean;
+};
+
 interface ProductImage {
   id?: number;
   image_path: string;
@@ -176,6 +204,10 @@ export default function MarketplacePage() {
   const [paymentMethod, setPaymentMethod] = useState<'wallet' | 'razorpay' | 'upi' | 'card'>('wallet');
   const [placedOrderId, setPlacedOrderId] = useState<string>('');
   const [placingOrder, setPlacingOrder] = useState<boolean>(false);
+
+  // Admin Configured Tax State
+  const [taxName, setTaxName] = useState<string>('GST');
+  const [taxRate, setTaxRate] = useState<number>(10.7);
 
   // Orders State
   const [buyerOrders, setBuyerOrders] = useState<Order[]>([]);
@@ -441,6 +473,7 @@ export default function MarketplacePage() {
       fetchUserProfile(token, uid, uType),
       fetchCategories(),
       fetchProducts(),
+      fetchCheckoutTax(),
       fetchMyProducts(token, uid),
       fetchBuyerOrders(token, uid),
       fetchSellerOrders(token, uid),
@@ -491,6 +524,22 @@ export default function MarketplacePage() {
     }
   };
 
+  // Fetch Active Taxes from Admin Panel (tj_tax via checkout-summary)
+  const fetchCheckoutTax = async () => {
+    try {
+      const res = await fetch('/api/v1/marketplace/checkout-summary');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.data && json.data.tax) {
+          setTaxName(json.data.tax.name || 'GST');
+          setTaxRate(parseFloat(json.data.tax.rate || '10.7'));
+        }
+      }
+    } catch (err) {
+      console.warn('Tax API note:', err);
+    }
+  };
+
   // Fetch Real Categories from Backend API & Deduplicate
   const fetchCategories = async () => {
     try {
@@ -534,9 +583,14 @@ export default function MarketplacePage() {
         if (json.data && Array.isArray(json.data)) {
           const apiProducts: Product[] = json.data.map((item: any) => ({
             ...item,
-            images: (item.images && item.images.length > 0) ? item.images : [
-              { id: 1, image_path: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80', is_primary: true }
-            ]
+            images: (item.images && item.images.length > 0)
+              ? item.images.map((img: any) => ({
+                  ...img,
+                  image_path: normalizeImageUrl(img.image_path)
+                }))
+              : [
+                  { id: 1, image_path: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80', is_primary: true }
+                ]
           }));
 
           setProducts(apiProducts);
@@ -580,7 +634,16 @@ export default function MarketplacePage() {
       if (res.ok) {
         const json = await res.json();
         if (json.data && Array.isArray(json.data)) {
-          setMyProducts(json.data);
+          const mappedMyProducts = json.data.map((item: any) => ({
+            ...item,
+            images: (item.images && item.images.length > 0)
+              ? item.images.map((img: any) => ({
+                  ...img,
+                  image_path: normalizeImageUrl(img.image_path)
+                }))
+              : []
+          }));
+          setMyProducts(mappedMyProducts);
           return;
         }
       }
@@ -766,7 +829,8 @@ export default function MarketplacePage() {
   const selectedCartItems = cart.filter(i => i.selected);
   const cartSubtotal = selectedCartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
   const deliveryFee = deliveryOption === 'express' ? 99 : 0;
-  const cartTotal = Math.max(0, cartSubtotal + deliveryFee);
+  const taxAmount = Math.round(((cartSubtotal * taxRate) / 100) * 100) / 100;
+  const cartTotal = Math.max(0, Math.round((cartSubtotal + deliveryFee + taxAmount) * 100) / 100);
 
   // Address Save Handler During Checkout
   const handleApplyAddressEdit = () => {
@@ -914,6 +978,8 @@ export default function MarketplacePage() {
           quantity: item.quantity,
         })),
         delivery_address: deliveryAddress,
+        delivery_charge: deliveryFee,
+        tax_amount: taxAmount,
         phone: userPhone || editPhone,
         contact_name: contactName,
         payment_method: payMethod,
@@ -1036,6 +1102,44 @@ export default function MarketplacePage() {
     setUpdatingOrderStatus(false);
   };
 
+  // Client-side Image Compression Helper for Instant & 100% Reliable Rendering
+  const compressImageFile = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 800;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.8));
+          } else {
+            resolve((e.target?.result as string) || '');
+          }
+        };
+        img.onerror = () => resolve((e.target?.result as string) || '');
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  };
+
   // Image Upload File Handler
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -1044,48 +1148,13 @@ export default function MarketplacePage() {
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      let uploadedUrl = '';
-
-      // 1. Try uploading to server endpoint
       try {
-        const formData = new FormData();
-        formData.append('image', file);
-        formData.append('folder', '/marketplace/products');
-
-        const headers: Record<string, string> = {};
-        if (userToken) headers['accesstoken'] = userToken;
-        if (userId) headers['user_id'] = userId;
-
-        const res = await fetch('/api/v1/marketplace/upload-image', {
-          method: 'POST',
-          headers,
-          body: formData,
-        });
-
-        if (res.ok) {
-          const json = await res.json();
-          if (json.url) {
-            uploadedUrl = json.url;
-          }
+        const compressedBase64 = await compressImageFile(file);
+        if (compressedBase64) {
+          setUploadedImages(prev => [...prev, compressedBase64].slice(0, 5));
         }
       } catch (err) {
-        console.warn('Server image upload note:', err);
-      }
-
-      // 2. Fallback to Async Data URL FileReader if server upload did not return URL
-      if (!uploadedUrl) {
-        try {
-          uploadedUrl = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onload = (ev) => resolve((ev.target?.result as string) || '');
-            reader.onerror = () => resolve('');
-            reader.readAsDataURL(file);
-          });
-        } catch (e) {}
-      }
-
-      if (uploadedUrl) {
-        setUploadedImages(prev => [...prev, uploadedUrl].slice(0, 5));
+        console.warn('Image compression error:', err);
       }
     }
 
@@ -1492,9 +1561,12 @@ export default function MarketplacePage() {
                       {/* Image Container */}
                       <div className="relative aspect-4/3 sm:aspect-square bg-slate-100 overflow-hidden">
                         <img
-                          src={prod.images?.[0]?.image_path || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80'}
+                          src={normalizeImageUrl(prod.images?.[0]?.image_path)}
                           alt={prod.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80';
+                          }}
                         />
                         <span className={`absolute top-2 left-2 text-[9px] font-bold px-2 py-0.5 rounded text-white shadow-2xs uppercase ${
                           prod.condition === 'New' ? 'bg-[#047857]' : 'bg-amber-600'
@@ -1626,9 +1698,12 @@ export default function MarketplacePage() {
             <div className="bg-white rounded-2xl p-4 border border-slate-200 space-y-4 shadow-2xs">
               <div className="relative aspect-4/3 sm:aspect-16/9 rounded-xl bg-slate-100 overflow-hidden border border-slate-200">
                 <img
-                  src={selectedProduct.images?.[activeImageIndex]?.image_path || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80'}
+                  src={normalizeImageUrl(selectedProduct.images?.[activeImageIndex]?.image_path)}
                   alt={selectedProduct.title}
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80';
+                  }}
                 />
                 {(() => {
                   const disc = getDiscountPercentage(selectedProduct.price, selectedProduct.original_price, selectedProduct.discount_percentage);
@@ -1655,7 +1730,14 @@ export default function MarketplacePage() {
                         activeImageIndex === idx ? 'border-[#047857]' : 'border-transparent opacity-60'
                       }`}
                     >
-                      <img src={img.image_path} alt="thumb" className="w-full h-full object-cover" />
+                      <img
+                        src={normalizeImageUrl(img.image_path)}
+                        alt="thumb"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=150&q=80';
+                        }}
+                      />
                     </button>
                   ))}
                 </div>
@@ -2230,7 +2312,14 @@ export default function MarketplacePage() {
                             <div className="flex gap-3 items-center">
                               {/* Thumbnail */}
                               <div className="w-16 h-16 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
-                                <img src={imgPath} alt={prod.title} className="w-full h-full object-cover" />
+                                <img
+                                  src={normalizeImageUrl(imgPath)}
+                                  alt={prod.title}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=300&q=80';
+                                  }}
+                                />
                               </div>
 
                               {/* Details */}
@@ -2373,6 +2462,35 @@ export default function MarketplacePage() {
                                 </div>
                               </div>
                             )}
+                          </div>
+
+                          {/* Earnings & Escrow Payout Breakdown */}
+                          <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 space-y-1.5 text-xs">
+                            <div className="flex justify-between items-center text-slate-700">
+                              <span>Gross Sale:</span>
+                              <span className="font-bold text-slate-900">₹{(order.subtotal || order.total_amount || 0).toLocaleString()}</span>
+                            </div>
+                            {(order as any).admin_commission_amount > 0 && (
+                              <div className="flex justify-between items-center text-red-600">
+                                <span>Platform Commission ({(order as any).admin_commission_rate || 5}%):</span>
+                                <span className="font-bold">-₹{((order as any).admin_commission_amount).toLocaleString()}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between items-center border-t border-slate-200 pt-1.5 font-bold">
+                              <span className="text-emerald-700">Net Seller Payout:</span>
+                              <span className="text-emerald-700 text-sm font-black">₹{((order as any).seller_payout_amount || (order.subtotal || order.total_amount || 0)).toLocaleString()}</span>
+                            </div>
+                            <div className="pt-1">
+                              {(order as any).payout_status === 'released' ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                                  ✓ Payout Credited to Wallet
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                                  ⏳ Held in Escrow (Settles upon Admin Confirmation)
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           {/* Update Shipping Status Action */}
@@ -2943,14 +3061,31 @@ export default function MarketplacePage() {
             </div>
 
             {cart.length > 0 && checkoutStep !== 'success' && (
-              <div className="p-4 border-t border-slate-200 space-y-3 bg-slate-50">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-600">Subtotal</span>
+              <div className="p-4 border-t border-slate-200 space-y-2.5 bg-slate-50">
+                <div className="flex justify-between text-xs text-slate-600">
+                  <span>Item Subtotal ({selectedCartItems.length} item{selectedCartItems.length > 1 ? 's' : ''})</span>
                   <span className="font-bold text-slate-900">₹{cartSubtotal.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-sm font-bold border-t border-slate-200 pt-2">
-                  <span>Grand Total</span>
-                  <span className="text-[#047857]">₹{cartTotal.toLocaleString()}</span>
+                {taxAmount > 0 && (
+                  <div className="flex justify-between text-xs text-indigo-700 font-medium">
+                    <span>Taxes &amp; Govt Charges ({taxName} {taxRate}%):</span>
+                    <span className="font-bold">+₹{taxAmount.toLocaleString()}</span>
+                  </div>
+                )}
+                {deliveryFee > 0 ? (
+                  <div className="flex justify-between text-xs text-slate-600">
+                    <span>Express Delivery:</span>
+                    <span className="font-bold">+₹{deliveryFee}</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between text-xs text-emerald-600 font-medium">
+                    <span>Delivery Charges:</span>
+                    <span className="font-bold uppercase text-[10px] bg-emerald-100 px-1.5 py-0.5 rounded">Free Delivery</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm font-black border-t border-slate-200 pt-2.5">
+                  <span className="text-slate-900">Total Payable Amount</span>
+                  <span className="text-[#047857] text-base">₹{cartTotal.toLocaleString()}</span>
                 </div>
 
                 {checkoutStep === 'cart' ? (
