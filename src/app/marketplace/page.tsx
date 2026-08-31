@@ -529,22 +529,46 @@ export default function MarketplacePage() {
     }
   };
 
-  // Fetch Active Taxes from Admin Panel (tj_tax via checkout-summary)
+  // Fetch Active Taxes from Admin Panel (Matching Home Services / Rides / Parcels settings API)
   const fetchCheckoutTax = async (sub?: number, payMethod?: string) => {
     try {
-      const subVal = sub !== undefined ? sub : cartSubtotal;
+      const subVal = sub !== undefined ? sub : (cartSubtotal > 0 ? cartSubtotal : 100);
       const methodVal = payMethod || paymentMethod || 'wallet';
+
+      // 1. Fetch from standard settings API (Single Source of Truth for Home Services)
+      const settingsRes = await fetch('/api/v1/settings');
+      if (settingsRes.ok) {
+        const setJson = await settingsRes.json();
+        if (setJson.data && Array.isArray(setJson.data.tax) && setJson.data.tax.length > 0) {
+          const activeTaxes = setJson.data.tax.filter((t: any) => t.statut === 'yes');
+          if (activeTaxes.length > 0) {
+            const mappedTaxes = activeTaxes.map((t: any) => {
+              const val = parseFloat(t.value || '0');
+              const isPct = (t.type || '').toLowerCase().includes('percent');
+              const amt = isPct ? Math.round(((subVal * val) / 100) * 100) / 100 : val;
+              return {
+                id: t.id,
+                name: t.libelle || 'Tax',
+                type: t.type,
+                rate: val,
+                rate_label: isPct ? `${val}%` : `₹${val}`,
+                amount: amt,
+                label: isPct ? `${t.libelle} (${val}%)` : `${t.libelle} (₹${val})`,
+                applicable_on: t.applicable_on || 'cash,upi,wallet,online',
+              };
+            });
+            setAppliedTaxes(mappedTaxes);
+            return;
+          }
+        }
+      }
+
+      // 2. Fallback to checkout-summary API
       const res = await fetch(`/api/v1/marketplace/checkout-summary?price=${subVal > 0 ? subVal : 100}&quantity=1&payment_method=${methodVal}`);
       if (res.ok) {
         const json = await res.json();
-        if (json.data) {
-          if (json.data.taxes && Array.isArray(json.data.taxes) && json.data.taxes.length > 0) {
-            setAppliedTaxes(json.data.taxes);
-          }
-          if (json.data.tax) {
-            setTaxName(json.data.tax.name || 'Taxes');
-            setTaxRate(parseFloat(json.data.tax.rate || '30'));
-          }
+        if (json.data && json.data.taxes && Array.isArray(json.data.taxes) && json.data.taxes.length > 0) {
+          setAppliedTaxes(json.data.taxes);
         }
       }
     } catch (err) {
