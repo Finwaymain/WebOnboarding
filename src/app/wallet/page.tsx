@@ -663,11 +663,13 @@ export default function WalletPage() {
     const amount = tx.parsedAmountStr || String(tx.amount || tx.transaction_amount || tx.montant || '0').replace('-', '');
     const title = encodeURIComponent(tx.parsedCategoryTitle || tx.category_title || tx.categoryTitle || tx.libelle || tx.description || 'Wallet Transaction');
     const user = encodeURIComponent(tx.parsedUserName || tx.counterparty_name || tx.user_name || tx.customer_name || 'Customer');
-    const date = encodeURIComponent(tx.creer || tx.created_at || tx.formattedDate || new Date().toISOString());
+    const paidFrom = encodeURIComponent(tx.parsedPaidFrom || tx.paid_from || (tx.parsedIsNegative ? 'Your Wallet' : (tx.counterparty || 'Fiinway Platform')));
+    const paidTo = encodeURIComponent(tx.parsedPaidTo || tx.paid_to || (tx.parsedIsNegative ? (tx.counterparty || 'Fiinway Services') : 'Your Wallet'));
+    const date = encodeURIComponent(tx.formatted_date || tx.creer || tx.created_at || tx.formattedDate || new Date().toISOString());
     const method = encodeURIComponent(tx.payment_method || tx.paymentMethod || (tx.parsedIsNegative ? 'Smart Value Debit' : 'Smart Value Credit'));
     const isDebit = tx.parsedIsNegative ? '1' : '0';
     
-    const invoiceUrl = `/invoice/${txId}/download?ride_id=${rideId}&amount=${amount}&title=${title}&user_name=${user}&date=${date}&payment_method=${method}&is_debit=${isDebit}`;
+    const invoiceUrl = `/invoice/${txId}/download?ride_id=${rideId}&amount=${amount}&title=${title}&user_name=${user}&paid_from=${paidFrom}&paid_to=${paidTo}&date=${date}&payment_method=${method}&is_debit=${isDebit}`;
     window.location.href = invoiceUrl;
   };
 
@@ -983,7 +985,7 @@ export default function WalletPage() {
                   <div className="space-y-2.5">
                     {historyList.map((tx, idx) => {
                       const amountRaw = String(tx.amount || tx.transaction_amount || tx.montant || '0').replace('-', '');
-                      const desc = (tx.description || tx.category_title || tx.categoryTitle || '').toLowerCase();
+                      const desc = (tx.description || tx.category_title || tx.categoryTitle || tx.note || '').toLowerCase();
                       const deductionType = String(tx.deduction_type ?? '');
                       
                       const isNegative = deductionType === '0' || 
@@ -997,38 +999,42 @@ export default function WalletPage() {
                                          desc.includes('purchased') ||
                                          desc.includes('subscription') ||
                                          desc.includes('admission') ||
+                                         desc.includes('commission') ||
                                          desc.includes('fee') ||
                                          desc.includes('deduct') ||
                                          desc.includes('paid to');
 
-                      let categoryTitle = tx.category_title || tx.categoryTitle || tx.libelle;
-                      if (!categoryTitle || categoryTitle === 'Wallet Transaction') {
-                        if (desc.includes('medical card purchase')) categoryTitle = 'Medical Card Purchase';
-                        else if (desc.includes('medical cashback')) categoryTitle = 'Medical Cashback Credited';
-                        else if (desc.includes('marketplace purchase')) categoryTitle = 'Marketplace Purchase';
-                        else if (desc.includes('marketplace sale')) categoryTitle = 'Marketplace Sale';
-                        else categoryTitle = isNegative ? 'Money Transfer' : 'Money Received';
-                      }
-                      
-                      // Extract User Name
-                      let userName = tx.counterparty_name || tx.counterpartyName || tx.counterparty || tx.user_name || tx.customer_name || tx.name || '';
-                      if (!userName || userName.toLowerCase() === 'customer' || userName === 'Fiinway User' || userName === 'Marketplace') {
-                        if (desc.includes('marketplace purchase')) {
-                          userName = tx.description ? tx.description.replace('Marketplace Purchase:', '').trim() : 'Marketplace Item';
-                        } else if (desc.includes('marketplace sale')) {
-                          userName = tx.description ? tx.description.replace('Marketplace Sale:', '').trim() : 'Marketplace Order';
-                        } else if (desc.includes('from ')) {
-                          userName = desc.split('from ')[1]?.split(' ')[0] || '';
-                        } else if (desc.includes('to ')) {
-                          userName = desc.split('to ')[1]?.split(' ')[0] || '';
+                      let categoryTitle = tx.category_title || tx.categoryTitle;
+                      if (!categoryTitle || categoryTitle === 'Wallet Transaction' || categoryTitle === 'Money Received' || categoryTitle === 'Money Transfer') {
+                        if (desc.includes('referral') || (tx.payment_method && tx.payment_method.toLowerCase().includes('referral'))) {
+                          categoryTitle = 'Referral Cashback';
+                        } else if (desc.includes('smart value') || desc.includes('cashback')) {
+                          categoryTitle = 'Smart Value Cashback';
+                        } else if (desc.includes('electrician') || desc.includes('plumber') || desc.includes('clean') || desc.includes('service')) {
+                          categoryTitle = tx.service_name || 'Home Service';
+                        } else if (desc.includes('bike')) {
+                          categoryTitle = isDriver ? 'Bike Ride Fare' : 'Bike Ride Payment';
+                        } else if (desc.includes('auto')) {
+                          categoryTitle = isDriver ? 'Auto Ride Fare' : 'Auto Ride Payment';
+                        } else if (desc.includes('cab') || desc.includes('ride')) {
+                          categoryTitle = isDriver ? 'Cab Ride Fare' : 'Cab Ride Payment';
+                        } else if (desc.includes('parcel')) {
+                          categoryTitle = isDriver ? 'Parcel Delivery Earnings' : 'Parcel Delivery';
+                        } else if (desc.includes('commission')) {
+                          categoryTitle = 'Admin Commission';
+                        } else if (desc.includes('withdraw')) {
+                          categoryTitle = 'Bank Withdrawal';
+                        } else if (desc.includes('recharge') || desc.includes('topup') || desc.includes('top-up')) {
+                          categoryTitle = 'Wallet Top-Up';
+                        } else {
+                          categoryTitle = isNegative ? 'Wallet Payment' : 'Wallet Credit';
                         }
                       }
-                      if (!userName) {
-                        userName = isDriver ? (isNegative ? 'Admin Panel' : 'Customer') : (isNegative ? 'Merchant / Recipient' : 'Sender User');
-                      }
-
-                      // Extract Business Name for Receipt Modal
-                      const businessName = tx.business_name || tx.vendor_name || tx.store_name || tx.company || 'Fiinway Business';
+                      
+                      // Extract Party Details
+                      const paidFrom = tx.paid_from || (isNegative ? 'Your Wallet' : (tx.counterparty || tx.counterparty_name || (isDriver ? 'Passenger / Customer' : 'Fiinway Platform')));
+                      const paidTo = tx.paid_to || (isNegative ? (tx.counterparty || tx.counterparty_name || (isDriver ? 'Fiinway Platform' : 'Service Expert')) : 'Your Wallet');
+                      const counterpartyLabel = isNegative ? `To: ${paidTo}` : `From: ${paidFrom}`;
 
                       return (
                         <div
@@ -1038,8 +1044,8 @@ export default function WalletPage() {
                           <div 
                             onClick={() => setSelectedTx({
                               ...tx,
-                              parsedUserName: userName,
-                              parsedBusinessName: businessName,
+                              parsedPaidFrom: paidFrom,
+                              parsedPaidTo: paidTo,
                               parsedCategoryTitle: categoryTitle,
                               parsedIsNegative: isNegative,
                               parsedAmountStr: amountRaw,
@@ -1055,8 +1061,8 @@ export default function WalletPage() {
                               <h4 className={`text-xs font-bold ${themeClasses.textMain} truncate`}>
                                 {categoryTitle}
                               </h4>
-                              <p className={`text-[11px] ${themeClasses.textMuted}`}>
-                                {tx.creer || tx.created_at || tx.formattedDate || 'Recently'}
+                              <p className={`text-[11px] ${themeClasses.textMuted} truncate`}>
+                                <span className="font-medium">{counterpartyLabel}</span> &bull; {tx.formatted_date || tx.creer || tx.created_at || 'Recently'}
                               </p>
                             </div>
                           </div>
@@ -1065,8 +1071,8 @@ export default function WalletPage() {
                             <div 
                               onClick={() => setSelectedTx({
                                 ...tx,
-                                parsedUserName: userName,
-                                parsedBusinessName: businessName,
+                                parsedPaidFrom: paidFrom,
+                                parsedPaidTo: paidTo,
                                 parsedCategoryTitle: categoryTitle,
                                 parsedIsNegative: isNegative,
                                 parsedAmountStr: amountRaw,
@@ -1085,8 +1091,8 @@ export default function WalletPage() {
                                 e.stopPropagation();
                                 handleDownloadInvoice({
                                   ...tx,
-                                  parsedUserName: userName,
-                                  parsedBusinessName: businessName,
+                                  parsedPaidFrom: paidFrom,
+                                  parsedPaidTo: paidTo,
                                   parsedCategoryTitle: categoryTitle,
                                   parsedIsNegative: isNegative,
                                   parsedAmountStr: amountRaw,

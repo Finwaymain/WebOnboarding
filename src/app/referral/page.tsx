@@ -304,6 +304,28 @@ function ReferralDashboardContent() {
     recent_business_users: [],
   };
 
+  const benefits = stats?.benefits || {
+    consumer: {
+      cashback_amount: "₹10",
+      cashback_value: 10,
+      type: "flat",
+      min_services: 5,
+      min_amount: 500,
+      title: "User Referral",
+      description: "Get ₹10 cashback per user referral after 5 completed services.",
+    },
+    business: {
+      cashback_amount: "₹50",
+      cashback_value: 50,
+      type: "flat",
+      min_services: 2,
+      min_amount: 200,
+      title: "Business Partner",
+      description: "Get ₹50 cashback per business partner after 2 completed services.",
+    },
+    commission_rate: "2.5%",
+  };
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans pb-10">
       {/* ──────────────────────────────────────────────────────────────────────────
@@ -366,49 +388,42 @@ function ReferralDashboardContent() {
             </button>
           </div>
 
-          {/* Your Partner Stats */}
-          <div className="space-y-2.5">
-            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Your Network Summary</h3>
-            <div className="grid grid-cols-4 gap-2">
-              {/* Stat 1: Total Partners */}
-              <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs text-center space-y-1">
-                <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 mx-auto flex items-center justify-center">
-                  <Users className="w-3.5 h-3.5" />
+          {/* Referral Benefits */}
+          <div className="space-y-2">
+            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Referral Benefits</h3>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              {/* User Referral */}
+              <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                    <Users className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-800">User Referral</span>
                 </div>
-                <h4 className="text-base font-bold text-slate-900 leading-none">{consumer.total_referrals}</h4>
-                <p className="text-[10px] font-medium text-slate-500 leading-tight">Partners</p>
+                <p className="text-base font-extrabold text-emerald-700">
+                  {benefits.consumer?.cashback_amount || "₹10"}{" "}
+                  <span className="text-[11px] font-semibold text-slate-500">Cashback</span>
+                </p>
               </div>
 
-              {/* Stat 2: App Installed */}
-              <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs text-center space-y-1">
-                <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 mx-auto flex items-center justify-center">
-                  <Download className="w-3.5 h-3.5" />
+              {/* Business Partner */}
+              <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-800">Business Partner</span>
                 </div>
-                <h4 className="text-base font-bold text-slate-900 leading-none">{consumer.installed}</h4>
-                <p className="text-[10px] font-medium text-slate-500 leading-tight">Installed</p>
-              </div>
-
-              {/* Stat 3: Registered */}
-              <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs text-center space-y-1">
-                <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 mx-auto flex items-center justify-center">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                </div>
-                <h4 className="text-base font-bold text-slate-900 leading-none">{consumer.registered}</h4>
-                <p className="text-[10px] font-medium text-slate-500 leading-tight">Registered</p>
-              </div>
-
-              {/* Stat 4: Active Users */}
-              <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs text-center space-y-1">
-                <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 mx-auto flex items-center justify-center">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                </div>
-                <h4 className="text-base font-bold text-slate-900 leading-none">{consumer.active_users}</h4>
-                <p className="text-[10px] font-medium text-slate-500 leading-tight">Active</p>
+                <p className="text-base font-extrabold text-blue-700">
+                  {benefits.business?.cashback_amount || "₹50"}{" "}
+                  <span className="text-[11px] font-semibold text-slate-500">Cashback</span>
+                </p>
               </div>
             </div>
           </div>
 
-          {/* Your Earnings */}
+          {/* Your Earnings Balance */}
           <div className="space-y-2.5">
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Your Earnings Balance</h3>
             <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs flex items-center justify-between">
