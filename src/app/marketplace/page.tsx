@@ -866,25 +866,45 @@ export default function MarketplacePage() {
   const cartSubtotal = selectedCartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
   const deliveryFee = deliveryOption === 'express' ? 99 : 0;
 
-  const computedTaxes = (appliedTaxes && appliedTaxes.length > 0)
-    ? appliedTaxes.map(t => {
-        const isPercent = (t.type || '').toLowerCase().includes('percent') || (!t.type && t.rate_label && t.rate_label.includes('%'));
-        const rVal = t.rate !== undefined ? t.rate : parseFloat(t.rate_label.replace(/[^0-9.]/g, '') || '0');
-        const amt = isPercent ? Math.round(((cartSubtotal * rVal) / 100) * 100) / 100 : rVal;
-        return {
-          ...t,
-          rate: rVal,
-          amount: amt,
-        };
+  // Taxes dynamically filtered by selected payment method applicability
+  const activeMethod = (paymentMethod || 'wallet').toLowerCase();
+  const applicableTaxesList = (appliedTaxes && appliedTaxes.length > 0)
+    ? appliedTaxes.filter(t => {
+        const app = (t.applicable_on || 'cash,upi,wallet,online').toLowerCase();
+        const methods = app.split(',').map((s: string) => s.trim());
+        if (methods.includes('all') || app === '') return true;
+        if (activeMethod === 'wallet') return methods.includes('wallet');
+        if (activeMethod === 'upi') return methods.includes('upi');
+        if (activeMethod === 'razorpay' || activeMethod === 'card' || activeMethod === 'online') return methods.includes('online') || methods.includes('card');
+        if (activeMethod === 'cash') return methods.includes('cash');
+        return methods.includes(activeMethod);
       })
-    : [
-        { name: 'GST', rate_label: '18%', amount: Math.round(((cartSubtotal * 18) / 100) * 100) / 100 },
-        { name: 'Platform Fee', rate_label: '10%', amount: Math.round(((cartSubtotal * 10) / 100) * 100) / 100 },
-        { name: 'UPI Handling', rate_label: '2%', amount: Math.round(((cartSubtotal * 2) / 100) * 100) / 100 },
-      ];
+    : (activeMethod === 'upi'
+        ? [
+            { name: 'GST', rate_label: '18%', amount: Math.round(((cartSubtotal * 18) / 100) * 100) / 100, rate: 18, type: 'Percentage' },
+            { name: 'Platform Fee', rate_label: '10%', amount: Math.round(((cartSubtotal * 10) / 100) * 100) / 100, rate: 10, type: 'Percentage' },
+            { name: 'UPI Handling', rate_label: '2%', amount: Math.round(((cartSubtotal * 2) / 100) * 100) / 100, rate: 2, type: 'Percentage' },
+          ]
+        : [
+            { name: 'GST', rate_label: '18%', amount: Math.round(((cartSubtotal * 18) / 100) * 100) / 100, rate: 18, type: 'Percentage' },
+            { name: 'Platform Fee', rate_label: '10%', amount: Math.round(((cartSubtotal * 10) / 100) * 100) / 100, rate: 10, type: 'Percentage' },
+          ]
+      );
+
+  const computedTaxes = applicableTaxesList.map(t => {
+    const isPercent = (t.type || '').toLowerCase().includes('percent') || (!t.type && t.rate_label && t.rate_label.includes('%'));
+    const rVal = t.rate !== undefined ? t.rate : parseFloat(t.rate_label.replace(/[^0-9.]/g, '') || '0');
+    const amt = isPercent ? Math.round(((cartSubtotal * rVal) / 100) * 100) / 100 : rVal;
+    return {
+      ...t,
+      rate: rVal,
+      amount: amt,
+      rate_label: isPercent ? `${rVal}%` : `₹${rVal}`,
+    };
+  });
 
   const taxAmount = Math.round(computedTaxes.reduce((sum, t) => sum + t.amount, 0) * 100) / 100;
-  const cartTotal = Math.max(0, Math.round((cartSubtotal + deliveryFee + taxAmount) * 100) / 100);
+  const cartTotal = Math.max(0, Math.round((cartSubtotal + deliveryFee + (checkoutStep === 'checkout' ? taxAmount : 0)) * 100) / 100);
 
   // Address Save Handler During Checkout
   const handleApplyAddressEdit = () => {
@@ -3076,29 +3096,41 @@ export default function MarketplacePage() {
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-800">Select Payment Method</label>
                     <div className="space-y-2">
-                      <label className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer ${paymentMethod === 'wallet' ? 'border-[#047857] bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                      {/* 1. Smart Value Wallet */}
+                      <label className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${paymentMethod === 'wallet' ? 'border-[#047857] bg-emerald-50 ring-1 ring-[#047857]' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
                         <div className="flex items-center gap-2.5">
-                          <input type="radio" name="payMethod" checked={paymentMethod === 'wallet'} onChange={() => setPaymentMethod('wallet')} className="text-[#047857]" />
+                          <input type="radio" name="payMethod" checked={paymentMethod === 'wallet'} onChange={() => { setPaymentMethod('wallet'); fetchCheckoutTax(cartSubtotal, 'wallet'); }} className="text-[#047857]" />
                           <div>
-                            <p className="text-xs font-bold text-slate-900">Pay &amp; Get Cashback</p>
-                            <p className="text-[10px] text-slate-500">Smart Value Wallet • Available: ₹{walletBalance.toLocaleString()}</p>
+                            <p className="text-xs font-bold text-slate-900">Pay &amp; Get Cashback (Smart Value Wallet)</p>
+                            <p className="text-[10px] text-slate-500">Available Balance: ₹{walletBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                           </div>
                         </div>
                         <Wallet className="w-4 h-4 text-[#047857]" />
                       </label>
 
-                      <label className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer ${paymentMethod === 'razorpay' ? 'border-[#047857] bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                      {/* 2. Instant UPI */}
+                      <label className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${paymentMethod === 'upi' ? 'border-[#047857] bg-emerald-50 ring-1 ring-[#047857]' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
                         <div className="flex items-center gap-2.5">
-                          <input type="radio" name="payMethod" checked={paymentMethod === 'razorpay'} onChange={() => setPaymentMethod('razorpay')} className="text-[#047857]" />
+                          <input type="radio" name="payMethod" checked={paymentMethod === 'upi'} onChange={() => { setPaymentMethod('upi'); fetchCheckoutTax(cartSubtotal, 'upi'); }} className="text-[#047857]" />
                           <div>
-                            <p className="text-xs font-bold text-slate-900">Razorpay / UPI / Cards / GPay</p>
-                            <p className="text-[10px] text-slate-500">Instant Online Gateway Payment (UPI Apps & Cards)</p>
+                            <p className="text-xs font-bold text-slate-900">Instant UPI (GPay / PhonePe / Paytm / BHIM)</p>
+                            <p className="text-[10px] text-slate-500">UPI Gateway (+2% Handling)</p>
+                          </div>
+                        </div>
+                        <div className="text-xs font-bold text-[#047857]">UPI</div>
+                      </label>
+
+                      {/* 3. Razorpay Cards & Netbanking */}
+                      <label className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${paymentMethod === 'razorpay' ? 'border-[#047857] bg-emerald-50 ring-1 ring-[#047857]' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
+                        <div className="flex items-center gap-2.5">
+                          <input type="radio" name="payMethod" checked={paymentMethod === 'razorpay'} onChange={() => { setPaymentMethod('razorpay'); fetchCheckoutTax(cartSubtotal, 'online'); }} className="text-[#047857]" />
+                          <div>
+                            <p className="text-xs font-bold text-slate-900">Credit / Debit Cards &amp; Netbanking</p>
+                            <p className="text-[10px] text-slate-500">All Major Indian Banks &amp; Cards</p>
                           </div>
                         </div>
                         <CreditCard className="w-4 h-4 text-[#047857]" />
                       </label>
-
-                     
                     </div>
                   </div>
                 </div>
@@ -3125,39 +3157,55 @@ export default function MarketplacePage() {
             {cart.length > 0 && checkoutStep !== 'success' && (
               <div className="p-4 border-t border-slate-200 space-y-1.5 bg-slate-50">
                 <div className="flex justify-between text-xs text-slate-700">
-                  <span>Subtotal</span>
+                  <span>Subtotal ({selectedCartItems.length} item{selectedCartItems.length > 1 ? 's' : ''})</span>
                   <span className="font-bold text-slate-900">₹{cartSubtotal.toLocaleString()}</span>
-                </div>
-                {computedTaxes.map((tax, idx) => (
-                  <div key={idx} className="flex justify-between text-xs text-indigo-700 font-medium">
-                    <span>{tax.name} ({tax.rate_label}):</span>
-                    <span className="font-bold">+₹{tax.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  </div>
-                ))}
-                <div className="flex justify-between text-xs text-slate-600">
-                  <span>Delivery Charges:</span>
-                  <span className="font-bold text-emerald-600 uppercase text-[10px]">{deliveryFee > 0 ? `+₹${deliveryFee}` : 'Free Delivery'}</span>
-                </div>
-                <div className="flex justify-between text-sm font-black border-t border-slate-200 pt-2 text-slate-900">
-                  <span>Grand Total</span>
-                  <span className="text-[#047857] text-base font-extrabold">₹{cartTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
 
                 {checkoutStep === 'cart' ? (
-                  <button
-                    onClick={() => setCheckoutStep('checkout')}
-                    className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs py-3 rounded-xl shadow-xs"
-                  >
-                    Proceed to Checkout
-                  </button>
+                  <>
+                    <div className="flex justify-between text-xs text-slate-600">
+                      <span>Delivery Charges:</span>
+                      <span className="font-bold text-emerald-600 uppercase text-[10px]">{deliveryFee > 0 ? `+₹${deliveryFee}` : 'Free Delivery'}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px] text-slate-500 italic">
+                      <span>Taxes &amp; Platform Charges:</span>
+                      <span>Calculated at payment selection</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-black border-t border-slate-200 pt-2 text-slate-900">
+                      <span>Estimated Total</span>
+                      <span className="text-[#047857] text-base font-extrabold">₹{(cartSubtotal + deliveryFee).toLocaleString()}</span>
+                    </div>
+                    <button
+                      onClick={() => setCheckoutStep('checkout')}
+                      className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs py-3 rounded-xl shadow-xs mt-1"
+                    >
+                      Proceed to Select Payment Method
+                    </button>
+                  </>
                 ) : (
-                  <button
-                    onClick={handlePlaceOrder}
-                    disabled={placingOrder}
-                    className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs py-3 rounded-xl shadow-xs"
-                  >
-                    {placingOrder ? 'Processing Order...' : `Pay ₹${cartTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} & Confirm`}
-                  </button>
+                  <>
+                    {computedTaxes.map((tax, idx) => (
+                      <div key={idx} className="flex justify-between text-xs text-indigo-700 font-medium">
+                        <span>{tax.name} ({tax.rate_label}):</span>
+                        <span className="font-bold">+₹{tax.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between text-xs text-slate-600">
+                      <span>Delivery Charges:</span>
+                      <span className="font-bold text-emerald-600 uppercase text-[10px]">{deliveryFee > 0 ? `+₹${deliveryFee}` : 'Free Delivery'}</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-black border-t border-slate-200 pt-2 text-slate-900">
+                      <span>Grand Total</span>
+                      <span className="text-[#047857] text-base font-extrabold">₹{cartTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                    <button
+                      onClick={handlePlaceOrder}
+                      disabled={placingOrder}
+                      className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs py-3 rounded-xl shadow-xs mt-1"
+                    >
+                      {placingOrder ? 'Processing Order...' : `Pay ₹${cartTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} & Confirm`}
+                    </button>
+                  </>
                 )}
               </div>
             )}
