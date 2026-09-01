@@ -663,11 +663,21 @@ function ReferralDashboardContent() {
                           </div>
 
                           <div className="text-right space-y-0.5">
-                            <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-semibold ${user.verified ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>
-                              {user.status}
+                            <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold ${
+                              user.condition_fulfilled || user.status === 'Credited' || user.status === 'Unlocked'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                : 'bg-amber-100 text-amber-900 border border-amber-200'
+                            }`}>
+                              {user.condition_fulfilled || user.status === 'Credited' || user.status === 'Unlocked' ? 'Credited' : 'Pending'}
                             </span>
-                            <p className="text-[10px] font-bold text-[#047857]">
-                              +₹{user.referral_earned} earned
+                            <p className={`text-[10px] font-black ${
+                              user.condition_fulfilled || user.status === 'Credited' || user.status === 'Unlocked'
+                                ? 'text-[#047857]'
+                                : 'text-amber-700'
+                            }`}>
+                              {user.condition_fulfilled || user.status === 'Credited' || user.status === 'Unlocked'
+                                ? `+₹${user.referral_earned || user.unlocked_cashback || user.reward_amount} earned`
+                                : `+₹${user.potential_reward || user.reward_amount || user.pending_cashback || user.frozen_cashback || 0} pending`}
                             </p>
                           </div>
                         </div>
@@ -855,11 +865,21 @@ function ReferralDashboardContent() {
                           </div>
 
                           <div className="text-right space-y-0.5">
-                            <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-semibold ${user.verified ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>
-                              {user.status}
+                            <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold ${
+                              user.condition_fulfilled || user.status === 'Credited' || user.status === 'Unlocked'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                : 'bg-amber-100 text-amber-900 border border-amber-200'
+                            }`}>
+                              {user.condition_fulfilled || user.status === 'Credited' || user.status === 'Unlocked' ? 'Credited' : 'Pending'}
                             </span>
-                            <p className="text-[10px] font-bold text-[#047857]">
-                              +₹{user.referral_earned} earned
+                            <p className={`text-[10px] font-black ${
+                              user.condition_fulfilled || user.status === 'Credited' || user.status === 'Unlocked'
+                                ? 'text-[#047857]'
+                                : 'text-amber-700'
+                            }`}>
+                              {user.condition_fulfilled || user.status === 'Credited' || user.status === 'Unlocked'
+                                ? `+₹${user.referral_earned || user.unlocked_cashback || user.reward_amount} earned`
+                                : `+₹${user.potential_reward || user.reward_amount || user.pending_cashback || user.frozen_cashback || 0} pending`}
                             </p>
                           </div>
                         </div>
