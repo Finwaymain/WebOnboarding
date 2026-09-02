@@ -987,31 +987,26 @@ export default function WalletPage() {
                       const amountRaw = String(tx.amount || tx.transaction_amount || tx.montant || '0').replace('-', '');
                       const desc = (tx.description || tx.category_title || tx.categoryTitle || tx.note || '').toLowerCase();
                       const deductionType = String(tx.deduction_type ?? '');
-                      
-                      const isNegative = deductionType === '0' || 
-                                         deductionType === 'debit' ||
-                                         tx.type === 'debit' || 
-                                         String(tx.amount || '').includes('-') ||
-                                         desc.includes('marketplace purchase') ||
-                                         desc.includes('transferred to') ||
-                                         desc.includes('debited') ||
-                                         desc.includes('withdraw') ||
-                                         desc.includes('purchased') ||
-                                         desc.includes('subscription') ||
-                                         desc.includes('admission') ||
-                                         desc.includes('commission') ||
-                                         desc.includes('fee') ||
-                                         desc.includes('deduct') ||
-                                         desc.includes('paid to');
 
+                      // 1. Resolve Category Title first
                       let categoryTitle = tx.category_title || tx.categoryTitle;
-                      if (!categoryTitle || categoryTitle === 'Wallet Transaction' || categoryTitle === 'Money Received' || categoryTitle === 'Money Transfer') {
-                        if (desc.includes('referral') || (tx.payment_method && tx.payment_method.toLowerCase().includes('referral'))) {
+                      if (!categoryTitle || categoryTitle === 'Wallet Transaction' || categoryTitle === 'Bank' || categoryTitle === 'Bank Transaction' || categoryTitle === 'Money Received' || categoryTitle === 'Money Transfer') {
+                        if (desc.includes('marketplace sale') || desc.includes('sale earnings') || (tx.payment_method && tx.payment_method.toLowerCase().includes('marketplace escrow'))) {
+                          categoryTitle = 'Marketplace Sale';
+                        } else if (desc.includes('marketplace purchase') || desc.includes('purchased')) {
+                          categoryTitle = 'Marketplace Purchase';
+                        } else if (desc.includes('top-up') || desc.includes('topup') || desc.includes('recharge') || desc.includes('top up')) {
+                          categoryTitle = 'Wallet Top-Up';
+                        } else if (desc.includes('withdraw') || desc.includes('payout')) {
+                          categoryTitle = 'Bank Withdrawal';
+                        } else if (desc.includes('commission')) {
+                          categoryTitle = 'Admin Commission';
+                        } else if (desc.includes('referral') || (tx.payment_method && tx.payment_method.toLowerCase().includes('referral'))) {
                           categoryTitle = 'Referral Cashback';
                         } else if (desc.includes('smart value') || desc.includes('cashback')) {
                           categoryTitle = 'Smart Value Cashback';
                         } else if (desc.includes('electrician') || desc.includes('plumber') || desc.includes('clean') || desc.includes('service')) {
-                          categoryTitle = tx.service_name || 'Home Service';
+                          categoryTitle = isDriver ? (tx.service_name ? `${tx.service_name} Earnings` : 'Home Service Earnings') : (tx.service_name || 'Home Service Booking');
                         } else if (desc.includes('bike')) {
                           categoryTitle = isDriver ? 'Bike Ride Fare' : 'Bike Ride Payment';
                         } else if (desc.includes('auto')) {
@@ -1019,21 +1014,43 @@ export default function WalletPage() {
                         } else if (desc.includes('cab') || desc.includes('ride')) {
                           categoryTitle = isDriver ? 'Cab Ride Fare' : 'Cab Ride Payment';
                         } else if (desc.includes('parcel')) {
-                          categoryTitle = isDriver ? 'Parcel Delivery Earnings' : 'Parcel Delivery';
-                        } else if (desc.includes('commission')) {
-                          categoryTitle = 'Admin Commission';
-                        } else if (desc.includes('withdraw')) {
-                          categoryTitle = 'Bank Withdrawal';
-                        } else if (desc.includes('recharge') || desc.includes('topup') || desc.includes('top-up')) {
+                          categoryTitle = isDriver ? 'Parcel Delivery Earnings' : 'Parcel Delivery Payment';
+                        } else if (desc.includes('transferred to')) {
+                          categoryTitle = 'Money Transfer';
+                        } else if (desc.includes('received from')) {
+                          categoryTitle = 'Money Received';
+                        } else if (deductionType === '1' || tx.type === 'credit') {
                           categoryTitle = 'Wallet Top-Up';
                         } else {
-                          categoryTitle = isNegative ? 'Wallet Payment' : 'Wallet Credit';
+                          categoryTitle = 'Wallet Payment';
                         }
                       }
+
+                      // 2. Strict Sign Determination (+ for Credit, - for Debit)
+                      const isCredit = categoryTitle === 'Wallet Top-Up' ||
+                                       categoryTitle === 'Marketplace Sale' ||
+                                       categoryTitle === 'Referral Cashback' ||
+                                       categoryTitle === 'Smart Value Cashback' ||
+                                       categoryTitle === 'Money Received' ||
+                                       (isDriver && (categoryTitle.includes('Fare') || categoryTitle.includes('Earnings'))) ||
+                                       (deductionType === '1' && categoryTitle !== 'Bank Withdrawal' && categoryTitle !== 'Admin Commission' && categoryTitle !== 'Marketplace Purchase');
+
+                      const isNegative = !isCredit;
                       
                       // Extract Party Details
-                      const paidFrom = tx.paid_from || (isNegative ? 'Your Wallet' : (tx.counterparty || tx.counterparty_name || (isDriver ? 'Passenger / Customer' : 'Fiinway Platform')));
-                      const paidTo = tx.paid_to || (isNegative ? (tx.counterparty || tx.counterparty_name || (isDriver ? 'Fiinway Platform' : 'Service Expert')) : 'Your Wallet');
+                      const paidFrom = tx.paid_from || (isNegative ? 'Your Wallet' : (
+                        categoryTitle === 'Marketplace Sale' ? 'Marketplace Escrow' :
+                        categoryTitle === 'Wallet Top-Up' ? (tx.payment_method || 'Payment Gateway') :
+                        categoryTitle === 'Referral Cashback' ? 'Fiinway Referral Program' :
+                        categoryTitle === 'Smart Value Cashback' ? 'Smart Value Rewards' :
+                        (tx.counterparty || tx.counterparty_name || (isDriver ? 'Passenger / Customer' : 'Fiinway Platform'))
+                      ));
+                      const paidTo = tx.paid_to || (isNegative ? (
+                        categoryTitle === 'Bank Withdrawal' ? 'Linked Bank Account' :
+                        categoryTitle === 'Admin Commission' ? 'Fiinway Platform' :
+                        categoryTitle === 'Marketplace Purchase' ? 'Marketplace Store' :
+                        (tx.counterparty || tx.counterparty_name || (isDriver ? 'Fiinway Platform' : 'Service Expert'))
+                      ) : 'Your Wallet');
                       const counterpartyLabel = isNegative ? `To: ${paidTo}` : `From: ${paidFrom}`;
 
                       return (
