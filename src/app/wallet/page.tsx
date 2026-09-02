@@ -144,6 +144,7 @@ function readUrlParams() {
     return { 
       driverId: null as string | null, 
       userId: null as string | null, 
+      phone: null as string | null,
       accesstoken: null as string | null, 
       userType: 'driver' as 'driver' | 'user',
       isDark: false,
@@ -153,6 +154,7 @@ function readUrlParams() {
   const params = new URLSearchParams(window.location.search);
   const driverId = params.get('driver_id') || params.get('id_driver') || params.get('id_conducteur');
   const rawUserId = params.get('user_id') || params.get('id_user') || params.get('id_user_app');
+  const phone = params.get('phone') || params.get('mobile') || params.get('user_phone') || null;
   const userTypeParam = params.get('user_type') || params.get('user_cat') || (driverId ? 'driver' : 'user');
   const isDriverType = userTypeParam === 'driver';
   const resolvedId = isDriverType ? (driverId || rawUserId) : (rawUserId || driverId);
@@ -163,6 +165,7 @@ function readUrlParams() {
   return {
     driverId: driverId || resolvedId,
     userId: resolvedId,
+    phone,
     accesstoken: params.get('accesstoken'),
     userType: (isDriverType ? 'driver' : 'user') as 'driver' | 'user',
     isDark,
@@ -175,6 +178,7 @@ export default function WalletPage() {
   const [params, setParams] = useState<{
     driverId: string | null;
     userId: string | null;
+    phone: string | null;
     accesstoken: string | null;
     userType: 'driver' | 'user';
     isDark: boolean;
@@ -182,6 +186,7 @@ export default function WalletPage() {
   }>({
     driverId: null,
     userId: null,
+    phone: null,
     accesstoken: null,
     userType: 'driver',
     isDark: false,
@@ -356,6 +361,8 @@ export default function WalletPage() {
       const payload: Record<string, any> = {
         user_type: isDriver ? 'driver' : 'customer',
         ac_no: userId,
+        phone: params.phone || '',
+        mobile: params.phone || '',
       };
       if (isDriver) {
         payload.driver_id = userId;
@@ -449,8 +456,12 @@ export default function WalletPage() {
       }
 
       // 3. Bank Details & Withdrawals List (For both Driver and User)
-      if (userId) {
-        const bankRes = await fetch(`/api/v1/bank-details?driver_id=${userId}&user_id=${userId}&user_type=${params.userType}`, { headers: apiHeaders });
+      if (userId || params.phone) {
+        const queryParams = isDriver
+          ? `driver_id=${userId || ''}&user_type=driver&phone=${encodeURIComponent(params.phone || '')}`
+          : `user_id=${userId || ''}&user_type=customer&phone=${encodeURIComponent(params.phone || '')}`;
+
+        const bankRes = await fetch(`/api/v1/bank-details?${queryParams}`, { headers: apiHeaders });
         if (bankRes.ok) {
           const bankData = await bankRes.json();
           if (bankData.success === 'success' && bankData.data) {
@@ -460,10 +471,17 @@ export default function WalletPage() {
             setHolderName(bankData.data.holder_name || '');
             setAccountNo(bankData.data.account_no || '');
             setIfscCode(bankData.data.other_info || bankData.data.ifsc_code || '');
+          } else {
+            setBankDetails(null);
+            setBankName('');
+            setBranchName('');
+            setHolderName('');
+            setAccountNo('');
+            setIfscCode('');
           }
         }
 
-        const withRes = await fetch(`/api/v1/withdrawals-list?driver_id=${userId}&user_id=${userId}&user_type=${params.userType}`, { headers: apiHeaders });
+        const withRes = await fetch(`/api/v1/withdrawals-list?${queryParams}`, { headers: apiHeaders });
         if (withRes.ok) {
           const withData = await withRes.json();
           if (withData.success === 'success' && Array.isArray(withData.data)) {
@@ -574,18 +592,27 @@ export default function WalletPage() {
 
     setWithdrawSubmitting(true);
     try {
+      const withPayload: Record<string, any> = {
+        user_type: isDriver ? 'driver' : 'customer',
+        phone: params.phone || '',
+        mobile: params.phone || '',
+        amount: withdrawAmount,
+        note: withdrawNote,
+      };
+      if (isDriver) {
+        withPayload.driver_id = userId;
+        withPayload.id_driver = userId;
+        withPayload.id_conducteur = userId;
+      } else {
+        withPayload.user_id = userId;
+        withPayload.id_user = userId;
+        withPayload.id_user_app = userId;
+      }
+
       const res = await fetch('/api/v1/withdrawals', {
         method: 'POST',
         headers: apiHeaders,
-        body: JSON.stringify({
-          driver_id: userId,
-          user_id: userId,
-          id_user: userId,
-          id_conducteur: userId,
-          user_type: params.userType,
-          amount: withdrawAmount,
-          note: withdrawNote,
-        }),
+        body: JSON.stringify(withPayload),
       });
       const data = await res.json();
       if (data.success === 'success') {
@@ -631,21 +658,30 @@ export default function WalletPage() {
 
     setBankSubmitting(true);
     try {
+      const bankPayload: Record<string, any> = {
+        user_type: isDriver ? 'driver' : 'customer',
+        phone: params.phone || '',
+        mobile: params.phone || '',
+        bank_name: cleanBank,
+        branch_name: branchName,
+        holder_name: holderName,
+        account_no: cleanAcc,
+        other_info: cleanIfsc,
+        ifsc_code: cleanIfsc,
+      };
+      if (isDriver) {
+        bankPayload.driver_id = userId;
+        bankPayload.id_conducteur = userId;
+      } else {
+        bankPayload.user_id = userId;
+        bankPayload.id_user = userId;
+        bankPayload.id_user_app = userId;
+      }
+
       const res = await fetch('/api/v1/add-bank-details', {
         method: 'POST',
         headers: apiHeaders,
-        body: JSON.stringify({
-          driver_id: userId,
-          user_id: userId,
-          id_user: userId,
-          user_type: params.userType,
-          bank_name: cleanBank,
-          branch_name: branchName,
-          holder_name: holderName,
-          account_no: cleanAcc,
-          other_info: cleanIfsc,
-          ifsc_code: cleanIfsc,
-        }),
+        body: JSON.stringify(bankPayload),
       });
       const data = await res.json();
       if (data.success === 'success') {
