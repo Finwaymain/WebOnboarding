@@ -208,6 +208,8 @@ export default function WalletPage() {
 
   // Data States
   const [walletAmount, setWalletAmount] = useState<number>(0);
+  const [withdrawableAmount, setWithdrawableAmount] = useState<number>(0);
+  const [topupAmountBalance, setTopupAmountBalance] = useState<number>(0);
   const [earnAmount, setEarnAmount] = useState<number>(0);
   const [totalEarn, setTotalEarn] = useState<string>('0');
   const [historyList, setHistoryList] = useState<any[]>([]);
@@ -376,9 +378,13 @@ export default function WalletPage() {
         const amtData = await amtRes.json();
         if (amtData.data) {
           const wAmt = Number(amtData.data.amount || amtData.data.wallet_amount || 0);
+          const withAmt = Number(amtData.data.withdrawable_balance !== undefined ? amtData.data.withdrawable_balance : (isDriver ? wAmt : 0));
+          const topAmt = Number(amtData.data.topup_balance !== undefined ? amtData.data.topup_balance : Math.max(0, wAmt - withAmt));
           const eAmt = Number(amtData.data.earn_amount || amtData.data.earning || 0);
           const tAmt = String(amtData.data.total_earnings || amtData.data.total_earn || '0');
           setWalletAmount(wAmt);
+          setWithdrawableAmount(withAmt);
+          setTopupAmountBalance(topAmt);
           setEarnAmount(eAmt > 0 ? eAmt : Number(tAmt));
           setTotalEarn(tAmt !== '0' ? tAmt : String(eAmt));
           amtFetched = true;
@@ -394,7 +400,12 @@ export default function WalletPage() {
         if (walletRes.ok) {
           const wData = await walletRes.json();
           if (wData.success === 'success' && wData.data) {
-            setWalletAmount(Number(wData.data.amount || 0));
+            const wAmt = Number(wData.data.amount || 0);
+            const withAmt = Number(wData.data.withdrawable_balance !== undefined ? wData.data.withdrawable_balance : (isDriver ? wAmt : 0));
+            const topAmt = Number(wData.data.topup_balance !== undefined ? wData.data.topup_balance : Math.max(0, wAmt - withAmt));
+            setWalletAmount(wAmt);
+            setWithdrawableAmount(withAmt);
+            setTopupAmountBalance(topAmt);
             setEarnAmount(Number(wData.data.earn_amount || 0));
           }
         }
@@ -552,8 +563,8 @@ export default function WalletPage() {
       showToast("Please enter a valid withdrawal amount", "error");
       return;
     }
-    if (reqAmt > walletAmount) {
-      showToast(`Insufficient wallet balance! Requested ₹${reqAmt.toFixed(2)} exceeds your available balance of ₹${walletAmount.toFixed(2)}.`, "error");
+    if (reqAmt > withdrawableAmount) {
+      showToast(`Requested ₹${reqAmt.toFixed(2)} exceeds your withdrawable earnings of ₹${withdrawableAmount.toFixed(2)}. Self top-up funds cannot be withdrawn via payout.`, "error");
       return;
     }
     if (!bankDetails || !bankDetails.account_no) {
@@ -793,8 +804,15 @@ export default function WalletPage() {
                     {formatCurrency(walletAmount)}
                   </div>
 
-                  <div className="inline-block bg-white/15 px-3 py-1 rounded-full text-xs font-medium text-white/90">
-                    Total Earnings: {formatCurrency(totalEarn)}
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <div className="inline-block bg-white/20 px-3 py-1 rounded-full text-xs font-semibold text-white">
+                      Withdrawable: {formatCurrency(withdrawableAmount)}
+                    </div>
+                    {topupAmountBalance > 0 && (
+                      <div className="inline-block bg-white/10 px-3 py-1 rounded-full text-xs font-normal text-white/90">
+                        Top-Up: {formatCurrency(topupAmountBalance)} (Spend only)
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1297,9 +1315,21 @@ export default function WalletPage() {
                   onChange={(e) => setWithdrawAmount(e.target.value)}
                   className={`w-full ${themeClasses.inputBg} border rounded-xl px-4 py-3 text-lg font-bold focus:outline-none focus:border-[#6AA720]`}
                 />
-                <p className={`text-[11px] ${themeClasses.textMuted} mt-1`}>
-                  Available Balance: {formatCurrency(walletAmount)}
-                </p>
+                <div className="bg-[#6AA720]/10 border border-[#6AA720]/20 rounded-xl p-3 text-xs space-y-1.5 mt-2">
+                  <div className="flex justify-between">
+                    <span className={themeClasses.textMuted}>Withdrawable Earnings:</span>
+                    <span className="font-bold text-[#6AA720]">{formatCurrency(withdrawableAmount)}</span>
+                  </div>
+                  {topupAmountBalance > 0 && (
+                    <div className="flex justify-between">
+                      <span className={themeClasses.textMuted}>Non-Withdrawable Top-Up:</span>
+                      <span className="font-semibold text-slate-400">{formatCurrency(topupAmountBalance)}</span>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-amber-500/90 pt-1 border-t border-slate-700/20 leading-tight">
+                    * Only earnings from rides, services, and referral rewards can be withdrawn. Self top-up funds can only be spent on platform services.
+                  </p>
+                </div>
               </div>
 
               <div>
