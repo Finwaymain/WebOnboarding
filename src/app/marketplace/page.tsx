@@ -265,6 +265,45 @@ export default function MarketplacePage() {
   const [mPinError, setMPinError] = useState<string>('');
   const [verifyingMPin, setVerifyingMPin] = useState<boolean>(false);
 
+  // Modern In-App Alert & Confirmation Modal State
+  const [appAlert, setAppAlert] = useState<{
+    isOpen: boolean;
+    title?: string;
+    message: string;
+    type?: 'success' | 'error' | 'warning' | 'info';
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+  } | null>(null);
+
+  const showAlert = (message: string, title?: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
+    setAppAlert({
+      isOpen: true,
+      title: title || (type === 'success' ? 'Success' : type === 'error' ? 'Notice' : type === 'warning' ? 'Action Required' : 'Information'),
+      message,
+      type,
+      confirmText: 'OK',
+      onConfirm: () => setAppAlert(null)
+    });
+  };
+
+  const showConfirm = (message: string, onConfirmAction: () => void, title: string = 'Please Confirm', confirmText: string = 'Confirm', cancelText: string = 'Cancel', type: 'warning' | 'error' | 'info' = 'warning') => {
+    setAppAlert({
+      isOpen: true,
+      title,
+      message,
+      type,
+      confirmText,
+      cancelText,
+      onConfirm: () => {
+        setAppAlert(null);
+        onConfirmAction();
+      },
+      onCancel: () => setAppAlert(null)
+    });
+  };
+
   // Categories List (22 categories for product posting & browsing)
   const defaultCategories: Category[] = [
     { id: 1, name: 'Mobiles', icon: '📱' },
@@ -875,12 +914,12 @@ export default function MarketplacePage() {
 
   const clearAllCart = () => {
     if (cart.length === 0) return;
-    if (window.confirm("Are you sure you want to remove all items from your cart?")) {
+    showConfirm("Are you sure you want to remove all items from your cart?", () => {
       setCart([]);
       if (typeof window !== 'undefined') {
         localStorage.removeItem('fiinway_marketplace_cart');
       }
-    }
+    }, "Clear Cart", "Clear All", "Cancel", "warning");
   };
 
   // Accurate Discount Percentage Helper
@@ -943,7 +982,7 @@ export default function MarketplacePage() {
   // Address Save Handler During Checkout
   const handleApplyAddressEdit = () => {
     if (!editStreetAddress || !editCity) {
-      alert('Please fill out street address and city');
+      showAlert('Please fill out street address and city', 'Missing Address', 'warning');
       return;
     }
     const full = `${editStreetAddress}, ${editCity} ${editPincode ? '- ' + editPincode : ''}`;
@@ -966,12 +1005,12 @@ export default function MarketplacePage() {
   // Order Placement (Handles Wallet M-PIN Verification, Cash on Delivery & Razorpay Online Payment)
   const handlePlaceOrder = async () => {
     if (selectedCartItems.length === 0) {
-      alert("Please select at least one product in your cart to proceed with checkout.");
+      showAlert("Please select at least one product in your cart to proceed with checkout.", "Cart Empty", "warning");
       return;
     }
 
     if (paymentMethod === 'wallet' && walletBalance < cartTotal) {
-      alert(`Insufficient Wallet Balance! Required: ₹${cartTotal.toLocaleString()}, Available: ₹${walletBalance.toLocaleString()}. Please choose Cash on Delivery or Online Payment.`);
+      showAlert(`Insufficient Wallet Balance! Required: ₹${cartTotal.toLocaleString()}, Available: ₹${walletBalance.toLocaleString()}. Please choose Cash on Delivery or Online Payment.`, "Insufficient Balance", "error");
       return;
     }
 
@@ -1141,7 +1180,7 @@ export default function MarketplacePage() {
         if (payMethod === 'wallet' && showMPinModal) {
           setMPinError(errMsg);
         } else {
-          alert(`Order Booking Error: ${errMsg}`);
+          showAlert(errMsg, "Order Booking Failed", "error");
         }
         setPlacingOrder(false);
         return;
@@ -1151,7 +1190,7 @@ export default function MarketplacePage() {
       if (payMethod === 'wallet' && showMPinModal) {
         setMPinError(msg);
       } else {
-        alert(msg);
+        showAlert(msg, "Order Booking Failed", "error");
       }
       setPlacingOrder(false);
       return;
@@ -1211,7 +1250,7 @@ export default function MarketplacePage() {
         if (status === 'rejected') msg = 'Order declined. Full refund initiated to buyer.';
         if (status === 'shipped') msg = 'Order marked as shipped!';
         if (status === 'delivered') msg = 'Order delivered! Net payout released directly to your wallet.';
-        alert(msg);
+        showAlert(msg, "Status Updated", "success");
         await fetchSellerOrders();
         await fetchBuyerOrders();
         setSelectedSellerOrder(null);
@@ -1219,7 +1258,7 @@ export default function MarketplacePage() {
         return;
       } else {
         const errJson = await res.json().catch(() => ({}));
-        alert(`Status update failed: ${errJson.error || 'Server error'}`);
+        showAlert(errJson.error || 'Server error', "Status Update Failed", "error");
         setUpdatingOrderStatus(false);
         return;
       }
@@ -1321,60 +1360,75 @@ export default function MarketplacePage() {
   };
 
   // Enable / Disable Product Status Toggle Handler
-  const handleToggleProductStatus = async (product: Product) => {
+  const handleToggleProductStatus = (product: Product) => {
     const newStatus = (product.status || '').toLowerCase() === 'active' ? 'inactive' : 'active';
     const actionText = newStatus === 'active' ? 'Enable' : 'Disable';
 
-    if (!confirm(`Are you sure you want to ${actionText.toLowerCase()} "${product.title}"?`)) return;
+    showConfirm(
+      `Are you sure you want to ${actionText.toLowerCase()} "${product.title}"?`,
+      async () => {
+        try {
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (userToken) headers['accesstoken'] = userToken;
+          if (userId) headers['user_id'] = userId;
 
-    try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (userToken) headers['accesstoken'] = userToken;
-      if (userId) headers['user_id'] = userId;
+          await fetch(`/api/v1/marketplace/products/${product.id}`, {
+            method: 'PUT',
+            headers,
+            body: JSON.stringify({ status: newStatus, user_id: userId })
+          });
+        } catch (e) {
+          console.warn('Status toggle API note:', e);
+        }
 
-      await fetch(`/api/v1/marketplace/products/${product.id}`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({ status: newStatus, user_id: userId })
-      });
-    } catch (e) {
-      console.warn('Status toggle API note:', e);
-    }
-
-    setMyProducts(prev => prev.map(p => p.id === product.id ? { ...p, status: newStatus } : p));
-    setProducts(prev => prev.map(p => p.id === product.id ? { ...p, status: newStatus } : p));
+        setMyProducts(prev => prev.map(p => p.id === product.id ? { ...p, status: newStatus } : p));
+        setProducts(prev => prev.map(p => p.id === product.id ? { ...p, status: newStatus } : p));
+        showAlert(`Product status set to ${newStatus}.`, 'Status Updated', 'success');
+      },
+      `${actionText} Product`,
+      actionText,
+      'Cancel',
+      newStatus === 'active' ? 'info' : 'warning'
+    );
   };
 
   // Delete Product Listing
-  const handleDeleteProduct = async (productId: number) => {
-    if (!confirm('Are you sure you want to delete this product listing?')) return;
+  const handleDeleteProduct = (productId: number) => {
+    showConfirm(
+      'Are you sure you want to delete this product listing?',
+      async () => {
+        try {
+          const headers: Record<string, string> = {};
+          if (userToken) headers['accesstoken'] = userToken;
+          if (userId) headers['user_id'] = userId;
 
-    try {
-      const headers: Record<string, string> = {};
-      if (userToken) headers['accesstoken'] = userToken;
-      if (userId) headers['user_id'] = userId;
+          const res = await fetch(`/api/v1/marketplace/products/${productId}`, {
+            method: 'DELETE',
+            headers
+          });
 
-      const res = await fetch(`/api/v1/marketplace/products/${productId}`, {
-        method: 'DELETE',
-        headers
-      });
-
-      if (res.ok) {
-        setMyProducts(prev => prev.filter(p => p.id !== productId));
-        await fetchProducts();
-        alert('Product ad deleted successfully.');
-      } else {
-        setMyProducts(prev => prev.filter(p => p.id !== productId));
-      }
-    } catch (e) {
-      setMyProducts(prev => prev.filter(p => p.id !== productId));
-    }
+          if (res.ok) {
+            setMyProducts(prev => prev.filter(p => p.id !== productId));
+            await fetchProducts();
+            showAlert('Product ad deleted successfully.', 'Deleted', 'success');
+          } else {
+            setMyProducts(prev => prev.filter(p => p.id !== productId));
+          }
+        } catch (e) {
+          setMyProducts(prev => prev.filter(p => p.id !== productId));
+        }
+      },
+      'Delete Product',
+      'Delete',
+      'Cancel',
+      'error'
+    );
   };
 
   // Submit or Update Product Listing & SHOW IMMEDIATELY on Home Page
   const handleSubmitNewProduct = async () => {
     if (!newTitle || !newPrice) {
-      alert('Please fill out product title and price!');
+      showAlert('Please fill out product title and price!', 'Missing Details', 'warning');
       return;
     }
 
@@ -1384,6 +1438,7 @@ export default function MarketplacePage() {
     const qUid = urlParams ? (urlParams.get('user_id') || urlParams.get('id_user') || urlParams.get('driver_id') || urlParams.get('id_conducteur')) : null;
     const activeUid = userId || qUid || (typeof window !== 'undefined' ? localStorage.getItem('user_id') || '' : '') || '1';
     const activeToken = userToken || (urlParams ? urlParams.get('accesstoken') : null) || (typeof window !== 'undefined' ? localStorage.getItem('accesstoken') || '' : '');
+    const activeUserType = (urlParams ? urlParams.get('user_type') || urlParams.get('role') : null) || (typeof window !== 'undefined' ? localStorage.getItem('user_type') : null) || userType || 'customer';
 
     try {
       const finalImages = uploadedImages.length > 0 
@@ -1409,7 +1464,7 @@ export default function MarketplacePage() {
         city: selectedCity,
         phone: userPhone || editPhone || (urlParams ? urlParams.get('phone') || urlParams.get('user_phone') : ''),
         seller_phone: userPhone || editPhone || (urlParams ? urlParams.get('phone') || urlParams.get('user_phone') : ''),
-        user_type: activeUserType || (urlParams ? urlParams.get('user_type') || urlParams.get('role') : 'customer'),
+        user_type: activeUserType,
         image_urls: finalImages,
       };
 
@@ -1445,7 +1500,7 @@ export default function MarketplacePage() {
         }
         await fetchProducts();
         await fetchMyProducts(activeToken, activeUid);
-        alert(isEditing ? 'Product Ad updated successfully!' : 'Product listed successfully! It is now live on the Marketplace catalog.');
+        showAlert(isEditing ? 'Product Ad updated successfully!' : 'Product listed successfully! It is now live on the Marketplace catalog.', 'Product Published', 'success');
         setEditingProduct(null);
         setWizardStep(1);
         setNewTitle('');
@@ -1460,11 +1515,11 @@ export default function MarketplacePage() {
         setSelectedCategory(null);
       } else {
         const errJson = await res.json().catch(() => ({}));
-        alert('Failed to save product: ' + (errJson.error || ('Server response code ' + res.status)));
+        showAlert('Failed to save product: ' + (errJson.error || ('Server response code ' + res.status)), 'Publication Failed', 'error');
       }
     } catch (err: any) {
       console.warn('Product submit error:', err);
-      alert('Product submission error: ' + (err.message || 'Connection error'));
+      showAlert('Product submission error: ' + (err.message || 'Connection error'), 'Submission Error', 'error');
     }
 
     setSubmittingProduct(false);
@@ -2624,9 +2679,14 @@ export default function MarketplacePage() {
                                 type="button"
                                 disabled={updatingOrderStatus}
                                 onClick={() => {
-                                  if (confirm(`Are you sure you want to REJECT this order? Full refund will be credited back to customer's wallet.`)) {
-                                    handleUpdateSellerOrderStatus('rejected', order);
-                                  }
+                                  showConfirm(
+                                    "Are you sure you want to REJECT this order? Full refund will be credited back to customer's wallet.",
+                                    () => handleUpdateSellerOrderStatus('rejected', order),
+                                    'Reject Order',
+                                    'Yes, Reject',
+                                    'Cancel',
+                                    'error'
+                                  );
                                 }}
                                 className="w-full py-2.5 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-extrabold text-xs rounded-xl transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
                               >
@@ -3617,10 +3677,17 @@ export default function MarketplacePage() {
                     type="button"
                     disabled={updatingOrderStatus}
                     onClick={() => {
-                      if (confirm(`Are you sure you want to REJECT this order? Customer will receive an immediate full refund.`)) {
-                        handleUpdateSellerOrderStatus('rejected', order);
-                        setViewingSellerOrderDetails(null);
-                      }
+                      showConfirm(
+                        "Are you sure you want to REJECT this order? Customer will receive an immediate full refund.",
+                        () => {
+                          handleUpdateSellerOrderStatus('rejected', order);
+                          setViewingSellerOrderDetails(null);
+                        },
+                        'Reject Order',
+                        'Yes, Reject',
+                        'Cancel',
+                        'error'
+                      );
                     }}
                     className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-extrabold text-xs rounded-xl transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
                   >
@@ -3775,9 +3842,14 @@ export default function MarketplacePage() {
                     type="button"
                     disabled={updatingOrderStatus}
                     onClick={() => {
-                      if (confirm(`Confirm delivery? Payout of ₹${order.seller_payout_amount || order.subtotal} will be released directly to your wallet.`)) {
-                        handleUpdateSellerOrderStatus('delivered', order);
-                      }
+                      showConfirm(
+                        `Confirm delivery? Net payout of ₹${(order.seller_payout_amount || order.subtotal || 0).toLocaleString()} will be released directly to your wallet.`,
+                        () => handleUpdateSellerOrderStatus('delivered', order),
+                        'Confirm Delivery',
+                        'Yes, Delivered',
+                        'Cancel',
+                        'info'
+                      );
                     }}
                     className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold py-2.5 rounded-xl shadow-xs transition-all text-xs cursor-pointer"
                   >
@@ -4281,6 +4353,93 @@ export default function MarketplacePage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* BEAUTIFUL CUSTOM IN-APP ALERT & CONFIRMATION MODAL */}
+      {appAlert?.isOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-xs w-full text-center space-y-4 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
+            {/* Top Icon Badge */}
+            <div className="flex justify-center">
+              {appAlert.type === 'success' && (
+                <div className="w-14 h-14 rounded-2xl bg-emerald-100/90 text-[#047857] flex items-center justify-center shadow-inner ring-4 ring-emerald-50">
+                  <CheckCircle2 className="w-8 h-8 stroke-[2.5]" />
+                </div>
+              )}
+              {appAlert.type === 'error' && (
+                <div className="w-14 h-14 rounded-2xl bg-rose-100/90 text-rose-600 flex items-center justify-center shadow-inner ring-4 ring-rose-50">
+                  <AlertCircle className="w-8 h-8 stroke-[2.5]" />
+                </div>
+              )}
+              {appAlert.type === 'warning' && (
+                <div className="w-14 h-14 rounded-2xl bg-amber-100/90 text-amber-600 flex items-center justify-center shadow-inner ring-4 ring-amber-50">
+                  <AlertCircle className="w-8 h-8 stroke-[2.5]" />
+                </div>
+              )}
+              {appAlert.type === 'info' && (
+                <div className="w-14 h-14 rounded-2xl bg-indigo-100/90 text-indigo-600 flex items-center justify-center shadow-inner ring-4 ring-indigo-50">
+                  <HelpCircle className="w-8 h-8 stroke-[2.5]" />
+                </div>
+              )}
+            </div>
+
+            {/* Title & Message */}
+            <div className="space-y-1.5">
+              <h3 className="text-base font-black text-slate-900 leading-snug">
+                {appAlert.title || 'Notification'}
+              </h3>
+              <p className="text-xs text-slate-600 font-medium leading-relaxed px-1">
+                {appAlert.message}
+              </p>
+            </div>
+
+            {/* Buttons */}
+            {appAlert.cancelText ? (
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (appAlert.onCancel) appAlert.onCancel();
+                    setAppAlert(null);
+                  }}
+                  className="w-full py-2.5 px-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
+                >
+                  {appAlert.cancelText}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (appAlert.onConfirm) appAlert.onConfirm();
+                  }}
+                  className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs text-white shadow-md active:scale-95 transition-all cursor-pointer ${
+                    appAlert.type === 'error'
+                      ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
+                      : 'bg-[#047857] hover:bg-[#065f46] shadow-emerald-200'
+                  }`}
+                >
+                  {appAlert.confirmText || 'OK'}
+                </button>
+              </div>
+            ) : (
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (appAlert.onConfirm) appAlert.onConfirm();
+                    setAppAlert(null);
+                  }}
+                  className={`w-full py-3 px-4 rounded-xl font-extrabold text-xs text-white shadow-md active:scale-95 transition-all cursor-pointer ${
+                    appAlert.type === 'error'
+                      ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
+                      : 'bg-[#047857] hover:bg-[#065f46] shadow-emerald-200'
+                  }`}
+                >
+                  {appAlert.confirmText || 'OK'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
