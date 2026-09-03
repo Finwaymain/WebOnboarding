@@ -668,18 +668,27 @@ export default function MarketplacePage() {
     const urlParams = new URLSearchParams(window.location.search);
     const qUserId = urlParams.get('user_id') || urlParams.get('id_user') || urlParams.get('driver_id') || urlParams.get('id_conducteur');
     const qToken = urlParams.get('accesstoken') || urlParams.get('token');
+    const qPhone = urlParams.get('phone') || urlParams.get('user_phone') || '';
+    const qUserType = urlParams.get('user_type') || urlParams.get('role') || '';
 
     const currentUid = uid || userId || qUserId || localStorage.getItem('user_id') || '';
     const currentToken = token || userToken || qToken || localStorage.getItem('accesstoken') || '';
+    const currentPhone = userPhone || editPhone || qPhone || localStorage.getItem('phone') || '';
+    const currentUserType = userRole || qUserType || localStorage.getItem('user_type') || 'customer';
 
-    if (!currentUid) return;
+    if (!currentUid && !currentPhone) return;
 
     try {
       const headers: Record<string, string> = {};
       if (currentToken) headers['accesstoken'] = currentToken;
-      headers['user_id'] = currentUid;
+      if (currentUid) headers['user_id'] = currentUid;
+      if (currentPhone) {
+        headers['phone'] = currentPhone;
+        headers['seller_phone'] = currentPhone;
+      }
+      if (currentUserType) headers['user_type'] = currentUserType;
 
-      const res = await fetch(`/api/v1/marketplace/my-products?user_id=${currentUid}&driver_id=${currentUid}&id_user=${currentUid}&accesstoken=${currentToken}`, { headers });
+      const res = await fetch(`/api/v1/marketplace/my-products?user_id=${currentUid}&driver_id=${currentUid}&id_user=${currentUid}&phone=${encodeURIComponent(currentPhone)}&user_type=${encodeURIComponent(currentUserType)}&accesstoken=${currentToken}`, { headers });
       if (res.ok) {
         const json = await res.json();
         if (json.data && Array.isArray(json.data)) {
@@ -750,13 +759,24 @@ export default function MarketplacePage() {
   const fetchSellerOrders = async (token = userToken, uid = userId) => {
     const currentUid = getActiveUserId(uid);
     const currentToken = getActiveToken(token);
+    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const currentPhone = userPhone || editPhone || (urlParams ? urlParams.get('phone') || urlParams.get('user_phone') : '') || (typeof window !== 'undefined' ? localStorage.getItem('phone') || '' : '');
+    const currentUserType = userRole || (urlParams ? urlParams.get('user_type') || urlParams.get('role') : '') || (typeof window !== 'undefined' ? localStorage.getItem('user_type') || 'customer' : 'customer');
+
     try {
       const headers: Record<string, string> = {};
       if (currentToken) headers['accesstoken'] = currentToken;
-      headers['user_id'] = currentUid;
-      headers['driver_id'] = currentUid;
+      if (currentUid) {
+        headers['user_id'] = currentUid;
+        headers['driver_id'] = currentUid;
+      }
+      if (currentPhone) {
+        headers['phone'] = currentPhone;
+        headers['seller_phone'] = currentPhone;
+      }
+      if (currentUserType) headers['user_type'] = currentUserType;
 
-      const res = await fetch(`/api/v1/marketplace/orders/seller?user_id=${currentUid}&driver_id=${currentUid}&id_user=${currentUid}&accesstoken=${currentToken}`, { headers });
+      const res = await fetch(`/api/v1/marketplace/orders/seller?user_id=${currentUid}&driver_id=${currentUid}&id_user=${currentUid}&phone=${encodeURIComponent(currentPhone)}&user_type=${encodeURIComponent(currentUserType)}&accesstoken=${currentToken}`, { headers });
       if (res.ok) {
         const json = await res.json();
         if (json.data && Array.isArray(json.data)) {
@@ -1371,6 +1391,9 @@ export default function MarketplacePage() {
         delivery_type: newDeliveryType,
         seller_city: selectedCity,
         city: selectedCity,
+        phone: userPhone || editPhone || (urlParams ? urlParams.get('phone') || urlParams.get('user_phone') : ''),
+        seller_phone: userPhone || editPhone || (urlParams ? urlParams.get('phone') || urlParams.get('user_phone') : ''),
+        user_type: activeUserType || (urlParams ? urlParams.get('user_type') || urlParams.get('role') : 'customer'),
         image_urls: finalImages,
       };
 
@@ -1380,6 +1403,11 @@ export default function MarketplacePage() {
         headers['user_id'] = activeUid;
         headers['driver_id'] = activeUid;
       }
+      if (payload.phone) {
+        headers['phone'] = payload.phone;
+        headers['seller_phone'] = payload.phone;
+      }
+      if (payload.user_type) headers['user_type'] = payload.user_type;
 
       const isEditing = Boolean(editingProduct);
       const url = isEditing 
