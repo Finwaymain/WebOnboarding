@@ -1255,7 +1255,7 @@ export default function MarketplacePage() {
         if (status === 'confirmed') msg = 'Order confirmed successfully! Proceed to pack and ship.';
         if (status === 'rejected') msg = 'Order declined. Full refund initiated to buyer.';
         if (status === 'shipped') msg = 'Order marked as shipped!';
-        if (status === 'delivered') msg = 'Order delivered! Net payout released directly to your wallet.';
+        if (status === 'delivered') msg = 'Order delivered successfully! Net payout is held in escrow and will be released by Company Admin.';
         showAlert(msg, "Status Updated", "success");
         await fetchSellerOrders();
         await fetchBuyerOrders();
@@ -2115,7 +2115,7 @@ export default function MarketplacePage() {
                 if (orderFilterTab === 'pending') return st === 'placed' || st === 'confirmed';
                 if (orderFilterTab === 'shipped') return ['packed', 'shipped', 'dispatched', 'out_for_delivery'].includes(st);
                 if (orderFilterTab === 'delivered') return st === 'delivered';
-                if (orderFilterTab === 'cancelled') return st === 'cancelled';
+                if (orderFilterTab === 'cancelled') return st === 'cancelled' || st === 'rejected';
                 return true;
               });
 
@@ -2136,7 +2136,7 @@ export default function MarketplacePage() {
                     const formattedDate = order.created_at ? new Date(order.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '12 May 2024';
                     const isOutForDelivery = order.status === 'out_for_delivery';
                     const isDelivered = order.status === 'delivered';
-                    const isCancelled = order.status === 'cancelled';
+                    const isCancelled = order.status === 'cancelled' || order.status === 'rejected';
 
                     return (
                       <div key={order.id} className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
@@ -2175,11 +2175,11 @@ export default function MarketplacePage() {
                             <span className={`inline-block text-[10px] font-bold mt-0.5 ${
                               isOutForDelivery ? 'text-indigo-600 font-black' :
                               isDelivered ? 'text-emerald-600' :
-                              isCancelled ? 'text-red-600' : 'text-amber-600'
+                              isCancelled ? 'text-rose-600 font-black' : 'text-amber-600'
                             }`}>
                               {isOutForDelivery ? 'Out for Delivery' :
                                isDelivered ? 'Delivered' :
-                               isCancelled ? 'Cancelled' :
+                               isCancelled ? 'Declined / Cancelled' :
                                order.status === 'shipped' ? 'Shipped' :
                                order.status === 'packed' ? 'Packed' : 'Order Confirmed'}
                             </span>
@@ -2193,9 +2193,13 @@ export default function MarketplacePage() {
                             setActiveTab('track_order');
                             window.scrollTo({ top: 0, behavior: 'smooth' });
                           }}
-                          className="w-full py-1.5 bg-white hover:bg-slate-50 text-indigo-700 font-extrabold text-xs rounded-lg border border-indigo-200 transition-all flex items-center justify-center gap-1 shadow-2xs"
+                          className={`w-full py-1.5 font-extrabold text-xs rounded-lg border transition-all flex items-center justify-center gap-1 shadow-2xs ${
+                            isCancelled
+                              ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                              : 'bg-white hover:bg-slate-50 text-indigo-700 border-indigo-200'
+                          }`}
                         >
-                          {['out_for_delivery', 'shipped', 'packed', 'confirmed', 'placed'].includes((order.status || '').toLowerCase()) ? 'Track Order' : 'View Details'}
+                          {isCancelled ? 'View Cancellation Details' : ['out_for_delivery', 'shipped', 'packed', 'confirmed', 'placed'].includes((order.status || '').toLowerCase()) ? 'Track Order' : 'View Details'}
                         </button>
                       </div>
                     );
@@ -2220,90 +2224,109 @@ export default function MarketplacePage() {
               <h1 className="text-base font-extrabold text-slate-900 leading-tight">Track Order</h1>
             </div>
 
-            {/* Top Order Confirmation Banner Card */}
-            <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-4 space-y-1 shadow-2xs">
-              <div className="flex items-center gap-2 text-emerald-700">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                <h3 className="text-sm font-extrabold">
-                  {selectedOrderForTracking.status === 'delivered' ? 'Order Delivered' :
-                   selectedOrderForTracking.status === 'cancelled' ? 'Order Cancelled' :
-                   selectedOrderForTracking.status === 'out_for_delivery' ? 'Order Out for Delivery' :
-                   'Order Confirmed'}
-                </h3>
-              </div>
-              <p className="text-xs text-slate-600 font-medium pl-7">
-                {selectedOrderForTracking.status === 'delivered' ? 'Your package has been delivered successfully' :
-                 selectedOrderForTracking.status === 'cancelled' ? 'This order was cancelled' :
-                 selectedOrderForTracking.status === 'out_for_delivery' ? 'Your order is out for delivery with our delivery partner' :
-                 'Your order has been confirmed'}
-              </p>
-              <div className="pl-7 pt-2 flex items-center justify-between text-xs font-bold text-slate-700 border-t border-emerald-100 mt-2">
-                <span>Order ID: <span className="font-extrabold text-slate-900">#ORD{selectedOrderForTracking.id}</span></span>
-                <span className="text-[11px] text-slate-500">
-                  Placed on: {selectedOrderForTracking.created_at ? new Date(selectedOrderForTracking.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '12 May 2024'}
-                </span>
-              </div>
-            </div>
-
-            {/* Simple Order Progress Status Badges (No vertical timeline lines) */}
-            <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-2.5">
-              <h4 className="text-xs font-extrabold text-slate-900 border-b border-slate-100 pb-2">Order Progress Status</h4>
-              <div className="grid grid-cols-5 text-center text-[9px] font-black gap-1">
-                <div className={`py-2 px-0.5 rounded-lg border transition-all ${
-                  ['placed', 'confirmed', 'packed', 'shipped', 'dispatched', 'out_for_delivery', 'delivered'].includes((selectedOrderForTracking.status || '').toLowerCase())
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-400 border-slate-200'
-                }`}>
-                  ✓ Placed
+            {/* If Order is Rejected / Cancelled */}
+            {(selectedOrderForTracking.status === 'rejected' || selectedOrderForTracking.status === 'cancelled') ? (
+              <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 space-y-2 shadow-2xs">
+                <div className="flex items-center gap-2 text-rose-700">
+                  <X className="w-5 h-5 text-rose-600 shrink-0" />
+                  <h3 className="text-sm font-extrabold">Order Declined by Seller</h3>
                 </div>
-                <div className={`py-2 px-0.5 rounded-lg border transition-all ${
-                  ['confirmed', 'packed', 'shipped', 'dispatched', 'out_for_delivery', 'delivered'].includes((selectedOrderForTracking.status || '').toLowerCase())
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-400 border-slate-200'
-                }`}>
-                  ✓ Confirmed
-                </div>
-                <div className={`py-2 px-0.5 rounded-lg border transition-all ${
-                  ['packed', 'shipped', 'dispatched', 'out_for_delivery', 'delivered'].includes((selectedOrderForTracking.status || '').toLowerCase())
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-400 border-slate-200'
-                }`}>
-                  ✓ Packed
-                </div>
-                <div className={`py-2 px-0.5 rounded-lg border transition-all ${
-                  ['shipped', 'dispatched', 'out_for_delivery', 'delivered'].includes((selectedOrderForTracking.status || '').toLowerCase())
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-400 border-slate-200'
-                }`}>
-                  ✓ Shipped
-                </div>
-                <div className={`py-2 px-0.5 rounded-lg border transition-all ${
-                  (selectedOrderForTracking.status || '').toLowerCase() === 'delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                  (selectedOrderForTracking.status || '').toLowerCase() === 'out_for_delivery' ? 'bg-purple-50 text-purple-700 border-purple-200 font-extrabold' :
-                  'bg-slate-100 text-slate-400 border-slate-200'
-                }`}>
-                  {selectedOrderForTracking.status === 'delivered' ? '✓ Delivered' : 'Out for Delivery'}
+                <p className="text-xs text-rose-800 font-medium pl-7 leading-relaxed">
+                  This order was declined by the seller. If you paid online or via wallet, a 100% full refund has already been credited back to your account.
+                </p>
+                <div className="pl-7 pt-2 flex items-center justify-between text-xs font-bold text-slate-700 border-t border-rose-200 mt-2">
+                  <span>Order ID: <span className="font-extrabold text-slate-900">#ORD{selectedOrderForTracking.id}</span></span>
+                  <span className="text-[10px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full uppercase">Declined / Closed</span>
                 </div>
               </div>
-            </div>
-
-            {/* Delivery Partner Details Card */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
-              <h4 className="text-xs font-extrabold text-slate-900">Delivery Partner</h4>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 font-black text-xs">
-                    {selectedOrderForTracking.courier_name?.[0] || 'BD'}
+            ) : (
+              <>
+                {/* Top Order Confirmation Banner Card */}
+                <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-4 space-y-1 shadow-2xs">
+                  <div className="flex items-center gap-2 text-emerald-700">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <h3 className="text-sm font-extrabold">
+                      {selectedOrderForTracking.status === 'delivered' ? 'Order Delivered' :
+                       selectedOrderForTracking.status === 'out_for_delivery' ? 'Order Out for Delivery' :
+                       selectedOrderForTracking.status === 'shipped' ? 'Order Shipped' :
+                       selectedOrderForTracking.status === 'packed' ? 'Order Packed' :
+                       'Order Confirmed'}
+                    </h3>
                   </div>
-                  <div>
-                    <p className="text-xs font-extrabold text-slate-900">{selectedOrderForTracking.courier_name || 'BlueDart'}</p>
-                    <p className="text-[11px] text-slate-500 font-semibold">Tracking ID: {selectedOrderForTracking.tracking_id || 'BD123456789'}</p>
+                  <p className="text-xs text-slate-600 font-medium pl-7">
+                    {selectedOrderForTracking.status === 'delivered' ? 'Your package has been delivered successfully' :
+                     selectedOrderForTracking.status === 'out_for_delivery' ? 'Your order is out for delivery with our delivery partner' :
+                     selectedOrderForTracking.status === 'shipped' ? 'Your order has been shipped and is in transit' :
+                     selectedOrderForTracking.status === 'packed' ? 'Seller has packed your order. Awaiting shipment pickup' :
+                     'Your order has been confirmed by the seller'}
+                  </p>
+                  <div className="pl-7 pt-2 flex items-center justify-between text-xs font-bold text-slate-700 border-t border-emerald-100 mt-2">
+                    <span>Order ID: <span className="font-extrabold text-slate-900">#ORD{selectedOrderForTracking.id}</span></span>
+                    <span className="text-[11px] text-slate-500">
+                      Placed on: {selectedOrderForTracking.created_at ? new Date(selectedOrderForTracking.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '12 May 2024'}
+                    </span>
                   </div>
                 </div>
-              </div>
-              <a
-                href={`tel:${selectedOrderForTracking.phone || '+91 9876543210'}`}
-                className="w-full py-2.5 bg-white hover:bg-slate-50 text-indigo-700 font-extrabold text-xs rounded-xl border border-indigo-200 transition-all flex items-center justify-center gap-2 shadow-2xs block text-center"
-              >
-                <Phone className="w-3.5 h-3.5" /> Call Partner
-              </a>
-            </div>
+
+                {/* Simple Order Progress Status Badges */}
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-2.5">
+                  <h4 className="text-xs font-extrabold text-slate-900 border-b border-slate-100 pb-2">Order Progress Status</h4>
+                  <div className="grid grid-cols-5 text-center text-[9px] font-black gap-1">
+                    <div className={`py-2 px-0.5 rounded-lg border transition-all ${
+                      ['placed', 'confirmed', 'packed', 'shipped', 'dispatched', 'out_for_delivery', 'delivered'].includes((selectedOrderForTracking.status || '').toLowerCase())
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-400 border-slate-200'
+                    }`}>
+                      ✓ Placed
+                    </div>
+                    <div className={`py-2 px-0.5 rounded-lg border transition-all ${
+                      ['confirmed', 'packed', 'shipped', 'dispatched', 'out_for_delivery', 'delivered'].includes((selectedOrderForTracking.status || '').toLowerCase())
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-400 border-slate-200'
+                    }`}>
+                      ✓ Confirmed
+                    </div>
+                    <div className={`py-2 px-0.5 rounded-lg border transition-all ${
+                      ['packed', 'shipped', 'dispatched', 'out_for_delivery', 'delivered'].includes((selectedOrderForTracking.status || '').toLowerCase())
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-400 border-slate-200'
+                    }`}>
+                      ✓ Packed
+                    </div>
+                    <div className={`py-2 px-0.5 rounded-lg border transition-all ${
+                      ['shipped', 'dispatched', 'out_for_delivery', 'delivered'].includes((selectedOrderForTracking.status || '').toLowerCase())
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-400 border-slate-200'
+                    }`}>
+                      ✓ Shipped
+                    </div>
+                    <div className={`py-2 px-0.5 rounded-lg border transition-all ${
+                      (selectedOrderForTracking.status || '').toLowerCase() === 'delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                      (selectedOrderForTracking.status || '').toLowerCase() === 'out_for_delivery' ? 'bg-purple-50 text-purple-700 border-purple-200 font-extrabold' :
+                      'bg-slate-100 text-slate-400 border-slate-200'
+                    }`}>
+                      {selectedOrderForTracking.status === 'delivered' ? '✓ Delivered' : 'Out for Delivery'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Delivery Partner Details Card (ONLY when shipped, out_for_delivery, or delivered) */}
+                {['shipped', 'dispatched', 'out_for_delivery', 'delivered'].includes((selectedOrderForTracking.status || '').toLowerCase()) && selectedOrderForTracking.courier_name && (
+                  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                    <h4 className="text-xs font-extrabold text-slate-900">Delivery Partner</h4>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 font-black text-xs">
+                          {selectedOrderForTracking.courier_name?.[0] || 'BD'}
+                        </div>
+                        <div>
+                          <p className="text-xs font-extrabold text-slate-900">{selectedOrderForTracking.courier_name}</p>
+                          {selectedOrderForTracking.tracking_id && (
+                            <p className="text-[11px] text-slate-500 font-semibold font-mono">Tracking ID: {selectedOrderForTracking.tracking_id}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
 
             {/* Delivery Address Details Card */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-2">
@@ -2759,9 +2782,13 @@ export default function MarketplacePage() {
                               <span className="text-emerald-700 text-sm font-black">₹{netPayout.toLocaleString()}</span>
                             </div>
                             <div className="pt-1">
-                              {isDelivered || (order as any).payout_status === 'released' ? (
+                              {(order as any).payout_status === 'released' ? (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                                  ✓ Payout of ₹{netPayout.toLocaleString()} Credited to Wallet
+                                  ✓ Payout of ₹{netPayout.toLocaleString()} Released to Wallet
+                                </span>
+                              ) : isDelivered ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                                  ⏳ Delivered • ₹{netPayout.toLocaleString()} Awaiting Admin Release
                                 </span>
                               ) : isRejected ? (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full">
@@ -2769,49 +2796,81 @@ export default function MarketplacePage() {
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                                  ⏳ ₹{netPayout.toLocaleString()} in Escrow (Auto-credits on Delivery)
+                                  ⏳ ₹{netPayout.toLocaleString()} in Escrow (Releases by Admin after Delivery)
                                 </span>
                               )}
                             </div>
                           </div>
 
                           {/* Shipping / Tracking Details if shipped */}
-                          {(order.courier_name || order.tracking_id) && (
+                          {(order.courier_name || order.tracking_id) && !isRejected && (
                             <div className="bg-blue-50/50 rounded-xl p-2.5 border border-blue-200 text-xs space-y-1">
                               {order.courier_name && <p className="font-bold text-blue-950">Courier: <span className="text-blue-800 font-semibold">{order.courier_name}</span></p>}
                               {order.tracking_id && <p className="font-semibold text-blue-700">Tracking ID: <span className="font-mono font-bold text-blue-900">{order.tracking_id}</span></p>}
                             </div>
                           )}
 
-                          {/* Section 13: Stage Progression Actions */}
+                          {/* Terminal State: Declined Order */}
+                          {isRejected && (
+                            <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs text-rose-800 font-semibold space-y-1">
+                              <div className="flex items-center gap-1.5 text-rose-700 font-black">
+                                <X className="w-4 h-4 text-rose-600" /> Order Declined
+                              </div>
+                              <p className="text-[11px] text-rose-700 font-medium leading-relaxed">
+                                You declined this order. Full refund was returned to the buyer. This order is closed and cannot be reopened.
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Terminal State: Delivered Order */}
+                          {isDelivered && (
+                            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900 font-semibold space-y-1">
+                              <div className="flex items-center gap-1.5 text-emerald-800 font-black">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Order Completed & Delivered
+                              </div>
+                              <p className="text-[11px] text-emerald-700 font-medium leading-relaxed">
+                                {(order as any).payout_status === 'released' 
+                                  ? `✓ Payout of ₹${netPayout.toLocaleString()} has been released by Admin to your wallet.`
+                                  : `⏳ Net payout of ₹${netPayout.toLocaleString()} is held in escrow and will be released by Company Admin.`}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Linear Forward-Only Stage Progression Actions (Only for in-progress orders) */}
                           {!isDelivered && !isRejected && (
-                            <div className="grid grid-cols-2 gap-2 pt-1">
+                            <div className="space-y-2 pt-1">
+                              {/* Stage Stepper Header */}
+                              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1">
+                                <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
+                                  <span>Stage Progression</span>
+                                  <span className="text-indigo-600 uppercase font-black">{order.status}</span>
+                                </div>
+                                <div className="grid grid-cols-4 gap-1 text-[8px] font-black text-center">
+                                  <div className={`py-1 rounded ${['confirmed', 'packed', 'shipped', 'out_for_delivery', 'delivered'].includes(st) ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'}`}>1. Confirmed</div>
+                                  <div className={`py-1 rounded ${['packed', 'shipped', 'out_for_delivery', 'delivered'].includes(st) ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'}`}>2. Packed</div>
+                                  <div className={`py-1 rounded ${['shipped', 'out_for_delivery', 'delivered'].includes(st) ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'}`}>3. Shipped</div>
+                                  <div className={`py-1 rounded ${['out_for_delivery', 'delivered'].includes(st) ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'}`}>4. Out for Del.</div>
+                                </div>
+                              </div>
+
+                              {/* Single Next Logical Action Button */}
                               {isConfirmed && (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleUpdateSellerOrderStatus('packed', order)}
-                                    disabled={updatingOrderStatus}
-                                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1"
-                                  >
-                                    <Package className="w-3.5 h-3.5" /> Mark Packed
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => { setSelectedSellerOrder(order); setShippingCourier(order.courier_name || 'BlueDart'); setShippingTrackingId(order.tracking_id || ''); }}
-                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1"
-                                  >
-                                    <Truck className="w-3.5 h-3.5" /> Add Shipping ID
-                                  </button>
-                                </>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateSellerOrderStatus('packed', order)}
+                                  disabled={updatingOrderStatus}
+                                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                                >
+                                  <Package className="w-4 h-4" /> 1. Mark Order as Packed
+                                </button>
                               )}
                               {isPacked && (
                                 <button
                                   type="button"
                                   onClick={() => { setSelectedSellerOrder(order); setShippingCourier(order.courier_name || 'BlueDart'); setShippingTrackingId(order.tracking_id || ''); }}
-                                  className="col-span-2 w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1"
+                                  className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
                                 >
-                                  <Truck className="w-3.5 h-3.5" /> Add Tracking ID & Mark as Shipped
+                                  <Truck className="w-4 h-4" /> 2. Add Tracking ID & Mark Shipped
                                 </button>
                               )}
                               {isShipped && (
@@ -2819,32 +2878,43 @@ export default function MarketplacePage() {
                                   type="button"
                                   onClick={() => handleUpdateSellerOrderStatus('out_for_delivery', order)}
                                   disabled={updatingOrderStatus}
-                                  className="col-span-2 w-full bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1"
+                                  className="w-full bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
                                 >
-                                  <Navigation className="w-3.5 h-3.5" /> Out for Delivery
+                                  <Navigation className="w-4 h-4" /> 3. Mark Out for Delivery
                                 </button>
                               )}
                               {isOutForDelivery && (
                                 <button
                                   type="button"
-                                  onClick={() => handleUpdateSellerOrderStatus('delivered', order)}
+                                  onClick={() => {
+                                    showConfirm(
+                                      `Confirm that this order has been delivered to the customer? Once confirmed, the order will be marked completed and Admin will release your net payout of ₹${netPayout.toLocaleString()} to your wallet.`,
+                                      () => handleUpdateSellerOrderStatus('delivered', order),
+                                      'Confirm Order Delivery',
+                                      'Yes, Delivered',
+                                      'Cancel',
+                                      'info'
+                                    );
+                                  }}
                                   disabled={updatingOrderStatus}
-                                  className="col-span-2 w-full bg-[#047857] hover:bg-[#065f46] text-white text-xs font-bold py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1"
+                                  className="w-full bg-[#047857] hover:bg-[#065f46] text-white text-xs font-bold py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
                                 >
-                                  <CheckCircle2 className="w-3.5 h-3.5" /> Mark Delivered (Release Payout)
+                                  <CheckCircle2 className="w-4 h-4" /> 4. Mark as Delivered (Request Payout)
                                 </button>
                               )}
                             </div>
                           )}
 
-                          {/* View Order Details Button */}
-                          <button
-                            type="button"
-                            onClick={() => setViewingSellerOrderDetails(order)}
-                            className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1"
-                          >
-                            <FileText className="w-3.5 h-3.5" /> View Order Details
-                          </button>
+                          {/* View Order Details Button (Hidden for rejected orders) */}
+                          {!isRejected && (
+                            <button
+                              type="button"
+                              onClick={() => setViewingSellerOrderDetails(order)}
+                              className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                              <FileText className="w-3.5 h-3.5" /> View Order Details
+                            </button>
+                          )}
                         </div>
                       );
                     })}
@@ -3711,7 +3781,39 @@ export default function MarketplacePage() {
                     <Check className="w-4 h-4" /> Confirm Order
                   </button>
                 </div>
-              ) : (
+              ) : isDelivered ? (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center space-y-1">
+                  <span className="text-xs font-black text-emerald-800 flex items-center justify-center gap-1">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Order Completed & Delivered
+                  </span>
+                  <p className="text-[11px] text-emerald-700 font-medium">
+                    {(order as any).payout_status === 'released' 
+                      ? `✓ Payout of ₹${netPayout.toLocaleString()} has been released by Admin to your wallet.`
+                      : `⏳ Net payout of ₹${netPayout.toLocaleString()} is held in escrow and will be released by Company Admin.`}
+                  </p>
+                </div>
+              ) : isRejected ? (
+                <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-center space-y-1">
+                  <span className="text-xs font-black text-rose-800 flex items-center justify-center gap-1">
+                    <X className="w-4 h-4 text-rose-600" /> Order Declined
+                  </span>
+                  <p className="text-[11px] text-rose-700 font-medium">
+                    You declined this order. Full refund was returned to the buyer. This order is closed.
+                  </p>
+                </div>
+              ) : isConfirmed ? (
+                <button
+                  type="button"
+                  disabled={updatingOrderStatus}
+                  onClick={() => {
+                    handleUpdateSellerOrderStatus('packed', order);
+                    setViewingSellerOrderDetails(null);
+                  }}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Package className="w-4 h-4" /> 1. Mark as Packed
+                </button>
+              ) : isPacked ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -3720,18 +3822,51 @@ export default function MarketplacePage() {
                     setShippingTrackingId(order.tracking_id || '');
                     setViewingSellerOrderDetails(null);
                   }}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Truck className="w-4 h-4" /> 2. Add Tracking ID & Mark Shipped
+                </button>
+              ) : isShipped ? (
+                <button
+                  type="button"
+                  disabled={updatingOrderStatus}
+                  onClick={() => {
+                    handleUpdateSellerOrderStatus('out_for_delivery', order);
+                    setViewingSellerOrderDetails(null);
+                  }}
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Navigation className="w-4 h-4" /> 3. Start Out for Delivery
+                </button>
+              ) : isOutForDelivery ? (
+                <button
+                  type="button"
+                  disabled={updatingOrderStatus}
+                  onClick={() => {
+                    showConfirm(
+                      `Confirm that this order has been delivered to the customer? Once confirmed, the order will be marked completed and Admin will release your net payout of ₹${netPayout.toLocaleString()} to your wallet.`,
+                      () => {
+                        handleUpdateSellerOrderStatus('delivered', order);
+                        setViewingSellerOrderDetails(null);
+                      },
+                      'Confirm Order Delivery',
+                      'Yes, Delivered',
+                      'Cancel',
+                      'info'
+                    );
+                  }}
                   className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <Truck className="w-4 h-4" /> Update Shipping / Delivery Status
+                  <CheckCircle2 className="w-4 h-4" /> 4. Mark as Delivered (Request Payout)
                 </button>
-              )}
+              ) : null}
             </div>
           </div>
         );
       })()}
 
       {/* SECTION 13: SHIPPING / DELIVERY — SELLER MODAL */}
-      {selectedSellerOrder && (() => {
+      {selectedSellerOrder && !['delivered', 'rejected', 'cancelled'].includes((selectedSellerOrder.status || '').toLowerCase()) && (() => {
         const order = selectedSellerOrder;
         const st = (order.status || '').toLowerCase();
 
@@ -3827,80 +3962,25 @@ export default function MarketplacePage() {
                 </button>
               </div>
 
-              {/* SELF-DELIVERY / LOCAL DELIVERY SECTION */}
+              {/* SELF-DELIVERY / LOCAL DROP-OFF OPTION */}
               <div className="space-y-2 text-xs bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-200">
                 <span className="font-extrabold text-emerald-950 flex items-center gap-1.5">
-                  <Navigation className="w-3.5 h-3.5 text-emerald-700" /> Self-Delivery / Local Drop-off
+                  <Navigation className="w-3.5 h-3.5 text-emerald-700" /> Self-Delivery / Local Handover
                 </span>
                 <p className="text-[11px] text-emerald-800 font-medium leading-relaxed">
-                  If delivering directly to the customer in-person:
+                  Delivering directly to the customer in person without a 3rd-party courier?
                 </p>
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <button
-                    type="button"
-                    disabled={updatingOrderStatus}
-                    onClick={() => handleUpdateSellerOrderStatus('out_for_delivery', order)}
-                    className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 rounded-xl shadow-xs transition-all text-xs cursor-pointer"
-                  >
-                    Start Delivery
-                  </button>
-                  <button
-                    type="button"
-                    disabled={updatingOrderStatus}
-                    onClick={() => {
-                      showConfirm(
-                        `Confirm delivery? Net payout of ₹${(order.seller_payout_amount || order.subtotal || 0).toLocaleString()} will be released directly to your wallet.`,
-                        () => handleUpdateSellerOrderStatus('delivered', order),
-                        'Confirm Delivery',
-                        'Yes, Delivered',
-                        'Cancel',
-                        'info'
-                      );
-                    }}
-                    className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold py-2.5 rounded-xl shadow-xs transition-all text-xs cursor-pointer"
-                  >
-                    Delivered
-                  </button>
-                </div>
-              </div>
-
-              {/* QUICK MANUAL STATUS TRANSITIONS */}
-              <div className="space-y-1.5 text-xs">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Direct Status Transition</span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateSellerOrderStatus('packed', order)}
-                    disabled={updatingOrderStatus}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-xl text-xs cursor-pointer"
-                  >
-                    Mark Packed
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateSellerOrderStatus('shipped', order)}
-                    disabled={updatingOrderStatus}
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl text-xs cursor-pointer"
-                  >
-                    Mark Shipped
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateSellerOrderStatus('out_for_delivery', order)}
-                    disabled={updatingOrderStatus}
-                    className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 rounded-xl text-xs cursor-pointer"
-                  >
-                    Out for Delivery
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateSellerOrderStatus('delivered', order)}
-                    disabled={updatingOrderStatus}
-                    className="bg-[#047857] hover:bg-[#065f46] text-white font-semibold py-2 rounded-xl text-xs cursor-pointer"
-                  >
-                    Mark Delivered
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  disabled={updatingOrderStatus}
+                  onClick={() => {
+                    handleUpdateSellerOrderStatus('out_for_delivery', order, { courier_name: 'Self-Delivery (Local)', tracking_id: 'LOCAL-' + order.id });
+                    setSelectedSellerOrder(null);
+                  }}
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 rounded-xl shadow-xs transition-all text-xs cursor-pointer flex items-center justify-center gap-1"
+                >
+                  <Navigation className="w-3.5 h-3.5" /> Dispatch via Self-Delivery
+                </button>
               </div>
             </div>
           </div>
