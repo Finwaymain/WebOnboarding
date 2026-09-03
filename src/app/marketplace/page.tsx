@@ -231,6 +231,7 @@ export default function MarketplacePage() {
 
   // Seller Order Shipping Modal State
   const [selectedSellerOrder, setSelectedSellerOrder] = useState<Order | null>(null);
+  const [viewingSellerOrderDetails, setViewingSellerOrderDetails] = useState<Order | null>(null);
   const [shippingCourier, setShippingCourier] = useState<string>('BlueDart');
   const [shippingTrackingId, setShippingTrackingId] = useState<string>('');
   const [shippingDays, setShippingDays] = useState<string>('3');
@@ -1170,31 +1171,47 @@ export default function MarketplacePage() {
   };
 
   // Seller Update Order Status API Call
-  const handleUpdateSellerOrderStatus = async (status: string) => {
-    if (!selectedSellerOrder) return;
+  const handleUpdateSellerOrderStatus = async (status: string, targetOrder?: Order | null, options?: { courier_name?: string, tracking_id?: string, notes?: string }) => {
+    const orderToUpdate = targetOrder || selectedSellerOrder;
+    if (!orderToUpdate) return;
     setUpdatingOrderStatus(true);
 
     try {
+      const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const currentPhone = userPhone || editPhone || (urlParams ? urlParams.get('phone') : '') || '';
+
       const payload = {
         user_id: userId,
         status,
-        tracking_id: shippingTrackingId || 'BD' + Math.floor(10000000 + Math.random() * 90000000) + 'IN',
-        courier_name: shippingCourier,
+        tracking_id: options?.tracking_id || shippingTrackingId || (status === 'shipped' ? 'BD' + Math.floor(10000000 + Math.random() * 90000000) + 'IN' : ''),
+        courier_name: options?.courier_name || shippingCourier || (status === 'shipped' ? 'BlueDart Express' : ''),
         delivery_days: parseInt(shippingDays) || 3,
+        status_notes: options?.notes,
+        phone: currentPhone,
+        seller_phone: currentPhone,
       };
 
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (userToken) headers['accesstoken'] = userToken;
       if (userId) headers['user_id'] = userId;
+      if (currentPhone) {
+        headers['phone'] = currentPhone;
+        headers['seller_phone'] = currentPhone;
+      }
 
-      const res = await fetch(`/api/v1/marketplace/orders/${selectedSellerOrder.id}/status?user_id=${userId}`, {
+      const res = await fetch(`/api/v1/marketplace/orders/${orderToUpdate.id}/status?user_id=${userId}`, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
       });
 
       if (res.ok) {
-        alert(`Order status updated to ${status}!`);
+        let msg = `Order status updated to ${status}!`;
+        if (status === 'confirmed') msg = 'Order confirmed successfully! Proceed to pack and ship.';
+        if (status === 'rejected') msg = 'Order declined. Full refund initiated to buyer.';
+        if (status === 'shipped') msg = 'Order marked as shipped!';
+        if (status === 'delivered') msg = 'Order delivered! Net payout released directly to your wallet.';
+        alert(msg);
         await fetchSellerOrders();
         await fetchBuyerOrders();
         setSelectedSellerOrder(null);
@@ -1207,12 +1224,11 @@ export default function MarketplacePage() {
         return;
       }
     } catch (err) {
-      console.warn('Status update API error, applying fallback');
+      console.warn('Status update API error:', err);
     }
 
-    setSellerOrders(prev => prev.map(o => o.id === selectedSellerOrder.id ? { ...o, status: status as any, courier_name: shippingCourier, tracking_id: shippingTrackingId } : o));
-    setBuyerOrders(prev => prev.map(o => o.id === selectedSellerOrder.id ? { ...o, status: status as any, courier_name: shippingCourier, tracking_id: shippingTrackingId } : o));
-    alert(`Order status updated to ${status}!`);
+    setSellerOrders(prev => prev.map(o => o.id === orderToUpdate.id ? { ...o, status: status as any, courier_name: shippingCourier, tracking_id: shippingTrackingId } : o));
+    setBuyerOrders(prev => prev.map(o => o.id === orderToUpdate.id ? { ...o, status: status as any, courier_name: shippingCourier, tracking_id: shippingTrackingId } : o));
     setSelectedSellerOrder(null);
     setUpdatingOrderStatus(false);
   };
@@ -2539,89 +2555,229 @@ export default function MarketplacePage() {
                       const productItem = order.items?.[0]?.product;
                       const productTitle = productItem?.title || 'Marketplace Item';
                       const productSpecs = productItem?.specifications || '';
+                      const productImages = productItem?.images || [];
+                      const primaryImage = productImages.length > 0 ? (productImages[0].image_path || '') : '';
+                      const orderQuantity = order.items?.[0]?.quantity || 1;
+                      const orderSubtotal = parseFloat((order.subtotal || order.total_amount || 0).toString());
+                      const commRate = parseFloat(((order as any).admin_commission_rate || 10).toString());
+                      const commAmount = parseFloat(((order as any).admin_commission_amount || (orderSubtotal * (commRate / 100))).toString());
+                      const netPayout = parseFloat(((order as any).seller_payout_amount || (orderSubtotal - commAmount)).toString());
+                      const st = (order.status || '').toLowerCase();
+                      const isPending = st === 'pending';
+                      const isConfirmed = st === 'confirmed';
+                      const isPacked = st === 'packed' || st === 'processing';
+                      const isShipped = st === 'shipped' || st === 'dispatched';
+                      const isOutForDelivery = st === 'out_for_delivery';
+                      const isDelivered = st === 'delivered';
+                      const isRejected = st === 'rejected' || st === 'cancelled';
 
+                      // SECTION 11: NEW ORDER CARD
+                      if (isPending) {
+                        return (
+                          <div key={order.id} className="bg-white rounded-2xl p-4 border-2 border-emerald-500 shadow-md space-y-3 relative overflow-hidden">
+                            {/* 🔔 New Order Header */}
+                            <div className="flex items-center justify-between bg-emerald-50 -mx-4 -mt-4 p-3 border-b border-emerald-200">
+                              <div className="flex items-center gap-2">
+                                <span className="text-base animate-bounce">🔔</span>
+                                <div>
+                                  <h4 className="text-xs font-black text-emerald-950 uppercase tracking-wider">New Order</h4>
+                                  <p className="text-[10px] text-emerald-700 font-bold">Action Required: Confirm or Reject</p>
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-black bg-emerald-600 text-white px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                Pending
+                              </span>
+                            </div>
+
+                            {/* Product Info & Amount */}
+                            <div className="flex items-center gap-3 pt-1">
+                              {primaryImage ? (
+                                <img src={normalizeImageUrl(primaryImage)} alt={productTitle} className="w-14 h-14 object-cover rounded-xl border border-slate-200 shrink-0" />
+                              ) : (
+                                <div className="w-14 h-14 bg-emerald-50 rounded-xl flex items-center justify-center text-xl shrink-0">🛍️</div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <h3 className="text-sm font-extrabold text-slate-900 truncate">{productTitle}</h3>
+                                <p className="text-xs text-slate-500 font-semibold">Quantity: <span className="text-slate-900 font-bold">{orderQuantity}</span></p>
+                                <p className="text-sm font-black text-[#047857]">₹{orderSubtotal.toLocaleString()}</p>
+                              </div>
+                            </div>
+
+                            {/* Buyer Info & Details Link */}
+                            <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-200 flex items-center justify-between text-xs">
+                              <div>
+                                <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider block">Buyer</span>
+                                <span className="font-extrabold text-slate-900">{buyerName}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setViewingSellerOrderDetails(order)}
+                                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline flex items-center gap-0.5 cursor-pointer"
+                              >
+                                View Order Details <ChevronRight className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {/* Action Buttons: [ Reject ] and [ Confirm Order ] */}
+                            <div className="grid grid-cols-2 gap-2 pt-1">
+                              <button
+                                type="button"
+                                disabled={updatingOrderStatus}
+                                onClick={() => {
+                                  if (confirm(`Are you sure you want to REJECT this order? Full refund will be credited back to customer's wallet.`)) {
+                                    handleUpdateSellerOrderStatus('rejected', order);
+                                  }
+                                }}
+                                className="w-full py-2.5 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-extrabold text-xs rounded-xl transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
+                              >
+                                <X className="w-4 h-4 text-rose-600" /> Reject
+                              </button>
+                              <button
+                                type="button"
+                                disabled={updatingOrderStatus}
+                                onClick={() => handleUpdateSellerOrderStatus('confirmed', order)}
+                                className="w-full py-2.5 px-3 bg-[#047857] hover:bg-[#065f46] text-white font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                              >
+                                <Check className="w-4 h-4" /> Confirm Order
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // PROGRESSED OR DELIVERED ORDERS
                       return (
                         <div key={order.id} className="bg-white rounded-2xl p-4 border border-slate-200 space-y-3 shadow-2xs">
                           {/* Order Header */}
                           <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                           
-                            <span className="text-[10px] font-bold text-[#047857] bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200 uppercase">
+                            <div>
+                              <span className="text-xs font-extrabold text-slate-900">{order.order_number || `Order #${order.id}`}</span>
+                              {order.purchase_id && <p className="text-[10px] text-slate-400 font-semibold">{order.purchase_id}</p>}
+                            </div>
+                            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded border uppercase ${
+                              isDelivered ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                              isRejected ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                              isShipped ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                              isOutForDelivery ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                              'bg-indigo-50 text-indigo-700 border-indigo-200'
+                            }`}>
                               {order.status}
                             </span>
                           </div>
 
-                          {/* Customer / Buyer Information */}
-                          <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 space-y-1 text-xs">
-                            <p className="font-bold text-slate-900">
-                               Customer Name: <span className="text-[#047857]">{buyerName}</span>
-                            </p>
-                            <p className="font-semibold text-slate-700">
-                               Phone Number: <span className="font-bold text-slate-900">{buyerPhone}</span>
-                            </p>
-                            <p className="font-medium text-slate-600 leading-snug">
-                              📍 Address: <span className="text-slate-800 font-semibold">{order.delivery_address}</span>
-                            </p>
-                          </div>
-
-                          {/* Product Details & Specifications */}
-                          <div className="bg-emerald-50/50 rounded-xl p-3 border border-emerald-200 space-y-1.5">
-                            <p className="text-xs font-bold text-slate-900">
-                               Product Name: <span className="text-[#047857]">{productTitle}</span>
-                            </p>
-                            {productSpecs && (
-                              <div className="space-y-1 pt-1 border-t border-emerald-200/60">
-                                <p className="text-[11px] font-bold text-[#047857] uppercase tracking-wider">
-                                   Specifications (Size / Gender / Age Group):
-                                </p>
-                                <div className="flex flex-wrap gap-1.5 pt-0.5">
-                                  {productSpecs.split('|').map((spec, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="bg-white text-slate-900 border border-emerald-300 font-extrabold text-[11px] px-2.5 py-1 rounded-md shadow-2xs"
-                                    >
-                                      {spec.trim()}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
+                          {/* Product Preview */}
+                          <div className="flex items-center gap-3">
+                            {primaryImage ? (
+                              <img src={normalizeImageUrl(primaryImage)} alt={productTitle} className="w-12 h-12 object-cover rounded-xl border border-slate-200 shrink-0" />
+                            ) : (
+                              <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-lg shrink-0">📦</div>
                             )}
+                            <div className="flex-1 min-w-0 text-xs">
+                              <p className="font-extrabold text-slate-900 truncate">{productTitle}</p>
+                              <p className="text-slate-500 font-medium">Qty: {orderQuantity} • Buyer: <span className="font-bold text-slate-800">{buyerName}</span></p>
+                            </div>
                           </div>
 
-                          {/* Earnings & Escrow Payout Breakdown */}
+                          {/* Section 14: Earnings & Company Commission Breakdown */}
                           <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 space-y-1.5 text-xs">
                             <div className="flex justify-between items-center text-slate-700">
-                              <span>Gross Sale:</span>
-                              <span className="font-bold text-slate-900">₹{(order.subtotal || order.total_amount || 0).toLocaleString()}</span>
+                              <span>Customer Paid:</span>
+                              <span className="font-bold text-slate-900">₹{orderSubtotal.toLocaleString()}</span>
                             </div>
-                            {(order as any).admin_commission_amount > 0 && (
-                              <div className="flex justify-between items-center text-red-600">
-                                <span>Platform Commission ({(order as any).admin_commission_rate || 5}%):</span>
-                                <span className="font-bold">-₹{((order as any).admin_commission_amount).toLocaleString()}</span>
-                              </div>
-                            )}
+                            <div className="flex justify-between items-center text-red-600">
+                              <span>Company Commission ({commRate}%):</span>
+                              <span className="font-bold">-₹{commAmount.toLocaleString()}</span>
+                            </div>
                             <div className="flex justify-between items-center border-t border-slate-200 pt-1.5 font-bold">
-                              <span className="text-emerald-700">Net Seller Payout:</span>
-                              <span className="text-emerald-700 text-sm font-black">₹{((order as any).seller_payout_amount || (order.subtotal || order.total_amount || 0)).toLocaleString()}</span>
+                              <span className="text-emerald-700">Seller Net Amount:</span>
+                              <span className="text-emerald-700 text-sm font-black">₹{netPayout.toLocaleString()}</span>
                             </div>
                             <div className="pt-1">
-                              {(order as any).payout_status === 'released' ? (
+                              {isDelivered || (order as any).payout_status === 'released' ? (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                                  ✓ Payout Credited to Wallet
+                                  ✓ Payout of ₹{netPayout.toLocaleString()} Credited to Wallet
+                                </span>
+                              ) : isRejected ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full">
+                                  ✕ Order Declined (Refunded to Buyer)
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                                  ⏳ Held in Escrow (Settles upon Admin Confirmation)
+                                  ⏳ ₹{netPayout.toLocaleString()} in Escrow (Auto-credits on Delivery)
                                 </span>
                               )}
                             </div>
                           </div>
 
-                          {/* Update Shipping Status Action */}
+                          {/* Shipping / Tracking Details if shipped */}
+                          {(order.courier_name || order.tracking_id) && (
+                            <div className="bg-blue-50/50 rounded-xl p-2.5 border border-blue-200 text-xs space-y-1">
+                              {order.courier_name && <p className="font-bold text-blue-950">Courier: <span className="text-blue-800 font-semibold">{order.courier_name}</span></p>}
+                              {order.tracking_id && <p className="font-semibold text-blue-700">Tracking ID: <span className="font-mono font-bold text-blue-900">{order.tracking_id}</span></p>}
+                            </div>
+                          )}
+
+                          {/* Section 13: Stage Progression Actions */}
+                          {!isDelivered && !isRejected && (
+                            <div className="grid grid-cols-2 gap-2 pt-1">
+                              {isConfirmed && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateSellerOrderStatus('packed', order)}
+                                    disabled={updatingOrderStatus}
+                                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1"
+                                  >
+                                    <Package className="w-3.5 h-3.5" /> Mark Packed
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setSelectedSellerOrder(order); setShippingCourier(order.courier_name || 'BlueDart'); setShippingTrackingId(order.tracking_id || ''); }}
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1"
+                                  >
+                                    <Truck className="w-3.5 h-3.5" /> Add Shipping ID
+                                  </button>
+                                </>
+                              )}
+                              {isPacked && (
+                                <button
+                                  type="button"
+                                  onClick={() => { setSelectedSellerOrder(order); setShippingCourier(order.courier_name || 'BlueDart'); setShippingTrackingId(order.tracking_id || ''); }}
+                                  className="col-span-2 w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1"
+                                >
+                                  <Truck className="w-3.5 h-3.5" /> Add Tracking ID & Mark as Shipped
+                                </button>
+                              )}
+                              {isShipped && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateSellerOrderStatus('out_for_delivery', order)}
+                                  disabled={updatingOrderStatus}
+                                  className="col-span-2 w-full bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1"
+                                >
+                                  <Navigation className="w-3.5 h-3.5" /> Out for Delivery
+                                </button>
+                              )}
+                              {isOutForDelivery && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateSellerOrderStatus('delivered', order)}
+                                  disabled={updatingOrderStatus}
+                                  className="col-span-2 w-full bg-[#047857] hover:bg-[#065f46] text-white text-xs font-bold py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> Mark Delivered (Release Payout)
+                                </button>
+                              )}
+                            </div>
+                          )}
+
+                          {/* View Order Details Button */}
                           <button
-                            onClick={() => setSelectedSellerOrder(order)}
-                            className="w-full bg-[#047857] hover:bg-[#065f46] text-white text-xs font-bold py-2.5 rounded-xl shadow-xs transition-all"
+                            type="button"
+                            onClick={() => setViewingSellerOrderDetails(order)}
+                            className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1"
                           >
-                            Update Shipping Status
+                            <FileText className="w-3.5 h-3.5" /> View Order Details
                           </button>
                         </div>
                       );
@@ -3343,78 +3499,335 @@ export default function MarketplacePage() {
         </div>
       )}
 
-      {/* SELLER SHIPPING STATUS UPDATE MODAL */}
-      {selectedSellerOrder && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-            
-              <button onClick={() => setSelectedSellerOrder(null)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-4 h-4" />
-              </button>
+      {/* SECTION 12: ORDER DETAILS — SELLER MODAL */}
+      {viewingSellerOrderDetails && (() => {
+        const order = viewingSellerOrderDetails;
+        const buyerName = order.contact_name || order.buyer?.name || (order.buyer as any)?.prenom || 'Customer';
+        const buyerPhone = order.phone || order.buyer?.phone || (order.buyer as any)?.mobile || 'N/A';
+        const productItem = order.items?.[0]?.product;
+        const productTitle = productItem?.title || 'Marketplace Item';
+        const productSpecs = productItem?.specifications || '';
+        const productImages = productItem?.images || [];
+        const primaryImage = productImages.length > 0 ? (productImages[0].image_path || '') : '';
+        const orderQuantity = order.items?.[0]?.quantity || 1;
+        const orderSubtotal = parseFloat((order.subtotal || order.total_amount || 0).toString());
+        const commRate = parseFloat(((order as any).admin_commission_rate || 10).toString());
+        const commAmount = parseFloat(((order as any).admin_commission_amount || (orderSubtotal * (commRate / 100))).toString());
+        const netPayout = parseFloat(((order as any).seller_payout_amount || (orderSubtotal - commAmount)).toString());
+        const st = (order.status || '').toLowerCase();
+        const isPending = st === 'pending';
+        const isPaid = ['paid', 'success'].includes((order.payment_status || '').toLowerCase()) || 
+          ['wallet', 'online', 'card', 'upi'].some(m => (order.payment_method || '').toLowerCase().includes(m));
+
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Order Details — Seller</h3>
+                  <p className="text-[10px] text-slate-500 font-bold">{order.order_number || `Order #${order.id}`}</p>
+                </div>
+                <button onClick={() => setViewingSellerOrderDetails(null)} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Product & Quantity */}
+              <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                {primaryImage ? (
+                  <img src={normalizeImageUrl(primaryImage)} alt={productTitle} className="w-16 h-16 object-cover rounded-xl border border-slate-200 shrink-0" />
+                ) : (
+                  <div className="w-16 h-16 bg-emerald-50 rounded-xl flex items-center justify-center text-2xl shrink-0">🛍️</div>
+                )}
+                <div className="flex-1 min-w-0 text-xs">
+                  <h4 className="font-extrabold text-slate-900 leading-tight">{productTitle}</h4>
+                  {productSpecs && <p className="text-[10px] text-indigo-700 font-bold mt-0.5">{productSpecs}</p>}
+                  <p className="text-slate-500 font-semibold mt-0.5">Quantity: <span className="font-bold text-slate-900">{orderQuantity}</span></p>
+                  <p className="text-sm font-black text-[#047857] mt-0.5">₹{orderSubtotal.toLocaleString()}</p>
+                </div>
+              </div>
+
+              {/* Buyer Information: Name, Mobile with tel: link, Delivery Address */}
+              <div className="space-y-2 text-xs">
+                <h4 className="font-extrabold text-slate-900 text-[11px] uppercase tracking-wider text-slate-500">Customer & Delivery Info</h4>
+                <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 space-y-1.5">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 font-medium">Buyer Name:</span>
+                    <span className="font-bold text-slate-900">{buyerName}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 font-medium">Mobile:</span>
+                    {buyerPhone && buyerPhone !== 'N/A' ? (
+                      <a href={`tel:${buyerPhone}`} className="font-bold text-indigo-600 hover:underline flex items-center gap-1">
+                        <Phone className="w-3 h-3" /> {buyerPhone}
+                      </a>
+                    ) : (
+                      <span className="font-bold text-slate-700">N/A</span>
+                    )}
+                  </div>
+                  <div className="pt-1 border-t border-slate-200">
+                    <span className="text-slate-500 font-medium block">Delivery Address:</span>
+                    <span className="font-semibold text-slate-800 leading-snug block mt-0.5">{order.delivery_address || 'Address provided on order'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Status & Expected Delivery */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-500 font-semibold block uppercase">Payment Status</span>
+                  <span className={`inline-block font-extrabold text-xs mt-0.5 ${
+                    isPaid ? 'text-emerald-700' : 'text-amber-700'
+                  }`}>
+                    {isPaid ? '✓ Paid' : '⏳ Pending'}
+                  </span>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-500 font-semibold block uppercase">Expected Delivery</span>
+                  <span className="font-extrabold text-slate-900 text-xs mt-0.5 block">
+                    {order.delivery_days ? `${order.delivery_days} Days` : '3-5 Business Days'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Section 14: Seller Financials & Company Commission Breakdown */}
+              <div className="bg-emerald-50/50 rounded-xl p-3 border border-emerald-200 space-y-1.5 text-xs">
+                <h4 className="font-extrabold text-emerald-950 text-[11px] uppercase tracking-wider">Payment / Earnings Breakdown</h4>
+                <div className="flex justify-between text-slate-700">
+                  <span>Product Amount:</span>
+                  <span className="font-bold text-slate-900">₹{orderSubtotal.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-red-600">
+                  <span>Company Commission ({commRate}%):</span>
+                  <span className="font-bold">-₹{commAmount.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between font-black text-sm text-emerald-800 border-t border-emerald-200 pt-1.5">
+                  <span>Seller Net Payout:</span>
+                  <span>₹{netPayout.toLocaleString()}</span>
+                </div>
+                <p className="text-[10px] text-emerald-700 font-medium leading-relaxed pt-1">
+                  * Company commission is automatically deducted. Net ₹{netPayout.toLocaleString()} credits to your wallet upon delivery.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              {isPending ? (
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={updatingOrderStatus}
+                    onClick={() => {
+                      if (confirm(`Are you sure you want to REJECT this order? Customer will receive an immediate full refund.`)) {
+                        handleUpdateSellerOrderStatus('rejected', order);
+                        setViewingSellerOrderDetails(null);
+                      }
+                    }}
+                    className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-extrabold text-xs rounded-xl transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
+                  >
+                    <X className="w-4 h-4 text-rose-600" /> Reject
+                  </button>
+                  <button
+                    type="button"
+                    disabled={updatingOrderStatus}
+                    onClick={() => {
+                      handleUpdateSellerOrderStatus('confirmed', order);
+                      setViewingSellerOrderDetails(null);
+                    }}
+                    className="w-full py-2.5 bg-[#047857] hover:bg-[#065f46] text-white font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                  >
+                    <Check className="w-4 h-4" /> Confirm Order
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedSellerOrder(order);
+                    setShippingCourier(order.courier_name || 'BlueDart');
+                    setShippingTrackingId(order.tracking_id || '');
+                    setViewingSellerOrderDetails(null);
+                  }}
+                  className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Truck className="w-4 h-4" /> Update Shipping / Delivery Status
+                </button>
+              )}
             </div>
+          </div>
+        );
+      })()}
 
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="font-semibold text-slate-700">Courier Partner</label>
-                <input
-                  type="text"
-                  value={shippingCourier}
-                  onChange={e => setShippingCourier(e.target.value)}
-                  placeholder="e.g. BlueDart / Delhivery"
-                  className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
-                />
+      {/* SECTION 13: SHIPPING / DELIVERY — SELLER MODAL */}
+      {selectedSellerOrder && (() => {
+        const order = selectedSellerOrder;
+        const st = (order.status || '').toLowerCase();
+
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Shipping & Delivery Pipeline</h3>
+                  <p className="text-[10px] text-slate-500 font-bold">{order.order_number || `Order #${order.id}`}</p>
+                </div>
+                <button onClick={() => setSelectedSellerOrder(null)} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                  <X className="w-4 h-4" />
+                </button>
               </div>
 
-              <div>
-                <label className="font-semibold text-slate-700">Tracking Number ID</label>
-                <input
-                  type="text"
-                  value={shippingTrackingId}
-                  onChange={e => setShippingTrackingId(e.target.value)}
-                  placeholder="e.g. BD9821414IN"
-                  className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
-                />
+              {/* Step Progression Bar: Confirmed -> Packed -> Shipped -> Out for Delivery -> Delivered */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider">Delivery Progression</span>
+                <div className="grid grid-cols-5 text-center text-[8px] font-black gap-1">
+                  <div className={`py-1.5 rounded-md border ${['confirmed', 'packed', 'processing', 'shipped', 'dispatched', 'out_for_delivery', 'delivered'].includes(st) ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-black' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
+                    Confirmed
+                  </div>
+                  <div className={`py-1.5 rounded-md border ${['packed', 'processing', 'shipped', 'dispatched', 'out_for_delivery', 'delivered'].includes(st) ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-black' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
+                    Packed
+                  </div>
+                  <div className={`py-1.5 rounded-md border ${['shipped', 'dispatched', 'out_for_delivery', 'delivered'].includes(st) ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-black' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
+                    Shipped
+                  </div>
+                  <div className={`py-1.5 rounded-md border ${['out_for_delivery', 'delivered'].includes(st) ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-black' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
+                    Out for Del.
+                  </div>
+                  <div className={`py-1.5 rounded-md border ${st === 'delivered' ? 'bg-emerald-600 text-white border-emerald-600 font-black' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
+                    Delivered
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 pt-2">
+              {/* COURIER DELIVERY SECTION */}
+              <div className="space-y-3 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-slate-900 flex items-center gap-1.5">
+                    <Truck className="w-3.5 h-3.5 text-indigo-600" /> Courier Partner
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-semibold">Tracked Shipping</span>
+                </div>
+
+                {/* Quick Courier Selection Chips */}
+                <div className="flex flex-wrap gap-1.5">
+                  {['BlueDart', 'Delhivery', 'DTDC', 'India Post', 'Shadowfax'].map(c => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setShippingCourier(c)}
+                      className={`px-2 py-1 text-[10px] font-bold rounded-lg border transition-all ${
+                        shippingCourier === c ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+
+                <div>
+                  <label className="font-semibold text-slate-700 text-[11px]">Courier Partner Name</label>
+                  <input
+                    type="text"
+                    value={shippingCourier}
+                    onChange={e => setShippingCourier(e.target.value)}
+                    placeholder="e.g. BlueDart / Delhivery / DTDC"
+                    className="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-semibold text-slate-700 text-[11px]">Tracking Number / ID *</label>
+                  <input
+                    type="text"
+                    value={shippingTrackingId}
+                    onChange={e => setShippingTrackingId(e.target.value)}
+                    placeholder="e.g. BD9821414IN / DEL827181"
+                    className="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono"
+                  />
+                </div>
+
                 <button
                   type="button"
-                  onClick={() => handleUpdateSellerOrderStatus('processing')}
-                  disabled={updatingOrderStatus}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-xl"
+                  disabled={updatingOrderStatus || !shippingTrackingId.trim()}
+                  onClick={() => handleUpdateSellerOrderStatus('shipped', order, { courier_name: shippingCourier, tracking_id: shippingTrackingId })}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-extrabold py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  Mark Processing
+                  <Truck className="w-4 h-4" /> Add Tracking ID & Mark as Shipped
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleUpdateSellerOrderStatus('dispatched')}
-                  disabled={updatingOrderStatus}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl"
-                >
-                  Mark Shipped
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleUpdateSellerOrderStatus('out_for_delivery')}
-                  disabled={updatingOrderStatus}
-                  className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 rounded-xl"
-                >
-                  Out for Delivery
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleUpdateSellerOrderStatus('delivered')}
-                  disabled={updatingOrderStatus}
-                  className="bg-[#047857] hover:bg-[#065f46] text-white font-semibold py-2 rounded-xl"
-                >
-                  Mark Delivered
-                </button>
+              </div>
+
+              {/* SELF-DELIVERY / LOCAL DELIVERY SECTION */}
+              <div className="space-y-2 text-xs bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-200">
+                <span className="font-extrabold text-emerald-950 flex items-center gap-1.5">
+                  <Navigation className="w-3.5 h-3.5 text-emerald-700" /> Self-Delivery / Local Drop-off
+                </span>
+                <p className="text-[11px] text-emerald-800 font-medium leading-relaxed">
+                  If delivering directly to the customer in-person:
+                </p>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={updatingOrderStatus}
+                    onClick={() => handleUpdateSellerOrderStatus('out_for_delivery', order)}
+                    className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 rounded-xl shadow-xs transition-all text-xs cursor-pointer"
+                  >
+                    Start Delivery
+                  </button>
+                  <button
+                    type="button"
+                    disabled={updatingOrderStatus}
+                    onClick={() => {
+                      if (confirm(`Confirm delivery? Payout of ₹${order.seller_payout_amount || order.subtotal} will be released directly to your wallet.`)) {
+                        handleUpdateSellerOrderStatus('delivered', order);
+                      }
+                    }}
+                    className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold py-2.5 rounded-xl shadow-xs transition-all text-xs cursor-pointer"
+                  >
+                    Delivered
+                  </button>
+                </div>
+              </div>
+
+              {/* QUICK MANUAL STATUS TRANSITIONS */}
+              <div className="space-y-1.5 text-xs">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Direct Status Transition</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateSellerOrderStatus('packed', order)}
+                    disabled={updatingOrderStatus}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-xl text-xs cursor-pointer"
+                  >
+                    Mark Packed
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateSellerOrderStatus('shipped', order)}
+                    disabled={updatingOrderStatus}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl text-xs cursor-pointer"
+                  >
+                    Mark Shipped
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateSellerOrderStatus('out_for_delivery', order)}
+                    disabled={updatingOrderStatus}
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 rounded-xl text-xs cursor-pointer"
+                  >
+                    Out for Delivery
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateSellerOrderStatus('delivered', order)}
+                    disabled={updatingOrderStatus}
+                    className="bg-[#047857] hover:bg-[#065f46] text-white font-semibold py-2 rounded-xl text-xs cursor-pointer"
+                  >
+                    Mark Delivered
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* STICKY MOBILE BOTTOM NAVIGATION BAR */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-3 py-2 shadow-lg">
