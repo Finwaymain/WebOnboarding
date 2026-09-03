@@ -134,6 +134,8 @@ export default function MarketplacePage() {
   const [selectedOrderForTracking, setSelectedOrderForTracking] = useState<Order | null>(null);
   const [userToken, setUserToken] = useState<string>('');
   const [userId, setUserId] = useState<string>('');
+  const [userRole, setUserRole] = useState<string>('customer');
+  const [userType, setUserType] = useState<string>('customer');
   const [userName, setUserName] = useState<string>('Valued User');
   const [userPhone, setUserPhone] = useState<string>('');
   const [userEmail, setUserEmail] = useState<string>('');
@@ -493,6 +495,10 @@ export default function MarketplacePage() {
 
     setUserToken(token);
     setUserId(uid);
+    if (uType) {
+      setUserType(uType);
+      setUserRole(uType);
+    }
     if (phone) setUserPhone(phone);
     if (name) setUserName(name);
 
@@ -713,8 +719,8 @@ export default function MarketplacePage() {
 
     const currentUid = uid || userId || qUserId || localStorage.getItem('user_id') || '';
     const currentToken = token || userToken || qToken || localStorage.getItem('accesstoken') || '';
-    const currentPhone = userPhone || editPhone || qPhone || localStorage.getItem('phone') || '';
-    const currentUserType = userRole || qUserType || localStorage.getItem('user_type') || 'customer';
+    const currentPhone = userPhone || editPhone || qPhone || (typeof window !== 'undefined' ? localStorage.getItem('phone') || '' : '');
+    const currentUserType = (urlParams ? urlParams.get('user_type') || urlParams.get('role') : null) || (typeof window !== 'undefined' ? localStorage.getItem('user_type') : null) || userType || userRole || qUserType || 'customer';
 
     if (!currentUid && !currentPhone) return;
 
@@ -801,7 +807,7 @@ export default function MarketplacePage() {
     const currentToken = getActiveToken(token);
     const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
     const currentPhone = userPhone || editPhone || (urlParams ? urlParams.get('phone') || urlParams.get('user_phone') : '') || (typeof window !== 'undefined' ? localStorage.getItem('phone') || '' : '');
-    const currentUserType = userRole || (urlParams ? urlParams.get('user_type') || urlParams.get('role') : '') || (typeof window !== 'undefined' ? localStorage.getItem('user_type') || 'customer' : 'customer');
+    const currentUserType = (urlParams ? urlParams.get('user_type') || urlParams.get('role') : null) || (typeof window !== 'undefined' ? localStorage.getItem('user_type') : null) || userType || userRole || 'customer';
 
     try {
       const headers: Record<string, string> = {};
