@@ -231,12 +231,28 @@ function OnboardingForm() {
 
         const res = await fetch(initUrl.toString(), {
           headers: {
+            "Accept": "application/json",
             "accesstoken": accesstoken || "",
             "apikey": "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU="
           }
         });
-        const result = await res.json();
-        if (result.success === 'success' || result.success === 'Success') {
+
+        const contentType = res.headers.get("content-type") || "";
+        let result: any = null;
+        if (contentType.includes("application/json")) {
+          result = await res.json();
+        } else {
+          const rawText = await res.text();
+          try {
+            result = JSON.parse(rawText);
+          } catch {
+            setInitError(`Server returned an error (${res.status}). Please check connection and reopen.`);
+            setLoadingInit(false);
+            return;
+          }
+        }
+
+        if (result && (result.success === 'success' || result.success === 'Success')) {
           const canEdit = editMode || result.data.allow_edit === true;
           if (result.data.onboarding_completed) {
             if (!canEdit) {
@@ -1214,23 +1230,43 @@ function OnboardingForm() {
     data.append("zone_id", zoneId);
 
     try {
-      const res = await fetch("/api/v1/driver/onboarding/submit", {
+      const submitUrl = new URL("/api/v1/driver/onboarding/submit", window.location.origin).toString();
+      const res = await fetch(submitUrl, {
         method: "POST",
         headers: {
+          "Accept": "application/json",
           "accesstoken": accesstoken || "",
           "apikey": "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU="
         },
         body: data,
       });
 
-      const result = await res.json();
-      if (result.success === "Success" || result.success === "success") {
+      const contentType = res.headers.get("content-type") || "";
+      let result: any = null;
+
+      if (contentType.includes("application/json")) {
+        result = await res.json();
+      } else {
+        const rawText = await res.text();
+        try {
+          result = JSON.parse(rawText);
+        } catch {
+          if (!res.ok) {
+            setError(`Server error (${res.status}). Please check your connection and file sizes, then try again.`);
+            return;
+          }
+          setError("Received invalid response from server. Please try again.");
+          return;
+        }
+      }
+
+      if (result && (result.success === "Success" || result.success === "success")) {
         setSuccess(true);
       } else {
-        setError(result.error || result.message || "Failed to submit.");
+        setError(result?.error || result?.message || `Failed to submit (HTTP ${res.status}).`);
       }
     } catch (err: any) {
-      setError(err.message || "Network error.");
+      setError(err?.message || "Network error. Please try again.");
     } finally {
       setLoading(false);
     }
