@@ -416,6 +416,9 @@ export default function WalletPage() {
           if (wData.success === 'success' && wData.data) {
             setWalletAmount(Number(wData.data.amount || 0));
             setEarnAmount(Number(wData.data.earn_amount || 0));
+            if (wData.data.promotional) {
+              setPromotional(wData.data.promotional);
+            }
           }
         }
       }
