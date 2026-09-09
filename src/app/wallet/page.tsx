@@ -820,15 +820,14 @@ export default function WalletPage() {
 
                     {/* Promotion Card inside Smart Value Card at Top Right */}
                     {promotional && (promotional.has_promotion || promotional.is_active || Number(promotional.balance) > 0) && (
-                      <div className="bg-white/20 backdrop-blur-md border border-white/30 rounded-xl p-2.5 text-right shadow-md shrink-0 max-w-[160px]">
-                        <div className="flex items-center justify-end gap-1 mb-0.5">
-                          <GiftIcon className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-                          <span className="text-[9.5px] uppercase font-black tracking-wider text-amber-300">Promotion Card</span>
+                      <div className="bg-white/15 backdrop-blur-sm border border-white/25 rounded-lg px-2 py-1 text-right shadow-sm shrink-0">
+                        <div className="text-[8.5px] uppercase font-bold tracking-wider text-amber-200">
+                          Promotion
                         </div>
-                        <div className="text-base font-black text-white leading-tight">
+                        <div className="text-xs font-bold text-white leading-tight">
                           ₹{Number(promotional.balance || 0).toFixed(2)}
                         </div>
-                        <div className="text-[9.5px] text-white/90 font-medium truncate mt-0.5">
+                        <div className="text-[8px] text-white/80 font-medium truncate">
                           ₹{Number(promotional.discount_per_service || 50).toFixed(0)} off &bull; {promotional.uses_remaining} uses
                         </div>
                       </div>
