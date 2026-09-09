@@ -139,6 +139,14 @@ function InvoiceIcon({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
+function GiftIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v13m0-13V4a2 2 0 00-2-2H8a2 2 0 00-2 2v4m6 0h5a2 2 0 012 2v2a2 2 0 01-2 2H5a2 2 0 01-2-2v-2a2 2 0 012-2h5m0 0V4a2 2 0 012-2h2a2 2 0 012 2v4" />
+    </svg>
+  );
+}
+
 function readUrlParams() {
   if (typeof window === 'undefined') {
     return { 
@@ -213,6 +221,15 @@ export default function WalletPage() {
   const [historyList, setHistoryList] = useState<any[]>([]);
   const [withdrawalsList, setWithdrawalsList] = useState<any[]>([]);
   const [bankDetails, setBankDetails] = useState<any>(null);
+  const [promotional, setPromotional] = useState<{
+    has_promotion: boolean;
+    balance: string;
+    discount_per_service: string;
+    uses_remaining: number;
+    total_uses: number;
+    expiry_date: string | null;
+    is_active: boolean;
+  } | null>(null);
 
   // Filters
   const [historyFilterDays, setHistoryFilterDays] = useState<number>(30);
@@ -381,6 +398,9 @@ export default function WalletPage() {
           setWalletAmount(wAmt);
           setEarnAmount(eAmt > 0 ? eAmt : Number(tAmt));
           setTotalEarn(tAmt !== '0' ? tAmt : String(eAmt));
+          if (amtData.data.promotional) {
+            setPromotional(amtData.data.promotional);
+          }
           amtFetched = true;
         }
       }
@@ -781,16 +801,35 @@ export default function WalletPage() {
             {activeTab === 'overview' && (
               <div className="space-y-4">
                 {/* Balance Hero Card */}
-                <div className="rounded-2xl bg-gradient-to-br from-[#6AA720] via-[#5B941B] to-[#4A7C15] p-5 text-white shadow-lg shadow-[#6AA720]/25 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-white/20 rounded-xl">
-                      <WalletIcon className="w-5 h-5 text-white" />
+                <div className="relative rounded-2xl bg-gradient-to-br from-[#6AA720] via-[#5B941B] to-[#4A7C15] p-5 text-white shadow-lg shadow-[#6AA720]/25 space-y-3 overflow-hidden">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <div className="p-2 bg-white/20 rounded-xl">
+                          <WalletIcon className="w-4 h-4 text-white" />
+                        </div>
+                        <span className="text-xs font-semibold text-white/90">Smart Value Balance</span>
+                      </div>
+                      <div className="text-3xl font-black text-white tracking-tight pt-1">
+                        {formatCurrency(walletAmount)}
+                      </div>
                     </div>
-                    <span className="text-xs font-medium text-white/90">Smart Value Balance</span>
-                  </div>
 
-                  <div className="text-3xl font-extrabold text-white tracking-tight">
-                    {formatCurrency(walletAmount)}
+                    {/* Promotion Card inside Smart Value Card at Top Right */}
+                    {promotional && (promotional.has_promotion || promotional.is_active || Number(promotional.balance) > 0) && (
+                      <div className="bg-white/20 backdrop-blur-md border border-white/30 rounded-xl p-2.5 text-right shadow-md shrink-0 max-w-[160px]">
+                        <div className="flex items-center justify-end gap-1 mb-0.5">
+                          <GiftIcon className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                          <span className="text-[9.5px] uppercase font-black tracking-wider text-amber-300">Promotion Card</span>
+                        </div>
+                        <div className="text-base font-black text-white leading-tight">
+                          ₹{Number(promotional.balance || 0).toFixed(2)}
+                        </div>
+                        <div className="text-[9.5px] text-white/90 font-medium truncate mt-0.5">
+                          ₹{Number(promotional.discount_per_service || 50).toFixed(0)} off &bull; {promotional.uses_remaining} uses
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="inline-block bg-white/15 px-3 py-1 rounded-full text-xs font-medium text-white/90">
@@ -888,8 +927,8 @@ export default function WalletPage() {
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className={`${themeClasses.cardBg} rounded-2xl p-4 space-y-1`}>
+                  <div className={`grid ${promotional && (promotional.has_promotion || Number(promotional.balance) > 0) ? 'grid-cols-3' : 'grid-cols-2'} gap-2.5`}>
+                    <div className={`${themeClasses.cardBg} rounded-2xl p-3.5 space-y-1`}>
                       <div className="w-7 h-7 rounded-lg bg-[#6AA720]/10 text-[#6AA720] flex items-center justify-center mb-2">
                         <WalletIcon className="w-4 h-4" />
                       </div>
@@ -897,13 +936,23 @@ export default function WalletPage() {
                       <p className={`text-sm font-bold ${themeClasses.textMain}`}>{formatCurrency(walletAmount)}</p>
                     </div>
 
-                    <div className={`${themeClasses.cardBg} rounded-2xl p-4 space-y-1`}>
+                    <div className={`${themeClasses.cardBg} rounded-2xl p-3.5 space-y-1`}>
                       <div className="w-7 h-7 rounded-lg bg-[#6AA720]/10 text-[#6AA720] flex items-center justify-center mb-2">
                         <SparklesIcon className="w-4 h-4" />
                       </div>
                       <span className={`text-[11px] ${themeClasses.textMuted}`}>Cashback</span>
                       <p className={`text-sm font-bold ${themeClasses.textMain}`}>{formatCurrency(earnAmount)}</p>
                     </div>
+
+                    {promotional && (promotional.has_promotion || Number(promotional.balance) > 0) && (
+                      <div className={`${themeClasses.cardBg} rounded-2xl p-3.5 space-y-1 border border-amber-400/40`}>
+                        <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center mb-2">
+                          <GiftIcon className="w-4 h-4" />
+                        </div>
+                        <span className={`text-[11px] text-amber-600 dark:text-amber-400 font-semibold`}>Promotions</span>
+                        <p className={`text-sm font-bold ${themeClasses.textMain}`}>₹{Number(promotional.balance || 0).toFixed(2)}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
