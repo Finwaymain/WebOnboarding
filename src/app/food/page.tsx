@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import RestaurantPartnerPortal from "./RestaurantPartnerPortal";
 import {
   Utensils,
   Store,
@@ -49,6 +50,10 @@ function FoodOnboardingWizard() {
   const [token, setToken] = useState<string>("");
   const [phone, setPhone] = useState<string>("");
   const [theme, setTheme] = useState<string>("light");
+
+  // Portal mode (Dashboard, Orders, Menu, etc.)
+  const [isPortalMode, setIsPortalMode] = useState<boolean>(false);
+  const [initialTab, setInitialTab] = useState<string>("dashboard");
 
   // Multi-step state: 1 to 7
   const [step, setStep] = useState<number>(1);
@@ -129,6 +134,8 @@ function FoodOnboardingWizard() {
       const t = p.get("token") || p.get("accesstoken") || searchParams.get("token") || searchParams.get("accesstoken");
       const ph = p.get("phone") || searchParams.get("phone");
       const th = p.get("theme") || searchParams.get("theme");
+      const view = p.get("view") || searchParams.get("view");
+      const tab = p.get("tab") || searchParams.get("tab");
 
       if (t) setToken(t);
       if (ph) {
@@ -136,6 +143,12 @@ function FoodOnboardingWizard() {
         setOwnerPhone(ph);
       }
       if (th) setTheme(th);
+      if (tab) setInitialTab(tab);
+
+      // If requested directly as portal mode or tab is specified
+      if (view === "portal" || tab || p.get("mode") === "portal") {
+        setIsPortalMode(true);
+      }
 
       fetchTypes();
     }
@@ -315,6 +328,17 @@ function FoodOnboardingWizard() {
 
   const isDark = theme === "dark";
 
+  if (isPortalMode) {
+    return (
+      <RestaurantPartnerPortal
+        token={token}
+        phone={phone}
+        initialTab={initialTab}
+        onBackToOnboarding={() => setIsPortalMode(false)}
+      />
+    );
+  }
+
   return (
     <div className={`min-h-screen font-sans ${isDark ? "bg-slate-950 text-slate-100" : "bg-[#f8fafc] text-slate-900"}`}>
       {/* Top Header Navbar */}
@@ -335,10 +359,18 @@ function FoodOnboardingWizard() {
             </div>
           </div>
 
-          <div className="hidden sm:flex items-center gap-6 text-xs text-slate-500">
-            <span className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-emerald-600" /> FSSAI Compliant</span>
-            <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-emerald-600" /> 24-48h Fast SLA</span>
-            <span className="flex items-center gap-1.5"><CreditCard className="w-4 h-4 text-emerald-600" /> Daily Direct Bank Payouts</span>
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex items-center gap-6 text-xs text-slate-500">
+              <span className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-emerald-600" /> FSSAI Compliant</span>
+              <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-emerald-600" /> 24-48h Fast SLA</span>
+              <span className="flex items-center gap-1.5"><CreditCard className="w-4 h-4 text-emerald-600" /> Daily Bank Payouts</span>
+            </div>
+            <button
+              onClick={() => setIsPortalMode(true)}
+              className="text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors flex items-center gap-1"
+            >
+              Partner Portal <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </header>
@@ -1191,12 +1223,8 @@ function FoodOnboardingWizard() {
 
             <div className="pt-4 flex flex-col sm:flex-row gap-3 justify-center">
               <button
-                onClick={() => {
-                  if (typeof window !== "undefined") {
-                    window.location.href = "/";
-                  }
-                }}
-                className="px-6 py-3 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition-colors"
+                onClick={() => setIsPortalMode(true)}
+                className="px-6 py-3 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition-colors shadow-md"
               >
                 Go to Partner Dashboard
               </button>
