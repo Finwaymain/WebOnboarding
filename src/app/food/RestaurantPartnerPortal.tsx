@@ -43,6 +43,23 @@ import {
   Menu as MenuIcon
 } from "lucide-react";
 
+const ENV_API_KEY = "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=";
+
+function getApiHeaders(authToken?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+    apikey: ENV_API_KEY,
+  };
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
+    headers["token"] = authToken;
+    headers["X-Restaurant-Token"] = authToken;
+    headers["accesstoken"] = authToken;
+  }
+  return headers;
+}
+
 interface RestaurantPartnerPortalProps {
   token?: string;
   phone?: string;
@@ -58,6 +75,12 @@ export default function RestaurantPartnerPortal({
 }: RestaurantPartnerPortalProps) {
   // Active Tab
   const [activeTab, setActiveTab] = useState<string>(initialTab);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   // Restaurant profile & Operational status (open / busy / closed)
@@ -269,46 +292,53 @@ export default function RestaurantPartnerPortal({
     } catch (_) {}
   }, [isAudioMuted]);
 
+  const resolveToken = useCallback(() => {
+    if (token) return token;
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      return (
+        p.get("token") ||
+        p.get("accesstoken") ||
+        localStorage.getItem("restaurant_token") ||
+        localStorage.getItem("token") ||
+        ""
+      );
+    }
+    return "";
+  }, [token]);
+
   // Load backend profile & data
   const fetchPortalData = useCallback(async () => {
-    const effectiveToken = token || (typeof window !== "undefined" ? localStorage.getItem("restaurant_token") || localStorage.getItem("token") || "" : "");
+    const effectiveToken = resolveToken();
     if (!effectiveToken) return;
 
     try {
+      const headers = getApiHeaders(effectiveToken);
+
       // 1. Fetch restaurant info
-      const res = await fetch("https://api.fiinway.com/api/v1/food/restaurant/me", {
-        headers: {
-          Authorization: `Bearer ${effectiveToken}`,
-          token: effectiveToken,
-          Accept: "application/json"
-        }
-      });
+      const res = await fetch("https://api.fiinway.com/api/v1/food/restaurant/me", { headers });
       const data = await res.json();
       if (data?.success && data?.data) {
-        setRestaurant(data.data);
+        setRestaurant((prev: any) => ({
+          ...prev,
+          ...data.data,
+          name: data.data.name || prev.name,
+          phone: data.data.owner_phone || phone || prev.phone,
+          address: data.data.address || prev.address,
+          city: data.data.city || prev.city,
+          operational_status: data.data.operational_status || prev.operational_status || "closed",
+        }));
       }
 
       // 2. Fetch dashboard stats
-      const dashRes = await fetch("https://api.fiinway.com/api/v1/food/restaurant/dashboard", {
-        headers: {
-          Authorization: `Bearer ${effectiveToken}`,
-          token: effectiveToken,
-          Accept: "application/json"
-        }
-      });
+      const dashRes = await fetch("https://api.fiinway.com/api/v1/food/restaurant/dashboard", { headers });
       const dashData = await dashRes.json();
       if (dashData?.success && dashData?.data) {
-        setStats(dashData.data);
+        setStats((prev: any) => ({ ...prev, ...dashData.data }));
       }
 
       // 3. Fetch incoming orders
-      const incRes = await fetch("https://api.fiinway.com/api/v1/food/restaurant/orders/incoming", {
-        headers: {
-          Authorization: `Bearer ${effectiveToken}`,
-          token: effectiveToken,
-          Accept: "application/json"
-        }
-      });
+      const incRes = await fetch("https://api.fiinway.com/api/v1/food/restaurant/orders/incoming", { headers });
       const incData = await incRes.json();
       if (incData?.success && Array.isArray(incData.data)) {
         setIncomingOrders(incData.data);
@@ -319,25 +349,13 @@ export default function RestaurantPartnerPortal({
       }
 
       // 4. Fetch menu categories & products
-      const catRes = await fetch("https://api.fiinway.com/api/v1/food/restaurant/categories", {
-        headers: {
-          Authorization: `Bearer ${effectiveToken}`,
-          token: effectiveToken,
-          Accept: "application/json"
-        }
-      });
+      const catRes = await fetch("https://api.fiinway.com/api/v1/food/restaurant/categories", { headers });
       const catData = await catRes.json();
       if (catData?.success && Array.isArray(catData.data) && catData.data.length > 0) {
         setCategories(catData.data);
       }
 
-      const prodRes = await fetch("https://api.fiinway.com/api/v1/food/restaurant/products", {
-        headers: {
-          Authorization: `Bearer ${effectiveToken}`,
-          token: effectiveToken,
-          Accept: "application/json"
-        }
-      });
+      const prodRes = await fetch("https://api.fiinway.com/api/v1/food/restaurant/products", { headers });
       const prodData = await prodRes.json();
       if (prodData?.success && Array.isArray(prodData.data) && prodData.data.length > 0) {
         setProducts(prodData.data);
@@ -345,7 +363,7 @@ export default function RestaurantPartnerPortal({
     } catch (e) {
       console.warn("Using offline portal cache / mock fallback");
     }
-  }, [token, selectedIncomingOrder, playChime]);
+  }, [resolveToken, selectedIncomingOrder, playChime, phone]);
 
   // Initial fetch and 8-second polling
   useEffect(() => {
@@ -356,17 +374,13 @@ export default function RestaurantPartnerPortal({
 
   // Operational Status Switcher (open / busy / closed)
   const handleToggleOperationalStatus = async (newStatus: string) => {
-    const effectiveToken = token || (typeof window !== "undefined" ? localStorage.getItem("restaurant_token") || localStorage.getItem("token") || "" : "");
+    const effectiveToken = resolveToken();
     setRestaurant((prev: any) => ({ ...prev, operational_status: newStatus }));
 
     try {
       await fetch("https://api.fiinway.com/api/v1/food/restaurant/operational-status", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${effectiveToken}`,
-          token: effectiveToken
-        },
+        headers: getApiHeaders(effectiveToken),
         body: JSON.stringify({ status: newStatus })
       });
       showToast(`Restaurant status set to ${newStatus.toUpperCase()}`);
@@ -377,15 +391,11 @@ export default function RestaurantPartnerPortal({
 
   // Accept Order
   const handleAcceptOrder = async (order: any) => {
-    const effectiveToken = token || (typeof window !== "undefined" ? localStorage.getItem("restaurant_token") || localStorage.getItem("token") || "" : "");
+    const effectiveToken = resolveToken();
     try {
       await fetch(`https://api.fiinway.com/api/v1/food/restaurant/orders/${order.id}/accept`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${effectiveToken}`,
-          token: effectiveToken
-        },
+        headers: getApiHeaders(effectiveToken),
         body: JSON.stringify({ preparation_time: prepTimeChoice })
       });
     } catch (_) {}
@@ -408,15 +418,11 @@ export default function RestaurantPartnerPortal({
   // Reject Order
   const handleRejectOrder = async () => {
     if (!orderToReject) return;
-    const effectiveToken = token || (typeof window !== "undefined" ? localStorage.getItem("restaurant_token") || localStorage.getItem("token") || "" : "");
+    const effectiveToken = resolveToken();
     try {
       await fetch(`https://api.fiinway.com/api/v1/food/restaurant/orders/${orderToReject.id}/reject`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${effectiveToken}`,
-          token: effectiveToken
-        },
+        headers: getApiHeaders(effectiveToken),
         body: JSON.stringify({ reason: rejectReason || "Kitchen overloaded" })
       });
     } catch (_) {}
@@ -431,15 +437,11 @@ export default function RestaurantPartnerPortal({
 
   // Transition Active Order (Preparing -> Ready -> Handed Over)
   const handleUpdateOrderStatus = async (orderId: number, nextStatus: string) => {
-    const effectiveToken = token || (typeof window !== "undefined" ? localStorage.getItem("restaurant_token") || localStorage.getItem("token") || "" : "");
+    const effectiveToken = resolveToken();
     try {
       await fetch(`https://api.fiinway.com/api/v1/food/restaurant/orders/${orderId}/status`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${effectiveToken}`,
-          token: effectiveToken
-        },
+        headers: getApiHeaders(effectiveToken),
         body: JSON.stringify({ status: nextStatus })
       });
     } catch (_) {}
@@ -453,15 +455,11 @@ export default function RestaurantPartnerPortal({
   // Rider Handover
   const handleConfirmHandover = async () => {
     if (!handoverOrderId) return;
-    const effectiveToken = token || (typeof window !== "undefined" ? localStorage.getItem("restaurant_token") || localStorage.getItem("token") || "" : "");
+    const effectiveToken = resolveToken();
     try {
       await fetch(`https://api.fiinway.com/api/v1/food/restaurant/orders/${handoverOrderId}/handover`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${effectiveToken}`,
-          token: effectiveToken
-        },
+        headers: getApiHeaders(effectiveToken),
         body: JSON.stringify({ otp: riderOtp })
       });
     } catch (_) {}
@@ -474,7 +472,7 @@ export default function RestaurantPartnerPortal({
 
   // Instant Stock Availability Toggle
   const handleToggleProductStock = async (productId: number, currentAvailable: boolean) => {
-    const effectiveToken = token || (typeof window !== "undefined" ? localStorage.getItem("restaurant_token") || localStorage.getItem("token") || "" : "");
+    const effectiveToken = resolveToken();
     const updated = !currentAvailable;
 
     setProducts((prev) =>
@@ -484,11 +482,7 @@ export default function RestaurantPartnerPortal({
     try {
       await fetch(`https://api.fiinway.com/api/v1/food/restaurant/products/${productId}/availability`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${effectiveToken}`,
-          token: effectiveToken
-        },
+        headers: getApiHeaders(effectiveToken),
         body: JSON.stringify({ is_available: updated })
       });
       showToast(`Dish marked as ${updated ? "AVAILABLE" : "OUT OF STOCK"}`);
@@ -566,7 +560,7 @@ export default function RestaurantPartnerPortal({
             >
               <MenuIcon className="w-5 h-5" />
             </button>
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#FF5200] to-[#E03E00] text-white flex items-center justify-center shadow-md">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#0F5132] to-[#15803D] text-white flex items-center justify-center shadow-md">
               <Utensils className="w-5 h-5 stroke-[2.5]" />
             </div>
             <div>
@@ -574,12 +568,12 @@ export default function RestaurantPartnerPortal({
                 <span className="font-black text-slate-900 tracking-tight text-base sm:text-lg">
                   {restaurant.name}
                 </span>
-                <span className="hidden sm:inline-block px-2 py-0.5 rounded-md text-[11px] font-extrabold uppercase tracking-wide bg-orange-100 text-[#FF5200]">
+                <span className="hidden sm:inline-block px-2 py-0.5 rounded-md text-[11px] font-extrabold uppercase tracking-wide bg-emerald-100 text-[#0F5132]">
                   {restaurant.business_type === "actual_restaurant" ? "Restaurant" : "Cloud Kitchen"}
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 hidden sm:block">
-                {restaurant.address}, {restaurant.city} • Rating: ⭐ {restaurant.rating || "4.8"}
+                {restaurant.address || "Outlet"}, {restaurant.city || "India"} • Rating: ⭐ {restaurant.rating || "4.8"}
               </p>
             </div>
           </div>
@@ -645,6 +639,21 @@ export default function RestaurantPartnerPortal({
           </div>
         </div>
       </header>
+
+      {/* Verification Status Banner if pending */}
+      {restaurant.onboarding_status === "pending_approval" && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 sm:px-6 py-2.5 text-xs font-semibold text-amber-900 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              <strong>Application Under Verification:</strong> Compliance team is reviewing your documents (FSSAI & Bank). You can manage your dishes, hours & settings while verification completes.
+            </span>
+          </div>
+          <span className="shrink-0 bg-amber-200/80 text-amber-900 text-[10px] font-black uppercase px-2 py-0.5 rounded-full ml-3">
+            In Review
+          </span>
+        </div>
+      )}
 
       {/* BODY WITH RESPONSIVE LAYOUT */}
       <div className="flex-1 flex overflow-hidden">
@@ -796,17 +805,15 @@ export default function RestaurantPartnerPortal({
           </nav>
 
           {/* Sidebar Footer */}
-          {onBackToOnboarding && (
-            <div className="p-4 border-t border-slate-100 text-xs">
-              <button
-                onClick={onBackToOnboarding}
-                className="w-full py-2 px-3 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 font-bold flex items-center justify-center gap-2"
-              >
-                <span>View Onboarding Details</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </button>
+          <div className="p-4 border-t border-slate-100 text-xs text-slate-500">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+              <div className="truncate">
+                <p className="font-bold text-slate-800 text-[11px] truncate">Fiinway Food Partner</p>
+                <p className="text-[10px] text-slate-400 font-mono truncate">{phone || restaurant.phone || "Active Outlet"}</p>
+              </div>
             </div>
-          )}
+          </div>
         </aside>
 
         {/* MAIN CONTENT AREA */}
