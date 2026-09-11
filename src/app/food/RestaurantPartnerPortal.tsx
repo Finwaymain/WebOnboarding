@@ -312,6 +312,12 @@ export default function RestaurantPartnerPortal({
     const effectiveToken = resolveToken();
     if (!effectiveToken) return;
 
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("restaurant_token", effectiveToken);
+      } catch (_) {}
+    }
+
     try {
       const headers = getApiHeaders(effectiveToken);
 
