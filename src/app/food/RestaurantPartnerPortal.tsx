@@ -40,7 +40,8 @@ import {
   ExternalLink,
   Search,
   Eye,
-  Menu as MenuIcon
+  Menu as MenuIcon,
+  LogOut
 } from "lucide-react";
 
 const ENV_API_KEY = "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=";
@@ -545,6 +546,22 @@ export default function RestaurantPartnerPortal({
     showToast("New category created!");
   };
 
+  const handleLogout = () => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("restaurant_token");
+        localStorage.removeItem("token");
+      } catch (_) {}
+
+      // Notify Flutter WebView bridge
+      if ((window as any).FiinwayBridge?.postMessage) {
+        (window as any).FiinwayBridge.postMessage("logout");
+      } else {
+        window.location.href = "/food";
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
       {/* Toast Alert */}
@@ -811,7 +828,7 @@ export default function RestaurantPartnerPortal({
           </nav>
 
           {/* Sidebar Footer */}
-          <div className="p-4 border-t border-slate-100 text-xs text-slate-500">
+          <div className="p-4 border-t border-slate-100 text-xs text-slate-500 space-y-3">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
               <div className="truncate">
@@ -819,6 +836,14 @@ export default function RestaurantPartnerPortal({
                 <p className="text-[10px] text-slate-400 font-mono truncate">{phone || restaurant.phone || "Active Outlet"}</p>
               </div>
             </div>
+
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-600 rounded-xl text-xs font-bold transition-all border border-red-200 shadow-xs cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Logout</span>
+            </button>
           </div>
         </aside>
 
