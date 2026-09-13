@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, useCallback } from "react";
 import {
   ChevronLeft,
+  ChevronRight,
   Users,
   Download,
   CheckCircle2,
@@ -20,9 +21,14 @@ import {
   MessageCircle,
   Send,
   MessageSquare,
-  ExternalLink
+  ExternalLink,
+  Layers,
+  Lock,
 } from "lucide-react";
 import AadhaarRegistrationModal from "../../components/AadhaarRegistrationModal";
+import VendorApplicationModal from "../../components/vendor_team/VendorApplicationModal";
+import TeamMemberDashboardView from "../../components/vendor_team/TeamMemberDashboardView";
+import VendorDashboardView from "../../components/vendor_team/VendorDashboardView";
 
 const API_KEY = "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=";
 const getApiBase = () => (typeof window !== "undefined" ? `${window.location.origin}/api/v1` : "https://api.fiinway.com/api/v1");
@@ -35,7 +41,7 @@ function readUrlParams() {
       driverId: null,
       userCat: null,
       phone: null,
-      view: "home" as "home" | "dashboard",
+      view: "home" as "home" | "dashboard" | "vendor_dashboard" | "member_dashboard",
     };
   }
   const params = new URLSearchParams(window.location.search);
@@ -46,7 +52,10 @@ function readUrlParams() {
   const token = params.get("accesstoken") || params.get("token") || params.get("access_token");
   const phone = params.get("phone") || params.get("mobile");
   const viewParam = params.get("view");
-  const view = (viewParam === "dashboard") ? "dashboard" : "home";
+  let view: "home" | "dashboard" | "vendor_dashboard" | "member_dashboard" = "home";
+  if (viewParam === "dashboard") view = "dashboard";
+  else if (viewParam === "vendor_dashboard" || viewParam === "vendor") view = "vendor_dashboard";
+  else if (viewParam === "member_dashboard" || viewParam === "team_member" || viewParam === "member") view = "member_dashboard";
 
   let driverId: string | null = null;
   let userId: string | null = null;
@@ -66,6 +75,7 @@ function readUrlParams() {
   return { token, userId, driverId, userCat, phone, view };
 }
 
+
 function ReferralDashboardContent() {
   const searchParams = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
@@ -75,7 +85,7 @@ function ReferralDashboardContent() {
   const [phone, setPhone] = useState<string | null>(null);
 
   // Navigation mode: "home" (Main Partner & Earn Screen) or "dashboard" (2-tab Partner Dashboard)
-  const [viewMode, setViewMode] = useState<"home" | "dashboard">("home");
+  const [viewMode, setViewMode] = useState<"home" | "dashboard" | "vendor_dashboard" | "member_dashboard">("home");
   const [activeTab, setActiveTab] = useState<"consumer" | "business">("consumer");
   const [loading, setLoading] = useState<boolean>(true);
   const [stats, setStats] = useState<any>(null);
@@ -84,6 +94,13 @@ function ReferralDashboardContent() {
   const [showAadhaarModal, setShowAadhaarModal] = useState<boolean>(false);
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
 
+  // Vendor & Field Team states
+  const [vendorRoleStatus, setVendorRoleStatus] = useState<"none" | "pending" | "vendor" | "team_member">("none");
+  const [vendorData, setVendorData] = useState<any>(null);
+  const [memberData, setMemberData] = useState<any>(null);
+  const [vendorApplicationData, setVendorApplicationData] = useState<any>(null);
+  const [showApplyModal, setShowApplyModal] = useState<boolean>(false);
+
   useEffect(() => {
     const parsed = readUrlParams();
     setToken(parsed.token);
@@ -91,10 +108,70 @@ function ReferralDashboardContent() {
     setDriverId(parsed.driverId);
     setUserCat(parsed.userCat);
     setPhone(parsed.phone);
-    if (parsed.view === "dashboard") {
-      setViewMode("dashboard");
+    if (parsed.view) {
+      setViewMode(parsed.view);
     }
   }, [searchParams]);
+
+  const fetchVendorTeamData = useCallback(async () => {
+    try {
+      const apiBase = getApiBase();
+      const parsed = readUrlParams();
+      const uId = userId || parsed.userId || "";
+      const dId = driverId || parsed.driverId || "";
+      const effectiveId = uId || dId;
+      const uCat = userCat || parsed.userCat || (dId ? "driver" : "customer");
+      const tok = token || parsed.token || "";
+
+      if (!effectiveId) return;
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "apikey": API_KEY,
+        "accesstoken": tok,
+        "id_user": effectiveId,
+        "user_cat": uCat,
+      };
+
+      const queryStr = `id_user=${encodeURIComponent(effectiveId)}&user_cat=${encodeURIComponent(uCat)}&accesstoken=${encodeURIComponent(tok)}&apikey=${encodeURIComponent(API_KEY)}`;
+
+      const res = await fetch(`${apiBase}/vendor-team/status?${queryStr}`, { headers });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          const role = json.data.role || "none";
+          const appStat = json.data.application_status || "none";
+
+          if (role === "vendor") {
+            setVendorRoleStatus("vendor");
+            const vRes = await fetch(`${apiBase}/vendor-team/vendor-dashboard?${queryStr}`, { headers });
+            if (vRes.ok) {
+              const vJson = await vRes.json();
+              if (vJson.success && vJson.data) {
+                setVendorData(vJson.data);
+              }
+            }
+          } else if (role === "team_member") {
+            setVendorRoleStatus("team_member");
+            const mRes = await fetch(`${apiBase}/vendor-team/member-dashboard?${queryStr}`, { headers });
+            if (mRes.ok) {
+              const mJson = await mRes.json();
+              if (mJson.success && mJson.data) {
+                setMemberData(mJson.data);
+              }
+            }
+          } else if (appStat === "pending") {
+            setVendorRoleStatus("pending");
+            setVendorApplicationData(json.data.application_data);
+          } else {
+            setVendorRoleStatus("none");
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Error fetching vendor team status:", e);
+    }
+  }, [userId, driverId, userCat, token]);
 
   const fetchReferralStats = useCallback(async () => {
     try {
@@ -167,7 +244,9 @@ function ReferralDashboardContent() {
 
   useEffect(() => {
     fetchReferralStats();
-  }, [fetchReferralStats]);
+    fetchVendorTeamData();
+  }, [fetchReferralStats, fetchVendorTeamData]);
+
 
   const handleOpenDashboard = () => {
     const isVerified = stats?.aadhar_submitted === true || 
@@ -248,7 +327,7 @@ function ReferralDashboardContent() {
   };
 
   const handleBack = () => {
-    if (viewMode === "dashboard") {
+    if (viewMode === "dashboard" || viewMode === "vendor_dashboard" || viewMode === "member_dashboard") {
       setViewMode("home");
     } else {
       if (typeof window !== "undefined" && (window as any).AppBridge) {
@@ -258,6 +337,7 @@ function ReferralDashboardContent() {
       }
     }
   };
+
 
   if (loading && !stats) {
     return (
@@ -388,9 +468,155 @@ function ReferralDashboardContent() {
             </button>
           </div>
 
+          {/* ── Field Marketing & Team Management Entry Card ── */}
+          <div className="space-y-2">
+            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+              <span>Field Marketing Team</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                Multi-Tier System
+              </span>
+            </h3>
+
+            {/* Case A: Freelancer / Team Member */}
+            {vendorRoleStatus === "team_member" && (
+              <div className="bg-white rounded-2xl p-4 border border-emerald-300 bg-gradient-to-br from-white via-emerald-50/20 to-emerald-50/50 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold shrink-0">
+                      <Briefcase className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900 leading-tight">
+                        My Team Member Dashboard
+                      </h4>
+                      <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                        Code: <span className="font-bold text-slate-800">{memberData?.member_code || "FR------"}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-600 text-white shadow-2xs">
+                    Freelancer
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-center bg-white/90 border border-slate-200 rounded-xl p-2.5">
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-semibold block">Customers Added</span>
+                    <span className="text-lg font-black text-slate-900">{memberData?.acquired_customers_count ?? 0}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-semibold block">Businesses Added</span>
+                    <span className="text-lg font-black text-slate-900">{memberData?.acquired_businesses_count ?? 0}</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setViewMode("member_dashboard")}
+                  className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs py-3 rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.99]"
+                >
+                  <span>Open Freelancer Dashboard</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Case B: Team Manager / Vendor */}
+            {vendorRoleStatus === "vendor" && (
+              <div className="bg-white rounded-2xl p-4 border border-blue-300 bg-gradient-to-br from-white via-blue-50/20 to-blue-50/50 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center font-bold shrink-0">
+                      <Layers className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900 leading-tight">
+                        Team Manager Dashboard
+                      </h4>
+                      <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                        Code: <span className="font-bold text-slate-800">{vendorData?.vendor_code || "TM------"}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-blue-600 text-white shadow-2xs">
+                    Team Manager
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-center bg-white/90 border border-slate-200 rounded-xl p-2.5">
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-semibold block">Team Members</span>
+                    <span className="text-sm font-black text-slate-900">{vendorData?.freelancers_count ?? 0}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-semibold block">Users Added</span>
+                    <span className="text-sm font-black text-slate-900">{(vendorData?.total_customers ?? 0) + (vendorData?.total_businesses ?? 0)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-semibold block">Earnings</span>
+                    <span className="text-sm font-black text-emerald-700">₹{vendorData?.total_earnings ?? 0}</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setViewMode("vendor_dashboard")}
+                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-3 rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.99]"
+                >
+                  <span>Manage Team & View Rates</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Case C: Pending Vendor Application */}
+            {vendorRoleStatus === "pending" && (
+              <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 shadow-2xs space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-700 shrink-0" />
+                    <h4 className="text-xs font-bold text-amber-950">Vendor Application Under Review</h4>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">
+                    In Review
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  Your application for territory <strong>{vendorApplicationData?.team_location}</strong> ({vendorApplicationData?.team_type}) is under review by admin. Payout rates are being configured.
+                </p>
+              </div>
+            )}
+
+            {/* Case D: Not Enrolled -> Apply for Vendor Role */}
+            {vendorRoleStatus === "none" && (
+              <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                      <Briefcase className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-800">Become a Team Manager</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                    Vendor Role
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Lead a field marketing team in your city. Onboard freelancers under you and earn verified cash payouts approved by Admin for every customer & driver signup.
+                </p>
+                <button
+                  onClick={() => setShowApplyModal(true)}
+                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs py-2.5 rounded-xl border border-slate-200 flex items-center justify-center gap-1.5 transition-all active:scale-[0.99]"
+                >
+                  <span>Apply for Vendor Role</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Referral Benefits */}
           <div className="space-y-2">
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Referral Benefits</h3>
+
 
             <div className="grid grid-cols-2 gap-2.5">
               {/* User Referral */}
@@ -899,12 +1125,50 @@ function ReferralDashboardContent() {
         </div>
       )}
 
+      {/* ──────────────────────────────────────────────────────────────────────────
+          SCREEN 3: TEAM MEMBER (FREELANCER) DASHBOARD
+         ────────────────────────────────────────────────────────────────────────── */}
+      {viewMode === "member_dashboard" && (
+        <TeamMemberDashboardView
+          onBack={handleBack}
+          memberData={memberData}
+          showToast={showToast}
+        />
+      )}
+
+      {/* ──────────────────────────────────────────────────────────────────────────
+          SCREEN 4: VENDOR / TEAM MANAGER DASHBOARD
+         ────────────────────────────────────────────────────────────────────────── */}
+      {viewMode === "vendor_dashboard" && (
+        <VendorDashboardView
+          onBack={handleBack}
+          vendorData={vendorData}
+          showToast={showToast}
+        />
+      )}
+
       {/* Toast Notification */}
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-lg z-50 animate-fade-in">
           {toast}
         </div>
       )}
+
+      {/* Vendor Application Modal */}
+      <VendorApplicationModal
+        isOpen={showApplyModal}
+        onClose={() => setShowApplyModal(false)}
+        onSuccess={(data) => {
+          setVendorRoleStatus("pending");
+          setVendorApplicationData(data);
+          showToast("Application submitted! Admin will review and set rates.");
+        }}
+        apiBase={getApiBase()}
+        userId={userId || driverId || ""}
+        userCat={userCat || (driverId ? "driver" : "customer")}
+        token={token || ""}
+        apiKey={API_KEY}
+      />
 
       {/* Aadhaar Verification Modal */}
       {showAadhaarModal && (
@@ -920,6 +1184,7 @@ function ReferralDashboardContent() {
         />
       )}
     </div>
+
   );
 }
 
