@@ -499,17 +499,6 @@ function ReferralDashboardContent() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-center bg-white/90 border border-slate-200 rounded-xl p-2.5">
-                  <div>
-                    <span className="text-[10px] text-slate-500 font-semibold block">Customers Added</span>
-                    <span className="text-lg font-black text-slate-900">{memberData?.acquired_customers_count ?? 0}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-500 font-semibold block">Businesses Added</span>
-                    <span className="text-lg font-black text-slate-900">{memberData?.acquired_businesses_count ?? 0}</span>
-                  </div>
-                </div>
-
                 <button
                   onClick={() => setViewMode("member_dashboard")}
                   className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs py-3 rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.99]"
@@ -542,21 +531,6 @@ function ReferralDashboardContent() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 text-center bg-white/90 border border-slate-200 rounded-xl p-2.5">
-                  <div>
-                    <span className="text-[10px] text-slate-500 font-semibold block">Team Members</span>
-                    <span className="text-sm font-black text-slate-900">{vendorData?.freelancers_count ?? 0}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-500 font-semibold block">Users Added</span>
-                    <span className="text-sm font-black text-slate-900">{(vendorData?.total_customers ?? 0) + (vendorData?.total_businesses ?? 0)}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-500 font-semibold block">Earnings</span>
-                    <span className="text-sm font-black text-emerald-700">₹{vendorData?.total_earnings ?? 0}</span>
-                  </div>
-                </div>
-
                 <button
                   onClick={() => setViewMode("vendor_dashboard")}
                   className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-3 rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.99]"
@@ -587,7 +561,7 @@ function ReferralDashboardContent() {
 
             {/* Case D: Not Enrolled -> Apply for Vendor Role */}
             {vendorRoleStatus === "none" && (
-              <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-2.5">
+              <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
@@ -599,12 +573,9 @@ function ReferralDashboardContent() {
                     Vendor Role
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500 leading-relaxed">
-                  Lead a field marketing team in your city. Onboard freelancers under you and earn verified cash payouts approved by Admin for every customer & driver signup.
-                </p>
                 <button
                   onClick={() => setShowApplyModal(true)}
-                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs py-2.5 rounded-xl border border-slate-200 flex items-center justify-center gap-1.5 transition-all active:scale-[0.99]"
+                  className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs py-2.5 rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.99]"
                 >
                   <span>Apply for Vendor Role</span>
                   <ChevronRight className="w-3.5 h-3.5" />
