@@ -237,10 +237,8 @@ export default function TeamMemberDashboardView({
         <div className="space-y-2.5">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <span>My Work Details</span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                {recentAcquisitions.length} Total
-              </span>
+              <span>My Work </span>
+             
             </h3>
 
             {/* Filter pills */}
@@ -341,6 +339,11 @@ export default function TeamMemberDashboardView({
                       }`}>
                         {isVerified ? "Verified" : isRejected ? "Rejected" : "In Review"}
                       </span>
+                      {!isVerified && !isRejected && acq.hours_left !== null && acq.hours_left !== undefined && (
+                        <span className="block text-[9.5px] text-amber-600 font-bold mt-0.5">
+                          {acq.hours_left} hour left
+                        </span>
+                      )}
                       {acq.kyc_status && (
                         <span className="block text-[9.5px] text-slate-400 mt-0.5">
                           KYC: {acq.kyc_status}
