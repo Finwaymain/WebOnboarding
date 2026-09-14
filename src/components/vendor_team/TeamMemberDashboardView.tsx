@@ -4,16 +4,14 @@ import React, { useState } from "react";
 import {
   ChevronLeft,
   Users,
-  ShieldCheck,
   Share2,
   Copy,
   Check,
-  CheckCircle2,
   Clock,
   Briefcase,
   MapPin,
-  Lock,
-  UserCheck
+  UserCheck,
+  Phone
 } from "lucide-react";
 
 interface TeamMemberDashboardViewProps {
@@ -29,6 +27,7 @@ export default function TeamMemberDashboardView({
 }: TeamMemberDashboardViewProps) {
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [filterType, setFilterType] = useState<"all" | "customer" | "business">("all");
 
   const memberCode = memberData?.member_code || "FR------";
   const shareUrl = memberData?.share_url || `https://api.fiinway.com/ref/${memberCode}`;
@@ -75,6 +74,11 @@ export default function TeamMemberDashboardView({
   const teamType = memberData?.team_type || "Field Marketing";
   const recentAcquisitions = memberData?.recent_acquisitions || [];
 
+  const filteredAcquisitions = recentAcquisitions.filter((acq: any) => {
+    if (filterType === "all") return true;
+    return acq.user_type === filterType;
+  });
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-12">
       {/* Sticky Header */}
@@ -90,10 +94,10 @@ export default function TeamMemberDashboardView({
             </button>
             <div>
               <h2 className="text-sm font-bold text-slate-900 leading-tight">
-                My Team Dashboard
+                My Dashboard
               </h2>
               <p className="text-[11px] text-slate-500 font-medium">
-                Freelancer Field Network
+                Freelancer Workspace
               </p>
             </div>
           </div>
@@ -158,23 +162,8 @@ export default function TeamMemberDashboardView({
           </div>
 
           <p className="text-[11px] text-slate-500 text-center leading-relaxed">
-            Share your freelancer code when onboarding new customers and business drivers. All registrations are credited to your team member record.
+            Share your freelancer code when onboarding new customers and business drivers. All registrations are credited to your personal record.
           </p>
-        </div>
-
-        {/* Privacy Guard Callout */}
-        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 flex items-start gap-3">
-          <div className="w-8 h-8 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center shrink-0 mt-0.5">
-            <Lock className="w-4 h-4" />
-          </div>
-          <div>
-            <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-              Privacy Guard Active
-            </h4>
-            <p className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
-              You have access to your personal acquisition numbers and active status. Financial rates and payout settlements are configured directly by Company Admin and your Team Manager.
-            </p>
-          </div>
         </div>
 
         {/* Performance Counters */}
@@ -244,53 +233,123 @@ export default function TeamMemberDashboardView({
           </div>
         </div>
 
-        {/* Recent Acquisitions List */}
-        <div className="space-y-2">
-          <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
-            <span>Recent Registrations</span>
-            <span className="text-[11px] font-semibold text-slate-500">{recentAcquisitions.length} tracked</span>
-          </h3>
+        {/* Work Details & Acquired Users List */}
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <span>My Work Details</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                {recentAcquisitions.length} Total
+              </span>
+            </h3>
+
+            {/* Filter pills */}
+            <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+              <button
+                onClick={() => setFilterType("all")}
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-md transition-all ${
+                  filterType === "all" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setFilterType("customer")}
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-md transition-all ${
+                  filterType === "customer" ? "bg-white text-emerald-700 shadow-2xs" : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                Customers ({custCount})
+              </button>
+              <button
+                onClick={() => setFilterType("business")}
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-md transition-all ${
+                  filterType === "business" ? "bg-white text-blue-700 shadow-2xs" : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                Business ({bizCount})
+              </button>
+            </div>
+          </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden divide-y divide-slate-100">
-            {recentAcquisitions.length === 0 ? (
-              <div className="p-6 text-center space-y-1.5">
-                <UserCheck className="w-8 h-8 text-slate-300 mx-auto" />
-                <p className="text-xs font-bold text-slate-700">No Acquisitions Yet</p>
-                <p className="text-[11px] text-slate-500">
-                  Share your code <strong>{memberCode}</strong> to start onboarding customers and business drivers!
+            {filteredAcquisitions.length === 0 ? (
+              <div className="p-6 text-center space-y-2">
+                <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+                  <UserCheck className="w-5 h-5" />
+                </div>
+                <p className="text-xs font-bold text-slate-800">
+                  {recentAcquisitions.length === 0 ? "No Work Records Yet" : "No Records Found in this Category"}
+                </p>
+                <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
+                  {recentAcquisitions.length === 0
+                    ? `Share your freelancer code ${memberCode} with new customers & business drivers to track your completed on-field registrations here.`
+                    : "Try switching the filter above to view all acquisitions."}
                 </p>
               </div>
             ) : (
-              recentAcquisitions.map((acq: any, idx: number) => (
-                <div key={idx} className="p-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
-                      acq.user_type === 'business'
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'bg-emerald-50 text-emerald-700'
-                    }`}>
-                      {acq.user_type === 'business' ? 'BIZ' : 'CUST'}
+              filteredAcquisitions.map((acq: any, idx: number) => {
+                const isBiz = acq.user_type === "business";
+                const isVerified = acq.verification_status === "verified";
+                const isRejected = acq.verification_status === "rejected";
+
+                return (
+                  <div key={idx} className="p-3.5 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 ${
+                        isBiz
+                          ? "bg-blue-50 text-blue-700 border border-blue-200"
+                          : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      }`}>
+                        {isBiz ? <Briefcase className="w-4 h-4" /> : <Users className="w-4 h-4" />}
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-xs font-bold text-slate-900 truncate">
+                            {acq.user_name || (isBiz ? "Business Driver" : "Customer User")}
+                          </p>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                            isBiz ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"
+                          }`}>
+                            {isBiz ? "Business Driver" : "Customer"}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 mt-0.5 text-[10.5px] text-slate-500 font-medium flex-wrap">
+                          {acq.phone && (
+                            <span className="flex items-center gap-1 font-mono text-slate-600">
+                              <Phone className="w-3 h-3 text-slate-400" />
+                              {acq.phone}
+                            </span>
+                          )}
+                          <span className="flex items-center gap-1 text-slate-400">
+                            <Clock className="w-3 h-3" />
+                            {acq.joined_date || "Recently"}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs font-bold text-slate-800">
-                        {acq.user_name || (acq.user_type === 'business' ? 'Business Partner' : 'Customer User')}
-                      </p>
-                      <p className="text-[10.5px] text-slate-400 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {acq.joined_date || "Recently"}
-                      </p>
+
+                    <div className="text-right shrink-0">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md inline-block ${
+                        isVerified
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          : isRejected
+                          ? "bg-rose-50 text-rose-700 border border-rose-200"
+                          : "bg-amber-50 text-amber-700 border border-amber-200"
+                      }`}>
+                        {isVerified ? "Verified" : isRejected ? "Rejected" : "In Review"}
+                      </span>
+                      {acq.kyc_status && (
+                        <span className="block text-[9.5px] text-slate-400 mt-0.5">
+                          KYC: {acq.kyc_status}
+                        </span>
+                      )}
                     </div>
                   </div>
-
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                    acq.verification_status === 'verified'
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                      : 'bg-amber-50 text-amber-700 border border-amber-200'
-                  }`}>
-                    {acq.verification_status === 'verified' ? 'Verified' : 'In Review'}
-                  </span>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

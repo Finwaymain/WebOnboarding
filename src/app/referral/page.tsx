@@ -471,9 +471,9 @@ function ReferralDashboardContent() {
           {/* ── Field Marketing & Team Management Entry Card ── */}
           <div className="space-y-2">
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
-              <span>Field Marketing Team</span>
+              <span>{vendorRoleStatus === "team_member" ? "MY WORK" : "Field Marketing Team"}</span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                Multi-Tier System
+                {vendorRoleStatus === "team_member" ? "Freelancer" : "Multi-Tier System"}
               </span>
             </h3>
 
@@ -487,7 +487,7 @@ function ReferralDashboardContent() {
                     </div>
                     <div>
                       <h4 className="text-xs font-bold text-slate-900 leading-tight">
-                        My Team Member Dashboard
+                        MY DASHBOARD
                       </h4>
                       <p className="text-[11px] text-slate-500 font-mono mt-0.5">
                         Code: <span className="font-bold text-slate-800">{memberData?.member_code || "FR------"}</span>
@@ -503,7 +503,7 @@ function ReferralDashboardContent() {
                   onClick={() => setViewMode("member_dashboard")}
                   className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs py-3 rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.99]"
                 >
-                  <span>Open Freelancer Dashboard</span>
+                  <span>Open My Dashboard</span>
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
