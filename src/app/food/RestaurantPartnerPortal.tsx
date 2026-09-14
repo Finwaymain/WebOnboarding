@@ -481,24 +481,105 @@ export default function RestaurantPartnerPortal({
     } catch (_) {}
   };
 
+  // Helper to compress image client-side via HTML5 canvas
+  const compressImage = (file: File): Promise<{ blob: Blob; dataUrl: string }> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 1200;
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            return resolve({ blob: file, dataUrl: (e.target?.result as string) || "" });
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+          canvas.toBlob(
+            (blob) => {
+              resolve({ blob: blob || file, dataUrl });
+            },
+            "image/jpeg",
+            0.85
+          );
+        };
+        img.onerror = () => resolve({ blob: file, dataUrl: (e.target?.result as string) || "" });
+        img.src = (e.target?.result as string) || "";
+      };
+      reader.onerror = () => resolve({ blob: file, dataUrl: "" });
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const triggerNativePick = (source: "camera" | "gallery") => {
+    if (typeof window !== "undefined" && (window as any).FiinwayBridge) {
+      try {
+        (window as any).FiinwayBridge.postMessage(JSON.stringify({ action: "pick_image", source }));
+      } catch (_) {}
+    }
+  };
+
+  // Register bridge image handler for Flutter WebView
+  useEffect(() => {
+    (window as any).handleBridgeImage = (base64Data: string, filename?: string) => {
+      setImagePreview(base64Data);
+      try {
+        const arr = base64Data.split(",");
+        const mime = arr[0].match(/:(.*?);/)?.[1] || "image/jpeg";
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        const f = new File([blob], filename || "dish.jpg", { type: mime });
+        setSelectedImageFile(f);
+      } catch (_) {}
+      showToast("Photo captured from mobile camera/gallery!");
+    };
+    return () => {
+      delete (window as any).handleBridgeImage;
+    };
+  }, []);
+
   // Handle Image Selection from Camera or Gallery
-  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 15 * 1024 * 1024) {
-      showToast("Selected photo is too large (max 15MB).");
-      return;
+    showToast("Processing photo...");
+    try {
+      const { blob, dataUrl } = await compressImage(file);
+      const optimizedFile = new File([blob], file.name ? file.name.replace(/\.[^/.]+$/, ".jpg") : "dish.jpg", {
+        type: "image/jpeg"
+      });
+      setSelectedImageFile(optimizedFile);
+      setImagePreview(dataUrl);
+      showToast("Photo attached & optimized!");
+    } catch (_) {
+      setSelectedImageFile(file);
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setImagePreview(ev.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+      showToast("Photo selected!");
     }
-
-    setSelectedImageFile(file);
-
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setImagePreview(ev.target?.result as string);
-    };
-    reader.readAsDataURL(file);
-    showToast("Photo captured/selected!");
   };
 
   // Save Product (Add or Edit) with Multipart FormData
@@ -525,6 +606,9 @@ export default function RestaurantPartnerPortal({
 
     if (selectedImageFile) {
       formData.append("image", selectedImageFile);
+    }
+    if (imagePreview && imagePreview.startsWith("data:image")) {
+      formData.append("image_base64", imagePreview);
     }
 
     try {
@@ -2232,7 +2316,7 @@ export default function RestaurantPartnerPortal({
                       </span>
                       <div className="flex items-center gap-1.5">
                         {/* Direct native camera label */}
-                        <label className="relative px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1 cursor-pointer overflow-hidden">
+                        <label onClick={() => triggerNativePick("camera")} className="relative px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1 cursor-pointer overflow-hidden">
                           <input
                             type="file"
                             accept="image/*"
@@ -2244,7 +2328,7 @@ export default function RestaurantPartnerPortal({
                           <span>Retake</span>
                         </label>
                         {/* Direct native gallery label */}
-                        <label className="relative px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1 cursor-pointer overflow-hidden">
+                        <label onClick={() => triggerNativePick("gallery")} className="relative px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1 cursor-pointer overflow-hidden">
                           <input
                             type="file"
                             accept="image/*"
@@ -2261,7 +2345,7 @@ export default function RestaurantPartnerPortal({
                   <div className="space-y-1.5">
                     <div className="grid grid-cols-2 gap-2">
                       {/* Native Mobile Camera Option */}
-                      <label className="relative p-3 rounded-2xl border-2 border-dashed border-slate-300 hover:border-[#FF5200] bg-slate-50 hover:bg-orange-50/40 transition-all flex flex-col items-center justify-center gap-1.5 text-center cursor-pointer overflow-hidden group">
+                      <label onClick={() => triggerNativePick("camera")} className="relative p-3 rounded-2xl border-2 border-dashed border-slate-300 hover:border-[#FF5200] bg-slate-50 hover:bg-orange-50/40 transition-all flex flex-col items-center justify-center gap-1.5 text-center cursor-pointer overflow-hidden group">
                         <input
                           type="file"
                           accept="image/*"
@@ -2279,7 +2363,7 @@ export default function RestaurantPartnerPortal({
                       </label>
 
                       {/* Native Mobile Gallery Option */}
-                      <label className="relative p-3 rounded-2xl border-2 border-dashed border-slate-300 hover:border-[#FF5200] bg-slate-50 hover:bg-orange-50/40 transition-all flex flex-col items-center justify-center gap-1.5 text-center cursor-pointer overflow-hidden group">
+                      <label onClick={() => triggerNativePick("gallery")} className="relative p-3 rounded-2xl border-2 border-dashed border-slate-300 hover:border-[#FF5200] bg-slate-50 hover:bg-orange-50/40 transition-all flex flex-col items-center justify-center gap-1.5 text-center cursor-pointer overflow-hidden group">
                         <input
                           type="file"
                           accept="image/*"
