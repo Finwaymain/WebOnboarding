@@ -2374,7 +2374,7 @@ export default function RestaurantPartnerPortal({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
                   <button
                     type="button"
-                    onClick={() => handleUpdateStatus("open")}
+                    onClick={() => handleToggleOperationalStatus("open")}
                     className={`p-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
                       restaurant.operational_status === "open"
                         ? "bg-emerald-500 text-white border-emerald-600 shadow-xs"
@@ -2386,7 +2386,7 @@ export default function RestaurantPartnerPortal({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleUpdateStatus("busy")}
+                    onClick={() => handleToggleOperationalStatus("busy")}
                     className={`p-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
                       restaurant.operational_status === "busy"
                         ? "bg-amber-500 text-white border-amber-600 shadow-xs"
@@ -2397,7 +2397,7 @@ export default function RestaurantPartnerPortal({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleUpdateStatus("temporarily_closed")}
+                    onClick={() => handleToggleOperationalStatus("temporarily_closed")}
                     className={`p-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
                       restaurant.operational_status === "temporarily_closed"
                         ? "bg-orange-500 text-white border-orange-600 shadow-xs"
@@ -2408,7 +2408,7 @@ export default function RestaurantPartnerPortal({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleUpdateStatus("closed")}
+                    onClick={() => handleToggleOperationalStatus("closed")}
                     className={`p-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
                       restaurant.operational_status === "closed"
                         ? "bg-rose-500 text-white border-rose-600 shadow-xs"
