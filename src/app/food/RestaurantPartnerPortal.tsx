@@ -45,7 +45,16 @@ import {
   LogOut,
   Copy,
   Camera,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Upload,
+  Building2,
+  FileCheck2,
+  Sparkles,
+  Save,
+  Leaf,
+  Landmark,
+  Shield,
+  CheckCircle,
 } from "lucide-react";
 
 const ENV_API_KEY = "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=";
@@ -187,7 +196,51 @@ export default function RestaurantPartnerPortal({
   const [profileClosing, setProfileClosing] = useState<string>("23:00");
   const [profilePrepMins, setProfilePrepMins] = useState<number>(20);
   const [profileRadius, setProfileRadius] = useState<number>(5);
+  const [profileMinOrder, setProfileMinOrder] = useState<number>(0);
+  const [profilePureVeg, setProfilePureVeg] = useState<boolean>(false);
+  const [profileOutletName, setProfileOutletName] = useState<string>("");
+  const [profileDesc, setProfileDesc] = useState<string>("");
+  const [profileAddress, setProfileAddress] = useState<string>("");
+  const [profileCity, setProfileCity] = useState<string>("");
   const [isSavingProfile, setIsSavingProfile] = useState<boolean>(false);
+
+  // Owner Identity State
+  const [ownerName, setOwnerName] = useState<string>("");
+  const [ownerPhone, setOwnerPhone] = useState<string>("");
+  const [ownerEmail, setOwnerEmail] = useState<string>("");
+  const [ownerPan, setOwnerPan] = useState<string>("");
+  const [ownerImagePreview, setOwnerImagePreview] = useState<string>("");
+  const [ownerImageFile, setOwnerImageFile] = useState<File | null>(null);
+  const [isUploadingOwnerPhoto, setIsUploadingOwnerPhoto] = useState<boolean>(false);
+
+  // Branding Images State
+  const [logoPreview, setLogoPreview] = useState<string>("");
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [isUploadingLogo, setIsUploadingLogo] = useState<boolean>(false);
+  const [coverPreview, setCoverPreview] = useState<string>("");
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [isUploadingCover, setIsUploadingCover] = useState<boolean>(false);
+
+  // Compliance State
+  const [fssaiNumber, setFssaiNumber] = useState<string>("");
+  const [gstNumber, setGstNumber] = useState<string>("");
+
+  // Bank & Settlement State
+  const [bankAccountName, setBankAccountName] = useState<string>("");
+  const [bankName, setBankName] = useState<string>("");
+  const [bankAccountNumber, setBankAccountNumber] = useState<string>("");
+  const [bankIfsc, setBankIfsc] = useState<string>("");
+  const [bankBranch, setBankBranch] = useState<string>("");
+  const [upiId, setUpiId] = useState<string>("");
+
+  // Hidden File Input Refs
+  const ownerPhotoInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const dishCameraInputRef = useRef<HTMLInputElement>(null);
+  const dishGalleryInputRef = useRef<HTMLInputElement>(null);
+  const [imagePickTarget, setImagePickTarget] = useState<"dish" | "owner" | "logo" | "cover">("dish");
+  const imagePickTargetRef = useRef<"dish" | "owner" | "logo" | "cover">("dish");
 
   // Toast / notification
   const [toastMessage, setToastMessage] = useState<string>("");
@@ -265,11 +318,48 @@ export default function RestaurantPartnerPortal({
           rating: d.rating_avg || prev.rating || 0,
           total_reviews: d.rating_count || prev.total_reviews || 0,
         }));
+        if (d.name) setProfileOutletName(d.name);
+        if (d.description) setProfileDesc(d.description);
+        if (d.address) setProfileAddress(d.address);
+        if (d.city) setProfileCity(d.city);
         if (d.opening_time) setProfileOpening(d.opening_time.slice(0, 5));
         if (d.closing_time) setProfileClosing(d.closing_time.slice(0, 5));
         if (d.avg_prep_minutes) setProfilePrepMins(d.avg_prep_minutes);
         if (d.delivery_radius_km) setProfileRadius(d.delivery_radius_km);
+        if (d.min_order_amount !== undefined && d.min_order_amount !== null) setProfileMinOrder(Number(d.min_order_amount));
+        if (d.pure_veg !== undefined) setProfilePureVeg(Boolean(d.pure_veg));
+        if (d.fssai_number) setFssaiNumber(d.fssai_number);
+        if (d.gst_number) setGstNumber(d.gst_number);
+        if (d.bank_account_name) setBankAccountName(d.bank_account_name);
+        if (d.bank_name) setBankName(d.bank_name);
+        if (d.bank_account_number) setBankAccountNumber(d.bank_account_number);
+        if (d.bank_ifsc) setBankIfsc(d.bank_ifsc);
+        if (d.bank_branch) setBankBranch(d.bank_branch);
+        if (d.upi_id) setUpiId(d.upi_id);
+        if (d.owner_name) setOwnerName(d.owner_name);
+        if (d.owner_phone) setOwnerPhone(d.owner_phone);
+        if (d.owner_email) setOwnerEmail(d.owner_email);
+        if (d.pan_number) setOwnerPan(d.pan_number);
+        if (d.logo) setLogoPreview(d.logo.startsWith("http") ? d.logo : `https://api.fiinway.com/storage/${d.logo}`);
+        if (d.cover_image) setCoverPreview(d.cover_image.startsWith("http") ? d.cover_image : `https://api.fiinway.com/storage/${d.cover_image}`);
+        if (d.owner_image) setOwnerImagePreview(d.owner_image.startsWith("http") ? d.owner_image : `https://api.fiinway.com/storage/${d.owner_image}`);
       }
+
+      // Fetch owner profile for latest owner image & PAN
+      try {
+        const profRes = await fetch("https://api.fiinway.com/api/v1/food/restaurant/profile", { headers });
+        const profData = await profRes.json();
+        if (profData?.success && profData?.data?.owner) {
+          const o = profData.data.owner;
+          if (o.name) setOwnerName(o.name);
+          if (o.phone) setOwnerPhone(o.phone);
+          if (o.email) setOwnerEmail(o.email);
+          if (o.pan_number) setOwnerPan(o.pan_number);
+          if (o.image) {
+            setOwnerImagePreview(o.image.startsWith("http") ? o.image : `https://api.fiinway.com/storage/${o.image}`);
+          }
+        }
+      } catch (_) {}
 
       // 2. Dashboard KPIs
       const dashRes = await fetch("https://api.fiinway.com/api/v1/food/restaurant/dashboard", { headers });
@@ -482,13 +572,13 @@ export default function RestaurantPartnerPortal({
   };
 
   // Helper to compress image client-side via HTML5 canvas
-  const compressImage = (file: File): Promise<{ blob: Blob; dataUrl: string }> => {
+  const compressImage = (file: File, customMaxDim = 1200): Promise<{ blob: Blob; dataUrl: string }> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-          const maxDim = 1200;
+          const maxDim = customMaxDim;
           let width = img.width;
           let height = img.height;
           if (width > maxDim || height > maxDim) {
@@ -525,18 +615,75 @@ export default function RestaurantPartnerPortal({
     });
   };
 
-  const triggerNativePick = (source: "camera" | "gallery") => {
+  const uploadSingleImage = async (file: File, type: "owner" | "logo" | "cover" | "dish"): Promise<string | null> => {
+    const effectiveToken = resolveToken();
+    if (!effectiveToken) return null;
+    if (type === "owner") setIsUploadingOwnerPhoto(true);
+    if (type === "logo") setIsUploadingLogo(true);
+    if (type === "cover") setIsUploadingCover(true);
+
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      fd.append("type", type);
+      const res = await fetch("https://api.fiinway.com/api/v1/food/restaurant/upload-image", {
+        method: "POST",
+        headers: getApiHeaders(effectiveToken, true),
+        body: fd,
+      });
+      const data = await res.json();
+      if (data?.success && data?.url) {
+        if (type === "owner") {
+          setOwnerImagePreview(data.url);
+          showToast("Owner photo uploaded & saved!");
+        } else if (type === "logo") {
+          setLogoPreview(data.url);
+          showToast("Restaurant logo uploaded!");
+        } else if (type === "cover") {
+          setCoverPreview(data.url);
+          showToast("Cover banner uploaded!");
+        }
+        return data.url;
+      } else {
+        showToast(data?.error || "Image uploaded.");
+        return null;
+      }
+    } catch (_) {
+      showToast("Photo selected. Click 'Save Settings' to apply.");
+      return null;
+    } finally {
+      if (type === "owner") setIsUploadingOwnerPhoto(false);
+      if (type === "logo") setIsUploadingLogo(false);
+      if (type === "cover") setIsUploadingCover(false);
+    }
+  };
+
+  const triggerNativePick = (source: "camera" | "gallery", target: "dish" | "owner" | "logo" | "cover" = "dish"): boolean => {
+    setImagePickTarget(target);
+    imagePickTargetRef.current = target;
     if (typeof window !== "undefined" && (window as any).FiinwayBridge) {
       try {
-        (window as any).FiinwayBridge.postMessage(JSON.stringify({ action: "pick_image", source }));
+        (window as any).FiinwayBridge.postMessage(JSON.stringify({ action: "pick_image", source, target }));
+        return true;
       } catch (_) {}
+    }
+    return false;
+  };
+
+  const handlePickDishPhoto = (source: "camera" | "gallery") => {
+    const bridged = triggerNativePick(source, "dish");
+    if (!bridged) {
+      if (source === "camera") {
+        dishCameraInputRef.current?.click();
+      } else {
+        dishGalleryInputRef.current?.click();
+      }
     }
   };
 
   // Register bridge image handler for Flutter WebView
   useEffect(() => {
     (window as any).handleBridgeImage = (base64Data: string, filename?: string) => {
-      setImagePreview(base64Data);
       try {
         const arr = base64Data.split(",");
         const mime = arr[0].match(/:(.*?);/)?.[1] || "image/jpeg";
@@ -547,15 +694,80 @@ export default function RestaurantPartnerPortal({
           u8arr[n] = bstr.charCodeAt(n);
         }
         const blob = new Blob([u8arr], { type: mime });
-        const f = new File([blob], filename || "dish.jpg", { type: mime });
-        setSelectedImageFile(f);
+        const currentTarget = imagePickTargetRef.current || imagePickTarget;
+        const f = new File([blob], filename || `${currentTarget}.jpg`, { type: mime });
+
+        if (currentTarget === "owner") {
+          setOwnerImagePreview(base64Data);
+          setOwnerImageFile(f);
+          uploadSingleImage(f, "owner");
+        } else if (currentTarget === "logo") {
+          setLogoPreview(base64Data);
+          setLogoFile(f);
+          uploadSingleImage(f, "logo");
+        } else if (currentTarget === "cover") {
+          setCoverPreview(base64Data);
+          setCoverFile(f);
+          uploadSingleImage(f, "cover");
+        } else {
+          setImagePreview(base64Data);
+          setSelectedImageFile(f);
+        }
+        showToast("Photo captured from mobile camera/gallery!");
       } catch (_) {}
-      showToast("Photo captured from mobile camera/gallery!");
     };
     return () => {
       delete (window as any).handleBridgeImage;
     };
-  }, []);
+  }, [imagePickTarget]);
+
+  const handleOwnerPhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    showToast("Processing owner photo...");
+    try {
+      const { blob, dataUrl } = await compressImage(file, 800);
+      const optimizedFile = new File([blob], "owner_photo.jpg", { type: "image/jpeg" });
+      setOwnerImagePreview(dataUrl);
+      setOwnerImageFile(optimizedFile);
+      uploadSingleImage(optimizedFile, "owner");
+    } catch (_) {
+      setOwnerImageFile(file);
+      uploadSingleImage(file, "owner");
+    }
+  };
+
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    showToast("Processing logo...");
+    try {
+      const { blob, dataUrl } = await compressImage(file, 600);
+      const optimizedFile = new File([blob], "restaurant_logo.jpg", { type: "image/jpeg" });
+      setLogoPreview(dataUrl);
+      setLogoFile(optimizedFile);
+      uploadSingleImage(optimizedFile, "logo");
+    } catch (_) {
+      setLogoFile(file);
+      uploadSingleImage(file, "logo");
+    }
+  };
+
+  const handleCoverFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    showToast("Processing cover banner...");
+    try {
+      const { blob, dataUrl } = await compressImage(file, 1400);
+      const optimizedFile = new File([blob], "restaurant_cover.jpg", { type: "image/jpeg" });
+      setCoverPreview(dataUrl);
+      setCoverFile(optimizedFile);
+      uploadSingleImage(optimizedFile, "cover");
+    } catch (_) {
+      setCoverFile(file);
+      uploadSingleImage(file, "cover");
+    }
+  };
 
   // Handle Image Selection from Camera or Gallery
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -606,9 +818,12 @@ export default function RestaurantPartnerPortal({
 
     if (selectedImageFile) {
       formData.append("image", selectedImageFile);
-    }
-    if (imagePreview && imagePreview.startsWith("data:image")) {
+    } else if (imagePreview && imagePreview.startsWith("data:image")) {
       formData.append("image_base64", imagePreview);
+    } else if (imagePreview && imagePreview.startsWith("http")) {
+      formData.append("image", imagePreview);
+    } else if (editingProduct && !imagePreview) {
+      formData.append("image", "");
     }
 
     try {
@@ -719,19 +934,62 @@ export default function RestaurantPartnerPortal({
     setIsSavingProfile(true);
     const effectiveToken = resolveToken();
     try {
-      await fetch("https://api.fiinway.com/api/v1/food/restaurant/update", {
+      const formData = new FormData();
+      if (profileOutletName.trim()) formData.append("name", profileOutletName.trim());
+      formData.append("description", profileDesc.trim());
+      formData.append("opening_time", profileOpening);
+      formData.append("closing_time", profileClosing);
+      formData.append("avg_prep_minutes", String(profilePrepMins));
+      formData.append("delivery_radius_km", String(profileRadius));
+      formData.append("min_order_amount", String(profileMinOrder));
+      formData.append("pure_veg", profilePureVeg ? "1" : "0");
+      formData.append("fssai_number", fssaiNumber.trim());
+      formData.append("gst_number", gstNumber.trim());
+      formData.append("owner_name", ownerName.trim());
+      formData.append("owner_email", ownerEmail.trim());
+      formData.append("owner_phone", ownerPhone.trim());
+      formData.append("pan_number", ownerPan.trim());
+      formData.append("bank_account_name", bankAccountName.trim());
+      formData.append("bank_name", bankName.trim());
+      formData.append("bank_account_number", bankAccountNumber.trim());
+      formData.append("bank_ifsc", bankIfsc.trim());
+      formData.append("bank_branch", bankBranch.trim());
+      formData.append("upi_id", upiId.trim());
+
+      if (ownerImageFile) {
+        formData.append("owner_image", ownerImageFile);
+      } else if (ownerImagePreview && ownerImagePreview.startsWith("data:image")) {
+        formData.append("owner_image", ownerImagePreview);
+      }
+
+      if (logoFile) {
+        formData.append("logo", logoFile);
+      } else if (logoPreview && logoPreview.startsWith("data:image")) {
+        formData.append("logo", logoPreview);
+      }
+
+      if (coverFile) {
+        formData.append("cover_image", coverFile);
+      } else if (coverPreview && coverPreview.startsWith("data:image")) {
+        formData.append("cover_image", coverPreview);
+      }
+
+      const res = await fetch("https://api.fiinway.com/api/v1/food/restaurant/update", {
         method: "POST",
-        headers: getApiHeaders(effectiveToken),
-        body: JSON.stringify({
-          opening_time: profileOpening,
-          closing_time: profileClosing,
-          avg_prep_minutes: profilePrepMins,
-          delivery_radius_km: profileRadius
-        })
+        headers: getApiHeaders(effectiveToken, true),
+        body: formData
       });
-      showToast("Kitchen settings saved successfully!");
+      const data = await res.json();
+      if (data?.success) {
+        showToast("Profile & Kitchen Settings updated successfully!");
+        setOwnerImageFile(null);
+        setLogoFile(null);
+        setCoverFile(null);
+      } else {
+        showToast(data?.error || "Profile settings saved.");
+      }
     } catch (_) {
-      showToast("Settings saved.");
+      showToast("Profile settings saved.");
     } finally {
       setIsSavingProfile(false);
       fetchPortalData();
@@ -1702,11 +1960,12 @@ export default function RestaurantPartnerPortal({
                       {/* Left: Thumbnail + Name + Price */}
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-14 h-14 rounded-xl overflow-hidden bg-slate-100 shrink-0 relative">
-                          {product.image ? (
+                          {product.image_url || product.image ? (
                             <img
-                              src={product.image.startsWith("http") ? product.image : `https://api.fiinway.com/storage/${product.image}`}
+                              src={product.image_url || (product.image.startsWith("http") ? product.image : `https://api.fiinway.com/storage/${product.image}`)}
                               alt={product.name}
                               className="w-full h-full object-cover"
+                              onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-slate-300">
@@ -2045,46 +2304,427 @@ export default function RestaurantPartnerPortal({
             </div>
           )}
 
-          {/* TAB 7: PROFILE */}
+          {/* TAB 7: PROFILE & RESTAURANT SETTINGS */}
           {activeTab === "profile" && (
-            <div className="max-w-3xl mx-auto space-y-3.5">
-              <div>
-                <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                  Kitchen Settings & SLA
-                </h1>
-                <p className="text-[11px] text-slate-500">Operating hours and prep turnaround</p>
+            <div className="max-w-4xl mx-auto space-y-5 pb-10">
+              {/* Hidden File Inputs for Native & Web Pickers */}
+              <input
+                ref={ownerPhotoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleOwnerPhotoChange}
+              />
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleLogoFileChange}
+              />
+              <input
+                ref={coverInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleCoverFileChange}
+              />
+
+              {/* Page Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-orange-100 text-[#FF5200]">
+                      <Store className="w-5 h-5" />
+                    </span>
+                    <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
+                      Restaurant & Owner Profile
+                    </h1>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Manage owner identity, brand visuals, kitchen SLA, government compliance, and settlement bank
+                  </p>
+                </div>
+                <button
+                  onClick={handleSaveProfile}
+                  disabled={isSavingProfile}
+                  className="flex items-center justify-center gap-2 px-6 py-2.5 bg-[#FF5200] hover:bg-[#e04800] disabled:bg-slate-300 text-white font-bold rounded-xl shadow-sm text-xs cursor-pointer transition-all active:scale-95"
+                >
+                  <Save className="w-4 h-4" />
+                  {isSavingProfile ? "Saving Changes..." : "Save All Changes"}
+                </button>
               </div>
 
-              <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3 text-xs">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-slate-400 font-bold mb-1">Outlet Name</label>
-                    <input
-                      type="text"
-                      disabled
-                      value={restaurant.name}
-                      className="w-full p-2.5 rounded-xl bg-slate-100 border border-slate-200 font-bold text-slate-800"
-                    />
+              {/* Live Operational Status Control */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700">
+                      <Clock className="w-4 h-4" />
+                    </span>
+                    <h2 className="text-sm font-black text-slate-900">Live Business Status</h2>
                   </div>
+                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 uppercase tracking-wide">
+                    Current: {restaurant.operational_status || "open"}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Control how your restaurant appears to customers on the food ordering app in real time.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateStatus("open")}
+                    className={`p-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                      restaurant.operational_status === "open"
+                        ? "bg-emerald-500 text-white border-emerald-600 shadow-xs"
+                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-emerald-50 hover:border-emerald-200"
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" />
+                    🟢 Open (Live)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateStatus("busy")}
+                    className={`p-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                      restaurant.operational_status === "busy"
+                        ? "bg-amber-500 text-white border-amber-600 shadow-xs"
+                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-amber-50 hover:border-amber-200"
+                    }`}
+                  >
+                    🟡 Busy (+15m)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateStatus("temporarily_closed")}
+                    className={`p-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                      restaurant.operational_status === "temporarily_closed"
+                        ? "bg-orange-500 text-white border-orange-600 shadow-xs"
+                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-orange-50 hover:border-orange-200"
+                    }`}
+                  >
+                    🟠 Paused
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateStatus("closed")}
+                    className={`p-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                      restaurant.operational_status === "closed"
+                        ? "bg-rose-500 text-white border-rose-600 shadow-xs"
+                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-rose-50 hover:border-rose-200"
+                    }`}
+                  >
+                    🔴 Closed
+                  </button>
+                </div>
+              </div>
+
+              {/* CARD 1: OWNER IDENTITY & PHOTO UPLOAD */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                  <span className="p-1.5 rounded-lg bg-blue-100 text-blue-700">
+                    <User className="w-4 h-4" />
+                  </span>
                   <div>
-                    <label className="block text-slate-400 font-bold mb-1">Business Model</label>
-                    <input
-                      type="text"
-                      disabled
-                      value={restaurant.business_type === "actual_restaurant" ? "Dine-In & Delivery" : "Cloud Kitchen"}
-                      className="w-full p-2.5 rounded-xl bg-slate-100 border border-slate-200 font-bold text-slate-800"
-                    />
+                    <h2 className="text-sm font-black text-slate-900">Owner Identity & Verification</h2>
+                    <p className="text-[11px] text-slate-500">
+                      Registered proprietor details and verified photo identity
+                    </p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Owner Photo Avatar and Uploader */}
+                <div className="flex flex-col sm:flex-row items-center gap-5 p-4 rounded-xl bg-slate-50 border border-slate-200/80">
+                  <div className="relative group">
+                    <div className="w-24 h-24 rounded-full overflow-hidden border-3 border-white shadow-md bg-slate-200 flex items-center justify-center">
+                      {ownerImagePreview ? (
+                        <img
+                          src={ownerImagePreview}
+                          alt="Owner Photo"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center text-slate-400">
+                          <User className="w-10 h-10 text-slate-400" />
+                          <span className="text-[9px] font-bold text-slate-400 mt-1">No Photo</span>
+                        </div>
+                      )}
+                    </div>
+                    {isUploadingOwnerPhoto && (
+                      <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center text-white text-[10px] font-bold">
+                        Uploading...
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => ownerPhotoInputRef.current?.click()}
+                      className="absolute bottom-0 right-0 p-2 rounded-full bg-[#FF5200] text-white shadow-md hover:bg-[#e04800] cursor-pointer transition-transform hover:scale-105"
+                      title="Upload Owner Photo"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="flex-1 text-center sm:text-left space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                      <h4 className="font-bold text-xs text-slate-800">
+                        Restaurant Owner Photo / Avatar
+                      </h4>
+                      {ownerImagePreview && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 w-fit mx-auto sm:mx-0">
+                          <CheckCircle2 className="w-3 h-3" /> Photo Uploaded
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Upload a clear frontal photo of the business owner. Required for KYC verification and partner identification.
+                    </p>
+
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => triggerNativePick("camera", "owner")}
+                        className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                      >
+                        <Camera className="w-3.5 h-3.5 text-[#FF5200]" />
+                        Take Photo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImagePickTarget("owner");
+                          ownerPhotoInputRef.current?.click();
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-[#FF5200]" />
+                        Choose File
+                      </button>
+                      {ownerImagePreview && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOwnerImagePreview("");
+                            setOwnerImageFile(null);
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg text-rose-600 hover:bg-rose-50 text-xs font-bold cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Owner Details Inputs */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">
+                      Owner Full Name <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={ownerName}
+                      onChange={(e) => setOwnerName(e.target.value)}
+                      placeholder="e.g. Rajesh Sharma"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-medium text-slate-800 focus:bg-white focus:border-[#FF5200] outline-hidden"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">
+                      Registered Mobile Number <span className="text-slate-400 font-normal">(Primary Auth)</span>
+                    </label>
+                    <input
+                      type="text"
+                      disabled
+                      value={ownerPhone || restaurant.owner_phone || phone}
+                      className="w-full p-2.5 rounded-xl bg-slate-100 border border-slate-200 font-bold text-slate-600 cursor-not-allowed"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">
+                      Owner Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={ownerEmail}
+                      onChange={(e) => setOwnerEmail(e.target.value)}
+                      placeholder="e.g. rajesh@example.com"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-medium text-slate-800 focus:bg-white focus:border-[#FF5200] outline-hidden"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">
+                      Owner PAN Number <span className="text-slate-400 font-normal">(10 Chars)</span>
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={10}
+                      value={ownerPan}
+                      onChange={(e) => setOwnerPan(e.target.value.toUpperCase())}
+                      placeholder="e.g. ABCDE1234F"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold tracking-wider text-slate-800 focus:bg-white focus:border-[#FF5200] outline-hidden"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* CARD 2: RESTAURANT BRANDING & STOREFRONT */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                  <span className="p-1.5 rounded-lg bg-orange-100 text-[#FF5200]">
+                    <Building2 className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h2 className="text-sm font-black text-slate-900">Restaurant Branding & Storefront</h2>
+                    <p className="text-[11px] text-slate-500">Public logo, cover banner, and outlet profile</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Logo Upload Card */}
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-4">
+                    <div className="w-20 h-20 rounded-xl overflow-hidden bg-slate-200 border border-slate-300 shrink-0 flex items-center justify-center">
+                      {logoPreview ? (
+                        <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" />
+                      ) : (
+                        <Store className="w-8 h-8 text-slate-400" />
+                      )}
+                    </div>
+                    <div className="space-y-1.5 flex-1">
+                      <h4 className="font-bold text-xs text-slate-800">Outlet Logo</h4>
+                      <p className="text-[11px] text-slate-500">Square 1:1 format (PNG or JPG)</p>
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImagePickTarget("logo");
+                            logoInputRef.current?.click();
+                          }}
+                          disabled={isUploadingLogo}
+                          className="px-3 py-1 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-lg shadow-2xs cursor-pointer flex items-center gap-1"
+                        >
+                          <Upload className="w-3 h-3 text-[#FF5200]" />
+                          {isUploadingLogo ? "Uploading..." : "Upload Logo"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Cover Banner Card */}
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-4">
+                    <div className="w-28 h-20 rounded-xl overflow-hidden bg-slate-200 border border-slate-300 shrink-0 flex items-center justify-center">
+                      {coverPreview ? (
+                        <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
+                      ) : (
+                        <ImageIcon className="w-8 h-8 text-slate-400" />
+                      )}
+                    </div>
+                    <div className="space-y-1.5 flex-1">
+                      <h4 className="font-bold text-xs text-slate-800">Cover Banner</h4>
+                      <p className="text-[11px] text-slate-500">Landscape 16:9 banner photo</p>
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImagePickTarget("cover");
+                            coverInputRef.current?.click();
+                          }}
+                          disabled={isUploadingCover}
+                          className="px-3 py-1 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-lg shadow-2xs cursor-pointer flex items-center gap-1"
+                        >
+                          <Upload className="w-3 h-3 text-[#FF5200]" />
+                          {isUploadingCover ? "Uploading..." : "Upload Banner"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Outlet Name, Description & Pure Veg */}
+                <div className="space-y-3 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1">Outlet Display Name</label>
+                      <input
+                        type="text"
+                        value={profileOutletName || restaurant.name}
+                        onChange={(e) => setProfileOutletName(e.target.value)}
+                        placeholder="e.g. Royal Biryani & Kebabs"
+                        className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-800 focus:bg-white focus:border-[#FF5200] outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 font-bold mb-1">Business Model</label>
+                      <input
+                        type="text"
+                        disabled
+                        value={restaurant.business_type === "actual_restaurant" ? "Dine-In & Delivery" : "Cloud Kitchen"}
+                        className="w-full p-2.5 rounded-xl bg-slate-100 border border-slate-200 font-bold text-slate-700"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Description / Tagline</label>
+                    <textarea
+                      rows={2}
+                      value={profileDesc}
+                      onChange={(e) => setProfileDesc(e.target.value)}
+                      placeholder="Authentic North Indian cuisines prepared fresh with premium spices..."
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:border-[#FF5200] outline-hidden resize-none"
+                    />
+                  </div>
+
+                  {/* Pure Veg Dietary Badge Toggle */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50/70 border border-emerald-200">
+                    <div className="flex items-center gap-2.5">
+                      <span className="p-1.5 rounded-lg bg-emerald-500 text-white">
+                        <Leaf className="w-4 h-4" />
+                      </span>
+                      <div>
+                        <span className="font-bold text-xs text-emerald-950 block">
+                          100% Pure Vegetarian Restaurant
+                        </span>
+                        <span className="text-[11px] text-emerald-700">
+                          Displays the official green Pure Veg badge on customer search cards
+                        </span>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={profilePureVeg}
+                        onChange={(e) => setProfilePureVeg(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* CARD 3: KITCHEN OPERATIONS & SLA */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                  <span className="p-1.5 rounded-lg bg-amber-100 text-amber-700">
+                    <Clock className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h2 className="text-sm font-black text-slate-900">Kitchen Operations & Turnaround SLA</h2>
+                    <p className="text-[11px] text-slate-500">Turnaround minutes, delivery range, and kitchen timing</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <div>
                     <label className="block text-slate-600 font-bold mb-1">Opening Time</label>
                     <input
                       type="time"
                       value={profileOpening}
                       onChange={(e) => setProfileOpening(e.target.value)}
-                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-800"
                     />
                   </div>
                   <div>
@@ -2093,55 +2733,190 @@ export default function RestaurantPartnerPortal({
                       type="time"
                       value={profileClosing}
                       onChange={(e) => setProfileClosing(e.target.value)}
-                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-800"
                     />
                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-600 font-bold mb-1">Prep Time (Mins)</label>
+                    <label className="block text-slate-600 font-bold mb-1">
+                      Avg Prep Turnaround (Mins)
+                    </label>
                     <input
                       type="number"
                       min={5}
                       max={90}
                       value={profilePrepMins}
                       onChange={(e) => setProfilePrepMins(Number(e.target.value))}
-                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-800"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-600 font-bold mb-1">Delivery Radius (KM)</label>
+                    <label className="block text-slate-600 font-bold mb-1">
+                      Delivery Serving Radius (KM)
+                    </label>
                     <input
                       type="number"
                       min={1}
                       max={25}
                       value={profileRadius}
                       onChange={(e) => setProfileRadius(Number(e.target.value))}
-                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-600 font-bold mb-1">
+                      Min Order Value (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={profileMinOrder}
+                      onChange={(e) => setProfileMinOrder(Number(e.target.value))}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 font-bold mb-1">
+                      Outlet Location / City
+                    </label>
+                    <input
+                      type="text"
+                      disabled
+                      value={`${restaurant.address || profileAddress || "Registered Kitchen"}, ${restaurant.city || profileCity || ""}`}
+                      className="w-full p-2.5 rounded-xl bg-slate-100 border border-slate-200 font-medium text-slate-600"
                     />
                   </div>
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-slate-400 font-bold mb-1">Address</label>
-                  <input
-                    type="text"
-                    disabled
-                    value={restaurant.address || "Outlet Address"}
-                    className="w-full p-2.5 rounded-xl bg-slate-100 border border-slate-200 font-semibold"
-                  />
+              {/* CARD 4: GOVERNMENT COMPLIANCE & LICENSES */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                  <span className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700">
+                    <ShieldCheck className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h2 className="text-sm font-black text-slate-900">Government Compliance & Licensing</h2>
+                    <p className="text-[11px] text-slate-500">Statutory regulatory numbers as per Section 32</p>
+                  </div>
                 </div>
 
-                <div className="pt-2 flex justify-end">
-                  <button
-                    onClick={handleSaveProfile}
-                    disabled={isSavingProfile}
-                    className="px-5 py-2 bg-[#FF5200] hover:bg-[#e04800] disabled:bg-slate-300 text-white font-bold rounded-xl shadow-xs text-xs cursor-pointer"
-                  >
-                    {isSavingProfile ? "Saving..." : "Save Settings"}
-                  </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">
+                      FSSAI License Number <span className="text-rose-500">* (14 Digits)</span>
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={14}
+                      value={fssaiNumber}
+                      onChange={(e) => setFssaiNumber(e.target.value.replace(/\D/g, "").slice(0, 14))}
+                      placeholder="e.g. 12224999000123"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold tracking-wider text-slate-800 focus:bg-white focus:border-[#FF5200] outline-hidden"
+                    />
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      {fssaiNumber.length === 14 ? "✅ Valid 14-digit FSSAI" : `${fssaiNumber.length}/14 digits entered`}
+                    </span>
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">
+                      GSTIN <span className="text-slate-400 font-normal">(15 Characters)</span>
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={15}
+                      value={gstNumber}
+                      onChange={(e) => setGstNumber(e.target.value.toUpperCase().slice(0, 15))}
+                      placeholder="e.g. 07AAAAA0000A1Z5"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold tracking-wider text-slate-800 focus:bg-white focus:border-[#FF5200] outline-hidden"
+                    />
+                  </div>
                 </div>
+              </div>
+
+              {/* CARD 5: SETTLEMENT BANK & PAYOUT */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                  <span className="p-1.5 rounded-lg bg-indigo-100 text-indigo-700">
+                    <Landmark className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h2 className="text-sm font-black text-slate-900">Settlement Bank & Payouts</h2>
+                    <p className="text-[11px] text-slate-500">Destination account for automated weekly settlements</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Account Holder Name</label>
+                    <input
+                      type="text"
+                      value={bankAccountName}
+                      onChange={(e) => setBankAccountName(e.target.value)}
+                      placeholder="e.g. Rajesh Kumar Sharma"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-medium text-slate-800 focus:bg-white focus:border-[#FF5200] outline-hidden"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Bank Name</label>
+                    <input
+                      type="text"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                      placeholder="e.g. HDFC Bank"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-medium text-slate-800 focus:bg-white focus:border-[#FF5200] outline-hidden"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Bank Account Number</label>
+                    <input
+                      type="text"
+                      value={bankAccountNumber}
+                      onChange={(e) => setBankAccountNumber(e.target.value)}
+                      placeholder="e.g. 50100234567890"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-800 focus:bg-white focus:border-[#FF5200] outline-hidden"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">IFSC Code</label>
+                    <input
+                      type="text"
+                      maxLength={11}
+                      value={bankIfsc}
+                      onChange={(e) => setBankIfsc(e.target.value.toUpperCase())}
+                      placeholder="e.g. HDFC0001234"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold tracking-wider text-slate-800 focus:bg-white focus:border-[#FF5200] outline-hidden"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-slate-700 font-bold mb-1">
+                      UPI ID for Instant Payouts <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={upiId}
+                      onChange={(e) => setUpiId(e.target.value)}
+                      placeholder="e.g. rajesh@okaxis"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-medium text-slate-800 focus:bg-white focus:border-[#FF5200] outline-hidden"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Sticky Action Bar */}
+              <div className="sticky bottom-16 sm:bottom-4 p-4 rounded-2xl bg-white/95 backdrop-blur-md border border-slate-200 shadow-lg flex items-center justify-between z-30">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#FF5200] animate-pulse" />
+                  <span className="text-xs font-bold text-slate-700">All updates sync live across customer app</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveProfile}
+                  disabled={isSavingProfile}
+                  className="px-6 py-2.5 bg-[#FF5200] hover:bg-[#e04800] disabled:bg-slate-300 text-white font-bold rounded-xl shadow-xs text-xs cursor-pointer transition-all flex items-center gap-1.5"
+                >
+                  <Save className="w-4 h-4" />
+                  {isSavingProfile ? "Saving Profile..." : "Save All Changes"}
+                </button>
               </div>
             </div>
           )}
@@ -2293,10 +3068,32 @@ export default function RestaurantPartnerPortal({
                   <span className="text-[10px] font-normal text-slate-400">Camera / Gallery</span>
                 </label>
 
+                {/* Hidden File Inputs */}
+                <input
+                  ref={dishCameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleImageFileChange}
+                  className="hidden"
+                />
+                <input
+                  ref={dishGalleryInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageFileChange}
+                  className="hidden"
+                />
+
                 {imagePreview ? (
                   <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 p-2 space-y-2">
                     <div className="relative rounded-xl overflow-hidden h-36 bg-slate-100">
-                      <img src={imagePreview} alt="Dish preview" className="w-full h-full object-cover" />
+                      <img
+                        src={imagePreview}
+                        alt="Dish preview"
+                        className="w-full h-full object-cover"
+                        onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                      />
                       <button
                         type="button"
                         onClick={() => {
@@ -2312,72 +3109,58 @@ export default function RestaurantPartnerPortal({
 
                     <div className="flex items-center justify-between pt-0.5">
                       <span className="text-emerald-700 font-bold text-[11px] flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5" /> Photo Added
+                        <Check className="w-3.5 h-3.5" /> Photo Attached
                       </span>
                       <div className="flex items-center gap-1.5">
-                        {/* Direct native camera label */}
-                        <label onClick={() => triggerNativePick("camera")} className="relative px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1 cursor-pointer overflow-hidden">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            onChange={handleImageFileChange}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
-                          />
+                        <button
+                          type="button"
+                          onClick={() => handlePickDishPhoto("camera")}
+                          className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1 cursor-pointer"
+                        >
                           <Camera className="w-3 h-3 text-[#FF5200]" />
                           <span>Retake</span>
-                        </label>
-                        {/* Direct native gallery label */}
-                        <label onClick={() => triggerNativePick("gallery")} className="relative px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1 cursor-pointer overflow-hidden">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleImageFileChange}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
-                          />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handlePickDishPhoto("gallery")}
+                          className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1 cursor-pointer"
+                        >
                           <ImageIcon className="w-3 h-3 text-blue-600" />
                           <span>Gallery</span>
-                        </label>
+                        </button>
                       </div>
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-1.5">
                     <div className="grid grid-cols-2 gap-2">
-                      {/* Native Mobile Camera Option */}
-                      <label onClick={() => triggerNativePick("camera")} className="relative p-3 rounded-2xl border-2 border-dashed border-slate-300 hover:border-[#FF5200] bg-slate-50 hover:bg-orange-50/40 transition-all flex flex-col items-center justify-center gap-1.5 text-center cursor-pointer overflow-hidden group">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          onChange={handleImageFileChange}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
-                        />
-                        <div className="w-8 h-8 rounded-full bg-orange-100 text-[#FF5200] flex items-center justify-center group-hover:scale-105 transition-transform pointer-events-none">
+                      <button
+                        type="button"
+                        onClick={() => handlePickDishPhoto("camera")}
+                        className="p-3 rounded-2xl border-2 border-dashed border-slate-300 hover:border-[#FF5200] bg-slate-50 hover:bg-orange-50/40 transition-all flex flex-col items-center justify-center gap-1.5 text-center cursor-pointer group"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-orange-100 text-[#FF5200] flex items-center justify-center group-hover:scale-105 transition-transform">
                           <Camera className="w-4 h-4" />
                         </div>
-                        <div className="pointer-events-none">
+                        <div>
                           <span className="font-bold text-xs text-slate-800 block leading-tight">Take Photo</span>
                           <span className="text-[9px] text-slate-400 block">Open Camera</span>
                         </div>
-                      </label>
+                      </button>
 
-                      {/* Native Mobile Gallery Option */}
-                      <label onClick={() => triggerNativePick("gallery")} className="relative p-3 rounded-2xl border-2 border-dashed border-slate-300 hover:border-[#FF5200] bg-slate-50 hover:bg-orange-50/40 transition-all flex flex-col items-center justify-center gap-1.5 text-center cursor-pointer overflow-hidden group">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageFileChange}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
-                        />
-                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center group-hover:scale-105 transition-transform pointer-events-none">
+                      <button
+                        type="button"
+                        onClick={() => handlePickDishPhoto("gallery")}
+                        className="p-3 rounded-2xl border-2 border-dashed border-slate-300 hover:border-[#FF5200] bg-slate-50 hover:bg-orange-50/40 transition-all flex flex-col items-center justify-center gap-1.5 text-center cursor-pointer group"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center group-hover:scale-105 transition-transform">
                           <ImageIcon className="w-4 h-4" />
                         </div>
-                        <div className="pointer-events-none">
+                        <div>
                           <span className="font-bold text-xs text-slate-800 block leading-tight">From Gallery</span>
                           <span className="text-[9px] text-slate-400 block">Pick Album</span>
                         </div>
-                      </label>
+                      </button>
                     </div>
                     <p className="text-[10px] text-slate-400 text-center">
                       Tap above to snap food with Camera or choose from Photos.
