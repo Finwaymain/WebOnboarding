@@ -32,7 +32,9 @@ import {
   BadgePercent,
   Sparkles,
   Check,
-  Navigation
+  Navigation,
+  Gift,
+  Lock
 } from 'lucide-react';
 
 const API_KEY = "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=";
@@ -95,6 +97,8 @@ interface OrderConfirmation {
   delivery_otp?: string;
   customer_payable: number;
   order_status: string;
+  payment_method?: string;
+  payment_status?: string;
   distance_km?: number;
   delivery_charge?: number;
   platform_charges?: number;
@@ -106,10 +110,13 @@ interface Props {
   initialLng?: number;
   userPhone?: string;
   userName?: string;
+  initialWalletBalance?: number;
+  token?: string;
+  userId?: string;
   onSwitchToMerchant?: () => void;
 }
 
-// Professional food photography categories (Curated high-res imagery, no emojis)
+// Professional food photography categories (No emojis)
 const CURATED_CATEGORIES = [
   { id: 'biryani', name: 'Biryani', img: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=200&auto=format&fit=crop&q=80' },
   { id: 'pizzas', name: 'Pizzas', img: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=200&auto=format&fit=crop&q=80' },
@@ -126,17 +133,23 @@ export default function CustomerFoodOrdering({
   initialLng,
   userPhone = '',
   userName = '',
+  initialWalletBalance = 0,
+  token = '',
+  userId = '',
 }: Props) {
-  // Real coordinates — no fake default city
+  // Real coordinates — starts from Flutter props or auto-detect
   const [lat, setLat] = useState<number | null>(initialLat || null);
   const [lng, setLng] = useState<number | null>(initialLng || null);
   const [radiusKm] = useState<number>(25);
   const [locationName, setLocationName] = useState<string>('Detecting your delivery location...');
   const [locationArea, setLocationArea] = useState<string>('Locating...');
-  const [isLocating, setIsLocating] = useState<boolean>(true);
+  const [isLocating, setIsLocating] = useState<boolean>(!initialLat);
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState<boolean>(false);
   const [manualAddressInput, setManualAddressInput] = useState<string>('');
   const [isGeocodingManual, setIsGeocodingManual] = useState<boolean>(false);
+
+  // User Wallet Details
+  const [walletBalance, setWalletBalance] = useState<number>(initialWalletBalance || 0);
 
   // Top Swiggy-style sub-tabs & Veg Toggle
   const [vegOnly, setVegOnly] = useState<boolean>(false);
@@ -175,14 +188,41 @@ export default function CustomerFoodOrdering({
   const [deliveryAddress, setDeliveryAddress] = useState<string>('');
   const [deliveryNotes, setDeliveryNotes] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<'wallet' | 'upi' | 'cod'>('wallet');
+  const [applyPromo, setApplyPromo] = useState<boolean>(true); // Home service promotional bonus
   const [isPlacingOrder, setIsPlacingOrder] = useState<boolean>(false);
+
+  // MPIN Verification Modal (Home Service standard)
+  const [isMpinModalOpen, setIsMpinModalOpen] = useState<boolean>(false);
+  const [mpinInput, setMpinInput] = useState<string>('');
+  const [mpinError, setMpinError] = useState<string>('');
 
   // Live Order Tracking
   const [confirmedOrder, setConfirmedOrder] = useState<OrderConfirmation | null>(null);
   const [isTrackingModal, setIsTrackingModal] = useState<boolean>(false);
 
-  // Guard to prevent duplicate location resolution
-  const hasResolvedLocationRef = useRef(false);
+  // Fetch Live Wallet Balance from API
+  const fetchWalletBalance = useCallback(async () => {
+    try {
+      const q = userId ? `user_id=${userId}` : userPhone ? `phone=${userPhone}` : '';
+      if (!q) return;
+      const res = await fetch(`/api/v1/food/customer/wallet?${q}`, {
+        headers: { Accept: 'application/json', apikey: API_KEY },
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        if (data.data.wallet_balance !== undefined) {
+          setWalletBalance(Number(data.data.wallet_balance));
+        }
+        if (data.data.name && !customerName) {
+          setCustomerName(data.data.name);
+        }
+      }
+    } catch (_) {}
+  }, [userId, userPhone, customerName]);
+
+  useEffect(() => {
+    fetchWalletBalance();
+  }, [fetchWalletBalance]);
 
   // Reverse Geocoding with Google Maps API + Fallback to Nominatim
   const reverseGeocode = useCallback(async (latitude: number, longitude: number) => {
@@ -199,7 +239,7 @@ export default function CustomerFoodOrdering({
         const mainArea = sub ? sub.long_name : (city ? city.long_name : 'Current Area');
         setLocationArea(mainArea);
         setLocationName(googleData.results[0].formatted_address?.slice(0, 48));
-        setDeliveryAddress(prev => prev || googleData.results[0].formatted_address);
+        setDeliveryAddress((prev) => prev || googleData.results[0].formatted_address);
         return;
       }
     } catch (_) {}
@@ -217,7 +257,7 @@ export default function CustomerFoodOrdering({
       const formatted = [road, city].filter(Boolean).join(', ') || osmData.display_name?.slice(0, 48);
       setLocationArea(area);
       setLocationName(formatted);
-      setDeliveryAddress(prev => prev || formatted);
+      setDeliveryAddress((prev) => prev || formatted);
     } catch (_) {
       setLocationArea('My Location');
       setLocationName(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
@@ -228,7 +268,6 @@ export default function CustomerFoodOrdering({
   const detectLiveGPS = useCallback(async () => {
     setIsLocating(true);
 
-    // Fast IP Geolocation fallback runner
     const runIPFallback = async () => {
       try {
         const ipRes = await fetch('https://ipwho.is/');
@@ -241,10 +280,8 @@ export default function CustomerFoodOrdering({
           setLocationArea(ipData.city || ipData.region || 'Current City');
           const fullLoc = [ipData.city, ipData.region, ipData.postal].filter(Boolean).join(', ');
           setLocationName(fullLoc);
-          setDeliveryAddress(prev => prev || fullLoc);
+          setDeliveryAddress((prev) => prev || fullLoc);
           setIsLocating(false);
-          hasResolvedLocationRef.current = true;
-          // Further refine address
           reverseGeocode(detectedLat, detectedLng);
           return true;
         }
@@ -261,9 +298,8 @@ export default function CustomerFoodOrdering({
           setLocationArea(bgData.city || bgData.principalSubdivision || 'Current City');
           const fullLoc = [bgData.locality, bgData.city, bgData.principalSubdivision].filter(Boolean).join(', ');
           setLocationName(fullLoc);
-          setDeliveryAddress(prev => prev || fullLoc);
+          setDeliveryAddress((prev) => prev || fullLoc);
           setIsLocating(false);
-          hasResolvedLocationRef.current = true;
           reverseGeocode(detectedLat, detectedLng);
           return true;
         }
@@ -272,7 +308,6 @@ export default function CustomerFoodOrdering({
       return false;
     };
 
-    // If browser navigator.geolocation is available, try it with high accuracy
     if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -281,11 +316,9 @@ export default function CustomerFoodOrdering({
           setLat(latitude);
           setLng(longitude);
           setIsLocating(false);
-          hasResolvedLocationRef.current = true;
           reverseGeocode(latitude, longitude);
         },
         async () => {
-          // GPS denied or failed in webview, fall back to IP location
           const ipOk = await runIPFallback();
           if (!ipOk) {
             setIsLocating(false);
@@ -305,7 +338,7 @@ export default function CustomerFoodOrdering({
     }
   }, [reverseGeocode]);
 
-  // Initial location bootstrap
+  // Initial location bootstrap from Flutter params or browser GPS
   useEffect(() => {
     if (initialLat && initialLng) {
       setLat(initialLat);
@@ -317,14 +350,13 @@ export default function CustomerFoodOrdering({
     detectLiveGPS();
   }, [initialLat, initialLng, detectLiveGPS, reverseGeocode]);
 
-  // Geocode manual text input (e.g. "Ujjain" or "Freeganj, Ujjain")
+  // Manual location search
   const handleManualLocationSearch = async (queryText: string) => {
     const q = queryText.trim();
     if (!q) return;
     setIsGeocodingManual(true);
 
     try {
-      // 1. Google Maps Geocoding
       const gRes = await fetch(
         `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&key=${GOOGLE_MAPS_KEY}`
       );
@@ -342,7 +374,6 @@ export default function CustomerFoodOrdering({
       }
     } catch (_) {}
 
-    // 2. Nominatim Search
     try {
       const osmRes = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`,
@@ -429,7 +460,7 @@ export default function CustomerFoodOrdering({
     }
   };
 
-  // Load real dishes from nearby restaurants for quick meals row
+  // Load real dishes for quick meals row
   useEffect(() => {
     if (restaurants.length > 0) {
       const firstRes = restaurants[0];
@@ -493,14 +524,21 @@ export default function CustomerFoodOrdering({
     return 95;
   }, [activeRestaurant, cartSubtotal]);
 
+  // Home Service standard Promo Bonus (20% up to ₹50)
+  const promoDiscountAmount = useMemo(() => {
+    if (!applyPromo || cartSubtotal <= 0) return 0;
+    return Math.min(50, Math.round(cartSubtotal * 0.2));
+  }, [applyPromo, cartSubtotal]);
+
   const platformFee = 3;
   const taxesAndGst = useMemo(() => Math.round(cartSubtotal * 0.05), [cartSubtotal]);
   const grandTotal = useMemo(
-    () => Math.round(cartSubtotal + deliveryFee + platformFee + taxesAndGst),
-    [cartSubtotal, deliveryFee, taxesAndGst]
+    () => Math.max(0, Math.round(cartSubtotal + deliveryFee + platformFee + taxesAndGst - promoDiscountAmount)),
+    [cartSubtotal, deliveryFee, platformFee, taxesAndGst, promoDiscountAmount]
   );
 
-  const handlePlaceOrder = async () => {
+  // Initiate Order Flow (Checks MPIN if wallet is selected)
+  const handleInitiateOrder = () => {
     const targetRestaurant = activeRestaurant || (restaurants.length > 0 ? restaurants[0] : null);
     if (!targetRestaurant) return;
     if (!customerPhone || customerPhone.length < 10) {
@@ -512,10 +550,33 @@ export default function CustomerFoodOrdering({
       return;
     }
 
+    if (paymentMethod === 'wallet') {
+      if (walletBalance < grandTotal) {
+        alert(`Insufficient wallet balance (Available: ₹${walletBalance}, Required: ₹${grandTotal}). Please add money or choose UPI/Cash on Delivery.`);
+        return;
+      }
+      // Open MPIN modal like Home Service
+      setMpinInput('');
+      setMpinError('');
+      setIsMpinModalOpen(true);
+      return;
+    }
+
+    executePlaceOrder();
+  };
+
+  // Place Order API execution (with optional MPIN)
+  const executePlaceOrder = async (enteredMpin?: string) => {
+    const targetRestaurant = activeRestaurant || (restaurants.length > 0 ? restaurants[0] : null);
+    if (!targetRestaurant) return;
+
     setIsPlacingOrder(true);
+    setMpinError('');
+
     try {
-      const payload = {
+      const payload: any = {
         restaurant_id: targetRestaurant.id,
+        customer_id: userId || undefined,
         customer_name: customerName || 'Fiinway Customer',
         customer_phone: customerPhone,
         delivery_address: deliveryAddress,
@@ -523,12 +584,19 @@ export default function CustomerFoodOrdering({
         delivery_lng: lng,
         special_instructions: deliveryNotes,
         payment_method: paymentMethod,
+        apply_promotional: applyPromo ? '1' : '0',
+        discount_amount: promoDiscountAmount,
         items: cartList.map((item) => ({
           product_id: item.product.id,
           quantity: item.quantity,
           instructions: '',
         })),
       };
+
+      if (enteredMpin) {
+        payload.m_pin = enteredMpin;
+        payload.mpin = enteredMpin;
+      }
 
       const res = await fetch('/api/v1/food/customer/orders', {
         method: 'POST',
@@ -542,12 +610,27 @@ export default function CustomerFoodOrdering({
       const data = await res.json();
 
       if (data.success && data.data) {
-        setConfirmedOrder({ ...data.data, restaurant: targetRestaurant });
+        setConfirmedOrder({
+          ...data.data,
+          payment_method: paymentMethod,
+          customer_payable: grandTotal,
+          restaurant: targetRestaurant,
+        });
         setCart({});
+        setIsMpinModalOpen(false);
         setIsCheckoutOpen(false);
         setIsTrackingModal(true);
+        // Refresh updated wallet balance
+        fetchWalletBalance();
+      } else if (data.require_mpin) {
+        setIsMpinModalOpen(true);
+        setMpinError(data.error || 'Please enter valid 4-digit MPIN.');
       } else {
-        alert(data.error || 'Failed to place order. Please try again.');
+        if (isMpinModalOpen) {
+          setMpinError(data.error || 'Payment failed. Please check MPIN.');
+        } else {
+          alert(data.error || 'Failed to place order. Please try again.');
+        }
       }
     } catch {
       alert('Network error while placing order. Please retry.');
@@ -610,7 +693,7 @@ export default function CustomerFoodOrdering({
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-gray-900 pb-28 font-sans antialiased select-none">
-      {/* 1. TOP STICKY HEADER (No Partner Button) */}
+      {/* 1. TOP STICKY HEADER (Zero Partner Button) */}
       <header className="sticky top-0 z-30 bg-white border-b border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.04)] px-4 pt-3 pb-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
           {/* Location Delivery Bar */}
@@ -632,9 +715,15 @@ export default function CustomerFoodOrdering({
                 </span>
               </div>
               <p className="text-xs text-gray-500 truncate max-w-[240px] sm:max-w-md font-medium">
-                {isLocating ? 'Detecting your exact GPS location...' : locationName}
+                {isLocating ? 'Detecting your delivery location...' : locationName}
               </p>
             </div>
+          </div>
+
+          {/* User Wallet Balance Pill */}
+          <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 px-2.5 py-1 rounded-full text-xs font-bold shrink-0">
+            <Wallet className="w-3.5 h-3.5 text-emerald-600" />
+            <span>₹{walletBalance}</span>
           </div>
 
           {/* GPS Refresh Button */}
@@ -680,7 +769,6 @@ export default function CustomerFoodOrdering({
                 : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
             }`}
           >
-            {/* Regulatory Veg Green Symbol */}
             <span className="w-3.5 h-3.5 border border-emerald-600 flex items-center justify-center p-[1.5px] rounded-[3px]">
               <span className="w-2 h-2 rounded-full bg-emerald-600" />
             </span>
@@ -836,10 +924,8 @@ export default function CustomerFoodOrdering({
                       key={dish.id}
                       className="bg-white rounded-2xl p-3.5 border border-gray-100 shadow-sm flex items-center justify-between gap-3 hover:border-gray-200 transition-all"
                     >
-                      {/* Left: Dish Info */}
                       <div className="flex-1 min-w-0 pr-2">
                         <div className="flex items-center gap-1.5 mb-1">
-                          {/* Veg/Non-Veg dot */}
                           <span
                             className={`w-3 h-3 border flex items-center justify-center p-[1px] rounded-[2px] ${
                               isVeg ? 'border-emerald-600' : 'border-rose-600'
@@ -864,7 +950,6 @@ export default function CustomerFoodOrdering({
                         )}
                       </div>
 
-                      {/* Right: Dish Photo & Swiggy-Style ADD Button */}
                       <div className="relative shrink-0 w-28 h-28 flex flex-col items-center">
                         <img
                           src={dish.image_url || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&auto=format&fit=crop&q=80'}
@@ -872,7 +957,6 @@ export default function CustomerFoodOrdering({
                           className="w-28 h-24 object-cover rounded-xl border border-gray-100 shadow-inner"
                         />
 
-                        {/* Floating ADD Button / Stepper */}
                         <div className="absolute -bottom-1">
                           {qty > 0 ? (
                             <div className="flex items-center bg-white border border-emerald-600 text-emerald-600 rounded-lg shadow-md font-extrabold text-xs h-7 px-2 gap-2">
@@ -1004,7 +1088,6 @@ export default function CustomerFoodOrdering({
 
             {/* Multiple Filter Chips Bar */}
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-              {/* Sort Filter */}
               <button
                 onClick={() => setFilterSort(filterSort === 'relevance' ? 'rating' : filterSort === 'rating' ? 'time' : 'relevance')}
                 className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all shrink-0 ${
@@ -1017,7 +1100,6 @@ export default function CustomerFoodOrdering({
                 <span>Sort: {filterSort === 'rating' ? 'Top Rated' : filterSort === 'time' ? 'Fast Delivery' : 'Relevance'}</span>
               </button>
 
-              {/* Fast Delivery Filter */}
               <button
                 onClick={() => setFilterFastDelivery(!filterFastDelivery)}
                 className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all shrink-0 ${
@@ -1030,7 +1112,6 @@ export default function CustomerFoodOrdering({
                 <span>Under 25 mins</span>
               </button>
 
-              {/* Rating 4.0+ */}
               <button
                 onClick={() => setFilterRating4Plus(!filterRating4Plus)}
                 className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all shrink-0 ${
@@ -1043,7 +1124,6 @@ export default function CustomerFoodOrdering({
                 <span>Rating 4.0+</span>
               </button>
 
-              {/* 25 km Radius Tag */}
               <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-bold bg-gray-100 text-gray-600 border border-gray-200 shrink-0">
                 <MapPin className="w-3 h-3 text-emerald-600" />
                 <span>Within 25km</span>
@@ -1106,7 +1186,6 @@ export default function CustomerFoodOrdering({
                     onClick={() => openRestaurantMenu(res)}
                     className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden cursor-pointer flex flex-col"
                   >
-                    {/* Cover Photo */}
                     <div className="relative h-44 w-full overflow-hidden bg-gray-100">
                       <img
                         src={
@@ -1118,19 +1197,16 @@ export default function CustomerFoodOrdering({
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
-                      {/* Offer Ribbon */}
                       <div className="absolute top-3 left-3 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded shadow">
                         FLAT ₹50 OFF
                       </div>
 
-                      {/* Pure Veg Badge */}
                       {res.pure_veg && (
                         <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm text-emerald-700 text-[10px] font-extrabold px-2 py-0.5 rounded border border-emerald-300">
                           VEG ONLY
                         </div>
                       )}
 
-                      {/* Bottom Image Overlay Details */}
                       <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between text-white">
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-white/90 truncate">
@@ -1146,7 +1222,6 @@ export default function CustomerFoodOrdering({
                       </div>
                     </div>
 
-                    {/* Card Body */}
                     <div className="p-3.5 flex-1 flex flex-col justify-between">
                       <div>
                         <h3 className="font-extrabold text-base text-gray-900 group-hover:text-emerald-600 transition-colors">
@@ -1191,7 +1266,7 @@ export default function CustomerFoodOrdering({
                 <p className="text-xs font-medium text-white/90">
                   {cartItemCount} {cartItemCount === 1 ? 'item' : 'items'} added
                 </p>
-                <p className="text-base font-black tracking-tight leading-none">₹{cartSubtotal}</p>
+                <p className="text-base font-black tracking-tight leading-none">₹{grandTotal}</p>
               </div>
             </div>
 
@@ -1246,14 +1321,14 @@ export default function CustomerFoodOrdering({
         </div>
       </nav>
 
-      {/* 5. SLIDE-UP CHECKOUT DRAWER */}
+      {/* 5. SLIDE-UP CHECKOUT DRAWER (Home Service Payment Architecture) */}
       {isCheckoutOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end justify-center transition-opacity">
           <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300">
             {/* Drawer Header */}
             <div className="p-4 border-b border-gray-100 flex items-center justify-between">
               <div>
-                <h2 className="text-base font-black text-gray-900">Review & Checkout</h2>
+                <h2 className="text-base font-black text-gray-900">Review & Payment</h2>
                 <p className="text-xs text-gray-500">
                   {activeRestaurant?.name || 'Fiinway Delivery'}
                 </p>
@@ -1299,7 +1374,7 @@ export default function CustomerFoodOrdering({
               <div className="bg-gray-50 rounded-2xl p-3.5 space-y-3">
                 <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Delivery Address (Within 25km)</span>
+                  <span>Delivery Address</span>
                 </h3>
                 <input
                   type="text"
@@ -1321,7 +1396,7 @@ export default function CustomerFoodOrdering({
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold text-gray-500 block mb-1">MOBILE (FOR OTP)</label>
+                    <label className="text-[10px] font-bold text-gray-500 block mb-1">MOBILE NUMBER</label>
                     <input
                       type="tel"
                       value={customerPhone}
@@ -1343,60 +1418,170 @@ export default function CustomerFoodOrdering({
                 </div>
               </div>
 
-              {/* Payment Methods */}
-              <div className="bg-gray-50 rounded-2xl p-3.5 space-y-2.5">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Payment Option</h3>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { id: 'wallet', label: 'Wallet', icon: Wallet, note: 'Fast 1-tap' },
-                    { id: 'upi', label: 'UPI / Online', icon: CreditCard, note: 'GPay/PhonePe' },
-                    { id: 'cod', label: 'Cash on Delivery', icon: Banknote, note: 'Pay cash' },
-                  ].map((pay) => {
-                    const Icon = pay.icon;
-                    const isSelected = paymentMethod === pay.id;
-                    return (
-                      <button
-                        key={pay.id}
-                        type="button"
-                        onClick={() => setPaymentMethod(pay.id as any)}
-                        className={`p-2.5 rounded-xl border text-center transition-all ${
-                          isSelected
-                            ? 'bg-emerald-50 border-emerald-600 text-emerald-800 font-bold shadow-xs'
-                            : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
-                        }`}
-                      >
-                        <Icon className={`w-4 h-4 mx-auto mb-1 ${isSelected ? 'text-emerald-600' : 'text-gray-400'}`} />
-                        <span className="text-[11px] block font-bold leading-tight">{pay.label}</span>
-                        <span className="text-[9px] text-gray-400 block mt-0.5">{pay.note}</span>
-                      </button>
-                    );
-                  })}
+              {/* Home Service Promotional Bonus Banner */}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
+                    <Gift className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="text-xs font-black text-emerald-950">Promotion Bonus</h4>
+                      <span className="text-[10px] font-bold bg-emerald-200 text-emerald-800 px-1.5 py-0.2 rounded">
+                        -₹{promoDiscountAmount}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-emerald-700">Exclusive food discount applied</p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={applyPromo}
+                    onChange={(e) => setApplyPromo(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600" />
+                </label>
+              </div>
+
+              {/* Home Service Style Payment Methods */}
+              <div className="bg-gray-50 rounded-2xl p-3.5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    Select Payment Method
+                  </h3>
+                  <span className="text-xs font-semibold text-emerald-700">
+                    Wallet: ₹{walletBalance}
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {/* Option 1: Fiinway Wallet */}
+                  <div
+                    onClick={() => setPaymentMethod('wallet')}
+                    className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                      paymentMethod === 'wallet'
+                        ? 'bg-emerald-50/80 border-emerald-500 ring-1 ring-emerald-400'
+                        : 'bg-white border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                          <Wallet className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-sm text-gray-900">Fiinway Wallet</span>
+                            <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
+                              Fast MPIN Pay
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {walletBalance >= grandTotal
+                              ? `Pay ₹${grandTotal} directly from wallet (Balance: ₹${walletBalance})`
+                              : `Insufficient balance (Available: ₹${walletBalance})`}
+                          </p>
+                        </div>
+                      </div>
+                      <input
+                        type="radio"
+                        name="paymentMethod"
+                        checked={paymentMethod === 'wallet'}
+                        onChange={() => setPaymentMethod('wallet')}
+                        className="accent-emerald-600 w-4 h-4"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Option 2: UPI / Online Payment */}
+                  <div
+                    onClick={() => setPaymentMethod('upi')}
+                    className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                      paymentMethod === 'upi'
+                        ? 'bg-emerald-50/80 border-emerald-500 ring-1 ring-emerald-400'
+                        : 'bg-white border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                          <CreditCard className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="font-extrabold text-sm text-gray-900">UPI / Online Payment</span>
+                          <p className="text-xs text-gray-500 mt-0.5">GPay, PhonePe, Paytm & Net Banking</p>
+                        </div>
+                      </div>
+                      <input
+                        type="radio"
+                        name="paymentMethod"
+                        checked={paymentMethod === 'upi'}
+                        onChange={() => setPaymentMethod('upi')}
+                        className="accent-emerald-600 w-4 h-4"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Option 3: Cash on Delivery */}
+                  <div
+                    onClick={() => setPaymentMethod('cod')}
+                    className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                      paymentMethod === 'cod'
+                        ? 'bg-emerald-50/80 border-emerald-500 ring-1 ring-emerald-400'
+                        : 'bg-white border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
+                          <Banknote className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="font-extrabold text-sm text-gray-900">Cash on Delivery</span>
+                          <p className="text-xs text-gray-500 mt-0.5">Pay cash to delivery partner at doorstep</p>
+                        </div>
+                      </div>
+                      <input
+                        type="radio"
+                        name="paymentMethod"
+                        checked={paymentMethod === 'cod'}
+                        onChange={() => setPaymentMethod('cod')}
+                        className="accent-emerald-600 w-4 h-4"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* Detailed Bill Summary */}
               <div className="bg-gray-50 rounded-2xl p-3.5 space-y-2 text-xs">
-                <h3 className="font-bold text-gray-500 uppercase tracking-wider mb-1">Bill Summary</h3>
+                <h3 className="font-bold text-gray-500 uppercase tracking-wider mb-1">Payment Summary</h3>
                 <div className="flex justify-between text-gray-600">
                   <span>Item Total</span>
                   <span className="font-semibold text-gray-900">₹{cartSubtotal}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
-                  <span className="flex items-center gap-1">
-                    Delivery Partner Fee ({activeRestaurant?.distance_km !== undefined ? activeRestaurant.distance_km : 1.5} km)
-                  </span>
+                  <span>Delivery Partner Fee ({activeRestaurant?.distance_km !== undefined ? activeRestaurant.distance_km : 1.5} km)</span>
                   <span className="font-semibold text-gray-900">₹{deliveryFee}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Platform Fee</span>
                   <span className="font-semibold text-gray-900">₹{platformFee}</span>
                 </div>
+                {applyPromo && promoDiscountAmount > 0 && (
+                  <div className="flex justify-between text-emerald-700 font-bold">
+                    <span>Promotion Bonus Discount</span>
+                    <span>-₹{promoDiscountAmount}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-gray-600">
                   <span>GST & Restaurant Taxes (5%)</span>
                   <span className="font-semibold text-gray-900">₹{taxesAndGst}</span>
                 </div>
                 <div className="border-t border-gray-200 pt-2 flex justify-between text-sm font-black text-gray-900">
-                  <span>To Pay</span>
+                  <span>Total Payable</span>
                   <span>₹{grandTotal}</span>
                 </div>
               </div>
@@ -1405,7 +1590,7 @@ export default function CustomerFoodOrdering({
             {/* Drawer Footer CTA */}
             <div className="p-4 border-t border-gray-100 bg-white">
               <button
-                onClick={handlePlaceOrder}
+                onClick={handleInitiateOrder}
                 disabled={isPlacingOrder || cartItemCount === 0}
                 className="w-full bg-[#60b246] hover:bg-[#529e3c] disabled:opacity-50 text-white font-black py-3.5 rounded-2xl shadow-lg transition-all flex items-center justify-between px-5 active:scale-[0.99]"
               >
@@ -1414,12 +1599,10 @@ export default function CustomerFoodOrdering({
                   <span className="text-lg leading-tight font-black">₹{grandTotal}</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-sm uppercase tracking-wider">
-                  <span>{isPlacingOrder ? 'Confirming...' : 'Place Order'}</span>
-                  {isPlacingOrder ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <ChevronRight className="w-5 h-5 stroke-[3]" />
-                  )}
+                  <span>
+                    {paymentMethod === 'wallet' ? 'Pay via Wallet' : paymentMethod === 'upi' ? 'Pay Online' : 'Place Order'}
+                  </span>
+                  <ChevronRight className="w-5 h-5 stroke-[3]" />
                 </div>
               </button>
             </div>
@@ -1427,7 +1610,63 @@ export default function CustomerFoodOrdering({
         </div>
       )}
 
-      {/* 6. ORDER CONFIRMATION & LIVE TRACKING MODAL */}
+      {/* 6. MPIN MODAL (Home Service Standard Security) */}
+      {isMpinModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
+              <Lock className="w-6 h-6" />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-black text-gray-900">Enter Wallet MPIN</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Authorize payment of <span className="font-extrabold text-gray-900">₹{grandTotal}</span> from your Fiinway Wallet.
+              </p>
+            </div>
+
+            {mpinError && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl p-2.5">
+                {mpinError}
+              </div>
+            )}
+
+            {/* 4-Digit MPIN Input */}
+            <div className="py-2">
+              <input
+                type="password"
+                maxLength={4}
+                autoFocus
+                value={mpinInput}
+                onChange={(e) => setMpinInput(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
+                placeholder="● ● ● ●"
+                className="w-40 text-center tracking-[1em] text-2xl font-black bg-gray-100 border border-gray-300 rounded-2xl py-3 focus:border-emerald-500 focus:bg-white outline-none mx-auto block"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsMpinModalOpen(false)}
+                className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-bold text-xs hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => executePlaceOrder(mpinInput)}
+                disabled={isPlacingOrder || mpinInput.length < 4}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black py-3 rounded-xl shadow-md text-xs transition-all flex items-center justify-center gap-1.5"
+              >
+                {isPlacingOrder && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isPlacingOrder ? 'Verifying...' : 'Confirm & Pay'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. ORDER CONFIRMATION & LIVE TRACKING MODAL */}
       {isTrackingModal && confirmedOrder && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 text-center">
@@ -1443,9 +1682,15 @@ export default function CustomerFoodOrdering({
               <h2 className="text-xl font-black text-gray-900 mt-2">
                 Order #{confirmedOrder.order_number || confirmedOrder.id}
               </h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Sent to {confirmedOrder.restaurant?.name || 'Restaurant'}
-              </p>
+              <div className="flex items-center justify-center gap-2 mt-1">
+                <span className="text-xs font-extrabold text-emerald-700">
+                  Paid ₹{confirmedOrder.customer_payable}
+                </span>
+                <span className="text-gray-300">•</span>
+                <span className="text-xs font-semibold text-gray-500 uppercase">
+                  {confirmedOrder.payment_method || 'Wallet'}
+                </span>
+              </div>
             </div>
 
             {/* Delivery OTP Card */}
@@ -1498,7 +1743,7 @@ export default function CustomerFoodOrdering({
         </div>
       )}
 
-      {/* 7. LOCATION PICKER / GPS MODAL */}
+      {/* 8. LOCATION PICKER / GPS MODAL */}
       {isLocationPickerOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
@@ -1512,7 +1757,6 @@ export default function CustomerFoodOrdering({
               </button>
             </div>
 
-            {/* GPS Locate Button */}
             <button
               onClick={() => {
                 detectLiveGPS();
@@ -1529,7 +1773,6 @@ export default function CustomerFoodOrdering({
               </div>
             </button>
 
-            {/* Quick City Chips */}
             <div>
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">
                 Quick Select Area
@@ -1547,7 +1790,6 @@ export default function CustomerFoodOrdering({
               </div>
             </div>
 
-            {/* Manual input */}
             <div className="space-y-2 pt-1 border-t border-gray-100">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
                 Or Type Area / Locality
