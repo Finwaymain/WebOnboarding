@@ -113,6 +113,7 @@ interface Props {
   initialWalletBalance?: number;
   token?: string;
   userId?: string;
+  userType?: string;
   onSwitchToMerchant?: () => void;
 }
 
@@ -136,6 +137,7 @@ export default function CustomerFoodOrdering({
   initialWalletBalance = 0,
   token = '',
   userId = '',
+  userType = 'customer',
 }: Props) {
   // Real coordinates — starts from Flutter props or auto-detect
   const [lat, setLat] = useState<number | null>(initialLat || null);
@@ -203,8 +205,9 @@ export default function CustomerFoodOrdering({
   // Fetch Live Wallet Balance from API
   const fetchWalletBalance = useCallback(async () => {
     try {
-      const q = userId ? `user_id=${userId}` : userPhone ? `phone=${userPhone}` : '';
-      if (!q) return;
+      const baseQ = userId ? `user_id=${userId}` : userPhone ? `phone=${userPhone}` : '';
+      if (!baseQ) return;
+      const q = `${baseQ}&user_type=${userType}`;
       const res = await fetch(`/api/v1/food/customer/wallet?${q}`, {
         headers: { Accept: 'application/json', apikey: API_KEY },
       });
@@ -218,7 +221,7 @@ export default function CustomerFoodOrdering({
         }
       }
     } catch (_) {}
-  }, [userId, userPhone, customerName]);
+  }, [userId, userPhone, userType, customerName]);
 
   useEffect(() => {
     fetchWalletBalance();
@@ -577,7 +580,10 @@ export default function CustomerFoodOrdering({
       const payload: any = {
         restaurant_id: targetRestaurant.id,
         customer_id: userId || undefined,
-        customer_name: customerName || 'Fiinway Customer',
+        user_id: userId || undefined,
+        driver_id: userType === 'driver' ? userId : undefined,
+        user_type: userType,
+        customer_name: customerName || (userType === 'driver' ? 'Fiinway Driver' : 'Fiinway Customer'),
         customer_phone: customerPhone,
         delivery_address: deliveryAddress,
         delivery_lat: lat,

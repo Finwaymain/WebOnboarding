@@ -15,6 +15,7 @@ function FoodPortalContent() {
   const [lng, setLng] = useState<number | undefined>(undefined);
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [userId, setUserId] = useState<string>("");
+  const [userType, setUserType] = useState<string>("customer");
   const [initialTab, setInitialTab] = useState<string>("dashboard");
   const [portalMode, setPortalMode] = useState<boolean>(false);
 
@@ -25,10 +26,10 @@ function FoodPortalContent() {
       const ph = p.get("phone") || searchParams.get("phone") || "";
       const nm = p.get("name") || p.get("username") || p.get("customer_name") || searchParams.get("name") || searchParams.get("username") || "";
       const wb = p.get("wallet_balance") || p.get("balance") || searchParams.get("wallet_balance") || searchParams.get("balance") || "0";
-      const uid = p.get("user_id") || p.get("id_user") || searchParams.get("user_id") || searchParams.get("id_user") || "";
+      const uid = p.get("user_id") || p.get("id_user") || p.get("driver_id") || p.get("id_driver") || searchParams.get("user_id") || searchParams.get("id_user") || searchParams.get("driver_id") || "";
       const tab = p.get("tab") || searchParams.get("tab") || "dashboard";
       const view = p.get("view") || searchParams.get("view") || "";
-      const userType = p.get("user_type") || searchParams.get("user_type") || "";
+      const uType = p.get("user_type") || searchParams.get("user_type") || (p.has("driver_id") ? "driver" : "customer");
       const role = p.get("role") || searchParams.get("role") || "";
 
       const rawLat = p.get("lat") || p.get("latitude") || searchParams.get("lat") || searchParams.get("latitude");
@@ -39,11 +40,12 @@ function FoodPortalContent() {
       if (nm) setName(nm);
       if (wb) setWalletBalance(parseFloat(wb) || 0);
       if (uid) setUserId(uid);
+      if (uType) setUserType(uType);
       if (tab) setInitialTab(tab);
       if (rawLat) setLat(Number(rawLat));
       if (rawLng) setLng(Number(rawLng));
 
-      const isPortal = view === "portal" || role === "restaurant" || userType === "restaurant" || (p.has("tab") && userType !== "customer");
+      const isPortal = view === "portal" || role === "restaurant" || uType === "restaurant" || (p.has("tab") && uType !== "customer" && uType !== "driver");
       setPortalMode(isPortal);
     }
   }, [searchParams]);
@@ -67,6 +69,7 @@ function FoodPortalContent() {
       initialWalletBalance={walletBalance}
       token={token}
       userId={userId}
+      userType={userType}
       onSwitchToMerchant={() => setPortalMode(true)}
     />
   );
