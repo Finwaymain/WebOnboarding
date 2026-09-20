@@ -53,6 +53,8 @@ interface Product {
   category_id?: number;
   name: string;
   description?: string;
+  customer_price?: number;
+  restaurant_price?: number;
   base_price?: number;
   final_price?: number;
   price?: number;
@@ -219,7 +221,7 @@ export default function CustomerFoodOrdering({
         const rawProducts: any[] = json.data.products || [];
         const normalized: Product[] = rawProducts.map((p) => ({
           ...p,
-          final_price: p.final_price || p.base_price || p.price || 0,
+          final_price: p.customer_price || p.final_price || p.restaurant_price || p.base_price || p.price || 0,
         }));
         setProducts(normalized);
         if (json.data.categories && json.data.categories.length > 0) {
