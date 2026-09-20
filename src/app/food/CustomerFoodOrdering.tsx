@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Search,
   MapPin,
@@ -43,6 +43,8 @@ interface Restaurant {
   name: string;
   description?: string;
   address?: string;
+  city?: string;
+  state?: string;
   latitude?: number | string;
   longitude?: number | string;
   distance_km?: number;
@@ -104,6 +106,7 @@ interface Props {
   initialLng?: number;
   userPhone?: string;
   userName?: string;
+  onSwitchToMerchant?: () => void;
 }
 
 // Professional food photography categories (Curated high-res imagery, no emojis)
@@ -124,15 +127,16 @@ export default function CustomerFoodOrdering({
   userPhone = '',
   userName = '',
 }: Props) {
-  // Web-only GPS coordinates
-  const [lat, setLat] = useState<number>(initialLat || 22.6066);
-  const [lng, setLng] = useState<number>(initialLng || 88.4259);
+  // Real coordinates — no fake default city
+  const [lat, setLat] = useState<number | null>(initialLat || null);
+  const [lng, setLng] = useState<number | null>(initialLng || null);
   const [radiusKm] = useState<number>(25);
-  const [locationName, setLocationName] = useState<string>('Locating your area...');
-  const [locationArea, setLocationArea] = useState<string>('Home');
-  const [isLocating, setIsLocating] = useState<boolean>(false);
+  const [locationName, setLocationName] = useState<string>('Detecting your delivery location...');
+  const [locationArea, setLocationArea] = useState<string>('Locating...');
+  const [isLocating, setIsLocating] = useState<boolean>(true);
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState<boolean>(false);
   const [manualAddressInput, setManualAddressInput] = useState<string>('');
+  const [isGeocodingManual, setIsGeocodingManual] = useState<boolean>(false);
 
   // Top Swiggy-style sub-tabs & Veg Toggle
   const [vegOnly, setVegOnly] = useState<boolean>(false);
@@ -149,7 +153,7 @@ export default function CustomerFoodOrdering({
 
   // Restaurant & Menu State
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [loadingRestaurants, setLoadingRestaurants] = useState<boolean>(true);
+  const [loadingRestaurants, setLoadingRestaurants] = useState<boolean>(false);
   const [restaurantError, setRestaurantError] = useState<string>('');
 
   const [activeRestaurant, setActiveRestaurant] = useState<Restaurant | null>(null);
@@ -166,7 +170,7 @@ export default function CustomerFoodOrdering({
   const [isCheckoutOpen, setIsCheckoutOpen] = useState<boolean>(false);
 
   // Checkout Form Details
-  const [customerName, setCustomerName] = useState<string>(userName || 'Customer');
+  const [customerName, setCustomerName] = useState<string>(userName || '');
   const [customerPhone, setCustomerPhone] = useState<string>(userPhone);
   const [deliveryAddress, setDeliveryAddress] = useState<string>('');
   const [deliveryNotes, setDeliveryNotes] = useState<string>('');
@@ -176,6 +180,9 @@ export default function CustomerFoodOrdering({
   // Live Order Tracking
   const [confirmedOrder, setConfirmedOrder] = useState<OrderConfirmation | null>(null);
   const [isTrackingModal, setIsTrackingModal] = useState<boolean>(false);
+
+  // Guard to prevent duplicate location resolution
+  const hasResolvedLocationRef = useRef(false);
 
   // Reverse Geocoding with Google Maps API + Fallback to Nominatim
   const reverseGeocode = useCallback(async (latitude: number, longitude: number) => {
@@ -189,10 +196,10 @@ export default function CustomerFoodOrdering({
         const comps = googleData.results[0].address_components || [];
         const sub = comps.find((c: any) => c.types.includes('sublocality') || c.types.includes('neighborhood'));
         const city = comps.find((c: any) => c.types.includes('locality'));
-        const mainArea = sub ? sub.long_name : (city ? city.long_name : 'Current Location');
+        const mainArea = sub ? sub.long_name : (city ? city.long_name : 'Current Area');
         setLocationArea(mainArea);
         setLocationName(googleData.results[0].formatted_address?.slice(0, 48));
-        if (!deliveryAddress) setDeliveryAddress(googleData.results[0].formatted_address);
+        setDeliveryAddress(prev => prev || googleData.results[0].formatted_address);
         return;
       }
     } catch (_) {}
@@ -200,7 +207,8 @@ export default function CustomerFoodOrdering({
     // 2. Fallback to OpenStreetMap Nominatim Geocoding
     try {
       const osmRes = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+        { headers: { 'User-Agent': 'FiinwayFood/1.0' } }
       );
       const osmData = await osmRes.json();
       const road = osmData.address?.road || osmData.address?.suburb || osmData.address?.neighbourhood || '';
@@ -209,46 +217,159 @@ export default function CustomerFoodOrdering({
       const formatted = [road, city].filter(Boolean).join(', ') || osmData.display_name?.slice(0, 48);
       setLocationArea(area);
       setLocationName(formatted);
-      if (!deliveryAddress) setDeliveryAddress(formatted);
+      setDeliveryAddress(prev => prev || formatted);
     } catch (_) {
-      setLocationArea('Current Location');
+      setLocationArea('My Location');
       setLocationName(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
     }
-  }, [deliveryAddress]);
+  }, []);
 
-  // High-Accuracy HTML5 Browser GPS Detection
-  const detectLiveGPS = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    if (!navigator.geolocation) {
-      setLocationArea('Kolkata');
-      setLocationName('Kolkata Region (Within 25km)');
-      return;
-    }
+  // Multi-tier location detection (Device GPS -> IP Geolocation Fallback)
+  const detectLiveGPS = useCallback(async () => {
     setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const latitude = pos.coords.latitude;
-        const longitude = pos.coords.longitude;
-        setLat(latitude);
-        setLng(longitude);
+
+    // Fast IP Geolocation fallback runner
+    const runIPFallback = async () => {
+      try {
+        const ipRes = await fetch('https://ipwho.is/');
+        const ipData = await ipRes.json();
+        if (ipData.success && ipData.latitude && ipData.longitude) {
+          const detectedLat = Number(ipData.latitude);
+          const detectedLng = Number(ipData.longitude);
+          setLat(detectedLat);
+          setLng(detectedLng);
+          setLocationArea(ipData.city || ipData.region || 'Current City');
+          const fullLoc = [ipData.city, ipData.region, ipData.postal].filter(Boolean).join(', ');
+          setLocationName(fullLoc);
+          setDeliveryAddress(prev => prev || fullLoc);
+          setIsLocating(false);
+          hasResolvedLocationRef.current = true;
+          // Further refine address
+          reverseGeocode(detectedLat, detectedLng);
+          return true;
+        }
+      } catch (_) {}
+
+      try {
+        const bgRes = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client');
+        const bgData = await bgRes.json();
+        if (bgData.latitude && bgData.longitude) {
+          const detectedLat = Number(bgData.latitude);
+          const detectedLng = Number(bgData.longitude);
+          setLat(detectedLat);
+          setLng(detectedLng);
+          setLocationArea(bgData.city || bgData.principalSubdivision || 'Current City');
+          const fullLoc = [bgData.locality, bgData.city, bgData.principalSubdivision].filter(Boolean).join(', ');
+          setLocationName(fullLoc);
+          setDeliveryAddress(prev => prev || fullLoc);
+          setIsLocating(false);
+          hasResolvedLocationRef.current = true;
+          reverseGeocode(detectedLat, detectedLng);
+          return true;
+        }
+      } catch (_) {}
+
+      return false;
+    };
+
+    // If browser navigator.geolocation is available, try it with high accuracy
+    if (typeof window !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const latitude = pos.coords.latitude;
+          const longitude = pos.coords.longitude;
+          setLat(latitude);
+          setLng(longitude);
+          setIsLocating(false);
+          hasResolvedLocationRef.current = true;
+          reverseGeocode(latitude, longitude);
+        },
+        async () => {
+          // GPS denied or failed in webview, fall back to IP location
+          const ipOk = await runIPFallback();
+          if (!ipOk) {
+            setIsLocating(false);
+            setLocationArea('Select Location');
+            setLocationName('Tap here to set your delivery area');
+          }
+        },
+        { timeout: 7000, enableHighAccuracy: true, maximumAge: 0 }
+      );
+    } else {
+      const ipOk = await runIPFallback();
+      if (!ipOk) {
         setIsLocating(false);
-        reverseGeocode(latitude, longitude);
-      },
-      () => {
-        setIsLocating(false);
-        setLocationArea('Kolkata');
-        setLocationName('Dum Dum, Kolkata (25km Zone)');
-      },
-      { timeout: 10000, enableHighAccuracy: true, maximumAge: 0 }
-    );
+        setLocationArea('Select Location');
+        setLocationName('Tap here to set your delivery area');
+      }
+    }
   }, [reverseGeocode]);
 
+  // Initial location bootstrap
   useEffect(() => {
+    if (initialLat && initialLng) {
+      setLat(initialLat);
+      setLng(initialLng);
+      setIsLocating(false);
+      reverseGeocode(initialLat, initialLng);
+      return;
+    }
     detectLiveGPS();
-  }, [detectLiveGPS]);
+  }, [initialLat, initialLng, detectLiveGPS, reverseGeocode]);
 
-  // Fetch Nearby Restaurants (within 25 km)
+  // Geocode manual text input (e.g. "Ujjain" or "Freeganj, Ujjain")
+  const handleManualLocationSearch = async (queryText: string) => {
+    const q = queryText.trim();
+    if (!q) return;
+    setIsGeocodingManual(true);
+
+    try {
+      // 1. Google Maps Geocoding
+      const gRes = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&key=${GOOGLE_MAPS_KEY}`
+      );
+      const gData = await gRes.json();
+      if (gData.status === 'OK' && gData.results?.length > 0) {
+        const loc = gData.results[0].geometry.location;
+        setLat(loc.lat);
+        setLng(loc.lng);
+        setLocationArea(q);
+        setLocationName(gData.results[0].formatted_address?.slice(0, 48));
+        setDeliveryAddress(gData.results[0].formatted_address);
+        setIsLocationPickerOpen(false);
+        setIsGeocodingManual(false);
+        return;
+      }
+    } catch (_) {}
+
+    // 2. Nominatim Search
+    try {
+      const osmRes = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`,
+        { headers: { 'User-Agent': 'FiinwayFood/1.0' } }
+      );
+      const osmData = await osmRes.json();
+      if (Array.isArray(osmData) && osmData.length > 0) {
+        const newLat = parseFloat(osmData[0].lat);
+        const newLng = parseFloat(osmData[0].lon);
+        setLat(newLat);
+        setLng(newLng);
+        setLocationArea(q);
+        setLocationName(osmData[0].display_name?.slice(0, 48));
+        setDeliveryAddress(osmData[0].display_name);
+        setIsLocationPickerOpen(false);
+        setIsGeocodingManual(false);
+        return;
+      }
+    } catch (_) {}
+
+    setIsGeocodingManual(false);
+    alert(`Could not locate "${q}". Please check spelling or use device GPS.`);
+  };
+
+  // Fetch Nearby Restaurants (within 25 km of user's resolved location)
   const fetchNearbyRestaurants = useCallback(async () => {
+    if (lat === null || lng === null) return;
     setLoadingRestaurants(true);
     setRestaurantError('');
     try {
@@ -272,8 +393,10 @@ export default function CustomerFoodOrdering({
   }, [lat, lng, radiusKm]);
 
   useEffect(() => {
-    fetchNearbyRestaurants();
-  }, [fetchNearbyRestaurants]);
+    if (lat !== null && lng !== null) {
+      fetchNearbyRestaurants();
+    }
+  }, [lat, lng, fetchNearbyRestaurants]);
 
   // Load Menu for restaurant
   const openRestaurantMenu = async (restaurant: Restaurant) => {
@@ -306,16 +429,16 @@ export default function CustomerFoodOrdering({
     }
   };
 
-  // Preload trending 99 store meals
+  // Load real dishes from nearby restaurants for quick meals row
   useEffect(() => {
-    if (restaurants.length > 0 && quickMeals.length === 0) {
+    if (restaurants.length > 0) {
       const firstRes = restaurants[0];
       fetch(`/api/v1/food/customer/restaurants/${firstRes.id}/menu`, {
         headers: { Accept: 'application/json', apikey: API_KEY },
       })
         .then((r) => r.json())
         .then((json) => {
-          if (json.success && json.data?.products) {
+          if (json.success && json.data?.products && Array.isArray(json.data.products)) {
             const items: Product[] = json.data.products.map((p: any) => ({
               ...p,
               final_price: p.customer_price || p.final_price || p.restaurant_price || p.base_price || 99,
@@ -325,8 +448,10 @@ export default function CustomerFoodOrdering({
           }
         })
         .catch(() => {});
+    } else {
+      setQuickMeals([]);
     }
-  }, [restaurants, quickMeals.length]);
+  }, [restaurants]);
 
   const addToCart = (product: Product, restaurant?: Restaurant) => {
     if (restaurant && (!activeRestaurant || activeRestaurant.id !== restaurant.id)) {
@@ -485,7 +610,7 @@ export default function CustomerFoodOrdering({
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-gray-900 pb-28 font-sans antialiased select-none">
-      {/* 1. TOP STICKY HEADER */}
+      {/* 1. TOP STICKY HEADER (No Partner Button) */}
       <header className="sticky top-0 z-30 bg-white border-b border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.04)] px-4 pt-3 pb-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
           {/* Location Delivery Bar */}
@@ -503,11 +628,11 @@ export default function CustomerFoodOrdering({
                   <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
                 </span>
                 <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full uppercase tracking-wider ml-1">
-                  25km Zone
+                  25km Radius
                 </span>
               </div>
               <p className="text-xs text-gray-500 truncate max-w-[240px] sm:max-w-md font-medium">
-                {isLocating ? 'Detecting exact GPS...' : locationName}
+                {isLocating ? 'Detecting your exact GPS location...' : locationName}
               </p>
             </div>
           </div>
@@ -531,7 +656,7 @@ export default function CustomerFoodOrdering({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search for restaurants, biryani, pizza, rolls..."
+              placeholder="Search for restaurants, biryani, chicken, rolls..."
               className="w-full bg-[#f1f3f6] focus:bg-white text-sm pl-10 pr-10 py-2.5 rounded-xl border border-transparent focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all outline-none font-medium placeholder:text-gray-400"
             />
             {searchQuery ? (
@@ -624,9 +749,11 @@ export default function CustomerFoodOrdering({
                   <p className="text-xs text-gray-500 mt-1 font-medium">
                     {Array.isArray(activeRestaurant.cuisines)
                       ? activeRestaurant.cuisines.join(', ')
-                      : activeRestaurant.cuisines || 'Multi-Cuisine, Fast Food'}
+                      : activeRestaurant.cuisines || 'Multi-Cuisine'}
                   </p>
-                  <p className="text-xs text-gray-400 mt-0.5 truncate">{activeRestaurant.address || 'Kolkata'}</p>
+                  <p className="text-xs text-gray-400 mt-0.5 truncate">
+                    {activeRestaurant.address || activeRestaurant.city || 'Delivery Area'}
+                  </p>
                 </div>
 
                 {/* Rating Badge */}
@@ -636,7 +763,7 @@ export default function CustomerFoodOrdering({
                     <Star className="w-3 h-3 fill-white" />
                   </div>
                   <span className="text-[9px] font-medium opacity-90 block">
-                    {activeRestaurant.rating_count || 48}+ ratings
+                    {activeRestaurant.rating_count || 10}+ ratings
                   </span>
                 </div>
               </div>
@@ -649,7 +776,7 @@ export default function CustomerFoodOrdering({
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Bike className="w-4 h-4 text-emerald-600" />
-                  <span>{activeRestaurant.distance_km ? `${activeRestaurant.distance_km} km away` : 'Within delivery range'}</span>
+                  <span>{activeRestaurant.distance_km !== undefined ? `${activeRestaurant.distance_km} km away` : 'Within delivery range'}</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-emerald-700 font-semibold">
                   <ShieldCheck className="w-4 h-4 text-emerald-600" />
@@ -789,7 +916,7 @@ export default function CustomerFoodOrdering({
                 <h2 className="text-sm font-extrabold text-gray-900 tracking-tight uppercase tracking-wider">
                   What's on your mind?
                 </h2>
-                <span className="text-[11px] font-semibold text-emerald-600">Curated & Fresh</span>
+                <span className="text-[11px] font-semibold text-emerald-600">Curated Categories</span>
               </div>
               <div className="flex items-center gap-4 overflow-x-auto no-scrollbar py-1">
                 {CURATED_CATEGORIES.map((cat) => (
@@ -813,7 +940,7 @@ export default function CustomerFoodOrdering({
               </div>
             </div>
 
-            {/* Quick 99 Store Row */}
+            {/* Quick 99 Store Row (Only shown if real dishes exist) */}
             {quickMeals.length > 0 && (
               <div className="bg-gradient-to-r from-emerald-900 to-teal-950 rounded-2xl p-4 text-white shadow-sm overflow-hidden relative">
                 <div className="flex items-center justify-between mb-3">
@@ -946,19 +1073,30 @@ export default function CustomerFoodOrdering({
                 ))}
               </div>
             ) : filteredRestaurants.length === 0 ? (
-              <div className="bg-white rounded-2xl p-10 text-center border border-gray-100 shadow-sm">
+              <div className="bg-white rounded-2xl p-8 text-center border border-gray-100 shadow-sm">
                 <UtensilsCrossed className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <h3 className="text-base font-bold text-gray-800">No restaurants found in this area</h3>
+                <h3 className="text-base font-bold text-gray-800">
+                  No restaurants delivering to {locationArea} yet
+                </h3>
                 <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
-                  {restaurantError || 'No operational restaurants found within 25 km of your location.'}
+                  {restaurantError || `We couldn't find any operational restaurants within 25km of ${locationArea}. Try changing your area or refresh location.`}
                 </p>
-                <button
-                  onClick={detectLiveGPS}
-                  className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-sm hover:bg-emerald-700 transition-colors"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Retry Location Search
-                </button>
+                <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => setIsLocationPickerOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 text-white text-xs font-bold shadow-sm hover:bg-gray-800 transition-colors"
+                  >
+                    <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+                    Change Delivery Area
+                  </button>
+                  <button
+                    onClick={detectLiveGPS}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 text-xs font-bold shadow-sm hover:bg-gray-50 transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Retry Device GPS
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1015,7 +1153,7 @@ export default function CustomerFoodOrdering({
                           {res.name}
                         </h3>
                         <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">
-                          {res.address || 'Kolkata Region'}
+                          {res.address || res.city || 'Delivery Area'}
                         </p>
                       </div>
 
@@ -1026,7 +1164,7 @@ export default function CustomerFoodOrdering({
                         </div>
                         <div className="flex items-center gap-1 font-bold text-emerald-700">
                           <Bike className="w-3.5 h-3.5" />
-                          <span>{res.distance_km ? `${res.distance_km} km` : 'Within 25km'}</span>
+                          <span>{res.distance_km !== undefined ? `${res.distance_km} km` : 'Within 25km'}</span>
                         </div>
                       </div>
                     </div>
@@ -1245,7 +1383,7 @@ export default function CustomerFoodOrdering({
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span className="flex items-center gap-1">
-                    Delivery Partner Fee ({activeRestaurant?.distance_km || 1.5} km)
+                    Delivery Partner Fee ({activeRestaurant?.distance_km !== undefined ? activeRestaurant.distance_km : 1.5} km)
                   </span>
                   <span className="font-semibold text-gray-900">₹{deliveryFee}</span>
                 </div>
@@ -1316,7 +1454,7 @@ export default function CustomerFoodOrdering({
                 Delivery Verification PIN
               </p>
               <div className="text-3xl font-black tracking-widest my-1">
-                {confirmedOrder.delivery_otp || '4821'}
+                {confirmedOrder.delivery_otp || String(Math.floor(1000 + Math.random() * 9000))}
               </div>
               <p className="text-[11px] text-emerald-100">
                 Share this PIN with your delivery rider upon doorstep arrival.
@@ -1386,35 +1524,53 @@ export default function CustomerFoodOrdering({
                 <Navigation className="w-4 h-4" />
               </div>
               <div>
-                <span className="block font-black text-sm text-emerald-900">Use Exact Device Location</span>
-                <span className="text-[11px] text-emerald-700 font-medium">GPS High Accuracy (Within 25km range)</span>
+                <span className="block font-black text-sm text-emerald-900">Use Exact Device GPS</span>
+                <span className="text-[11px] text-emerald-700 font-medium">Auto-detect accurate location</span>
               </div>
             </button>
 
+            {/* Quick City Chips */}
+            <div>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">
+                Quick Select Area
+              </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {['Ujjain', 'Freeganj, Ujjain', 'Indore', 'Dewas'].map((city) => (
+                  <button
+                    key={city}
+                    onClick={() => handleManualLocationSearch(city)}
+                    className="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-emerald-50 hover:text-emerald-700 text-xs font-semibold text-gray-700 transition-colors"
+                  >
+                    {city}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Manual input */}
-            <div className="space-y-2">
+            <div className="space-y-2 pt-1 border-t border-gray-100">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
                 Or Type Area / Locality
               </label>
-              <input
-                type="text"
-                value={manualAddressInput}
-                onChange={(e) => setManualAddressInput(e.target.value)}
-                placeholder="e.g. Salt Lake, Dum Dum, New Town..."
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-medium focus:border-emerald-500 outline-none"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={manualAddressInput}
+                  onChange={(e) => setManualAddressInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleManualLocationSearch(manualAddressInput);
+                  }}
+                  placeholder="e.g. Freeganj, Mahakal Marg, Ujjain..."
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-medium focus:border-emerald-500 outline-none"
+                />
+              </div>
               <button
-                onClick={() => {
-                  if (manualAddressInput.trim()) {
-                    setLocationArea(manualAddressInput.trim());
-                    setLocationName(manualAddressInput.trim());
-                    setDeliveryAddress(manualAddressInput.trim());
-                    setIsLocationPickerOpen(false);
-                  }
-                }}
-                className="w-full bg-gray-900 text-white text-xs font-bold py-2.5 rounded-xl mt-1"
+                onClick={() => handleManualLocationSearch(manualAddressInput)}
+                disabled={isGeocodingManual || !manualAddressInput.trim()}
+                className="w-full bg-gray-900 hover:bg-gray-800 disabled:opacity-50 text-white text-xs font-bold py-2.5 rounded-xl mt-1 flex items-center justify-center gap-2"
               >
-                Set Location
+                {isGeocodingManual && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isGeocodingManual ? 'Locating...' : 'Set Delivery Area'}</span>
               </button>
             </div>
           </div>
