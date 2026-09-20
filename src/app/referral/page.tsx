@@ -468,6 +468,64 @@ function ReferralDashboardContent() {
             </button>
           </div>
 
+          {/* Referral Benefits */}
+          <div className="space-y-2">
+            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Referral Benefits</h3>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              {/* User Referral */}
+              <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                    <Users className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-800">User Referral</span>
+                </div>
+                <p className="text-base font-extrabold text-emerald-700">
+                  {benefits.consumer?.cashback_amount || "₹10"}{" "}
+                  <span className="text-[11px] font-semibold text-slate-500">Cashback</span>
+                </p>
+              </div>
+
+              {/* Business Partner */}
+              <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-800">Business Partner</span>
+                </div>
+                <p className="text-base font-extrabold text-blue-700">
+                  {benefits.business?.cashback_amount || "₹50"}{" "}
+                  <span className="text-[11px] font-semibold text-slate-500">Cashback</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Your Earnings Balance */}
+          <div className="space-y-2.5">
+            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Your Earnings Balance</h3>
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 flex items-center justify-center text-xl shrink-0">
+                  👛
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-500">Partner Wallet Balance</p>
+                  <p className="text-xl font-bold text-slate-900">₹{walletBalance.toLocaleString()}</p>
+                </div>
+              </div>
+
+              <button
+                onClick={handleOpenDashboard}
+                className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-xs transition-all active:scale-[0.98]"
+              >
+                View History
+              </button>
+            </div>
+          </div>
+
           {/* ── Field Marketing & Team Management Entry Card ── */}
           <div className="space-y-2">
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
@@ -582,65 +640,6 @@ function ReferralDashboardContent() {
                 </button>
               </div>
             )}
-          </div>
-
-          {/* Referral Benefits */}
-          <div className="space-y-2">
-            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Referral Benefits</h3>
-
-
-            <div className="grid grid-cols-2 gap-2.5">
-              {/* User Referral */}
-              <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
-                    <Users className="w-3.5 h-3.5" />
-                  </div>
-                  <span className="text-xs font-bold text-slate-800">User Referral</span>
-                </div>
-                <p className="text-base font-extrabold text-emerald-700">
-                  {benefits.consumer?.cashback_amount || "₹10"}{" "}
-                  <span className="text-[11px] font-semibold text-slate-500">Cashback</span>
-                </p>
-              </div>
-
-              {/* Business Partner */}
-              <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                  </div>
-                  <span className="text-xs font-bold text-slate-800">Business Partner</span>
-                </div>
-                <p className="text-base font-extrabold text-blue-700">
-                  {benefits.business?.cashback_amount || "₹50"}{" "}
-                  <span className="text-[11px] font-semibold text-slate-500">Cashback</span>
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Your Earnings Balance */}
-          <div className="space-y-2.5">
-            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Your Earnings Balance</h3>
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 flex items-center justify-center text-xl shrink-0">
-                  👛
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-slate-500">Partner Wallet Balance</p>
-                  <p className="text-xl font-bold text-slate-900">₹{walletBalance.toLocaleString()}</p>
-                </div>
-              </div>
-
-              <button
-                onClick={handleOpenDashboard}
-                className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-xs transition-all active:scale-[0.98]"
-              >
-                View History
-              </button>
-            </div>
           </div>
         </div>
       )}

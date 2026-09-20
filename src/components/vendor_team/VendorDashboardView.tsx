@@ -20,7 +20,11 @@ import {
   AlertCircle,
   Store,
   ChevronRight,
-  User
+  User,
+  Download,
+  TrendingUp,
+  Smartphone,
+  Info,
 } from "lucide-react";
 
 interface VendorDashboardViewProps {
@@ -40,6 +44,13 @@ export default function VendorDashboardView({
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
   const [subTab, setSubTab] = useState<"all" | "verified" | "pending" | "rejected">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [rejectionRemarkModal, setRejectionRemarkModal] = useState<{
+    open: boolean;
+    name: string;
+    remark: string;
+    phone?: string;
+    date?: string;
+  } | null>(null);
 
   const vendorCode = vendorData?.vendor_code || "TM------";
   const shareUrl = vendorData?.share_url || `https://api.fiinway.com/join/${vendorCode}`;
@@ -89,15 +100,39 @@ export default function VendorDashboardView({
     }
   };
 
-  const rateCustomer = vendorData?.rate_per_customer ?? 0;
-  const rateBusiness = vendorData?.rate_per_business ?? 0;
+  const rateCustomer = Number(vendorData?.rate_per_customer ?? 0);
+  const rateBusiness = Number(vendorData?.rate_per_business ?? 0);
   const freelancersCount = vendorData?.freelancers_count ?? (vendorData?.team_members?.length ?? 0);
-  const totalCustomers = vendorData?.total_customers ?? 0;
-  const verifiedCustomers = vendorData?.verified_customers ?? 0;
-  const totalBusinesses = vendorData?.total_businesses ?? 0;
-  const verifiedBusinesses = vendorData?.verified_businesses ?? 0;
-  const totalEarnings = vendorData?.total_earnings ?? 0;
-  const paidEarnings = vendorData?.paid_earnings ?? 0;
+
+  // App Install / Total registrations
+  const totalCustomers = Number(vendorData?.total_customers ?? vendorData?.customer_joined ?? 0);
+  const totalBusinesses = Number(vendorData?.total_businesses ?? vendorData?.business_joined ?? 0);
+  const totalInstall = Number(vendorData?.total_install ?? (totalCustomers + totalBusinesses));
+
+  // Verified / Pending / Rejected
+  const verifiedCustomers = Number(vendorData?.verified_customers ?? vendorData?.customer_verified ?? 0);
+  const verifiedBusinesses = Number(vendorData?.verified_businesses ?? vendorData?.business_verified ?? 0);
+  const totalVerified = Number(vendorData?.total_verified ?? (verifiedCustomers + verifiedBusinesses));
+
+  const pendingCustomers = Number(vendorData?.customer_pending ?? Math.max(0, totalCustomers - verifiedCustomers));
+  const pendingBusinesses = Number(vendorData?.business_pending ?? Math.max(0, totalBusinesses - verifiedBusinesses));
+  const totalPending = Number(vendorData?.total_pending ?? (pendingCustomers + pendingBusinesses));
+
+  const rejectedCustomers = Number(vendorData?.customer_rejected ?? 0);
+  const rejectedBusinesses = Number(vendorData?.business_rejected ?? 0);
+  const totalRejected = Number(vendorData?.total_rejected ?? (rejectedCustomers + rejectedBusinesses));
+
+  // Dues & Upcoming
+  const customerDue = Number(vendorData?.customer_due ?? (verifiedCustomers * rateCustomer));
+  const businessDue = Number(vendorData?.business_due ?? (verifiedBusinesses * rateBusiness));
+  const totalVerifiedDue = Number(vendorData?.total_verified_due ?? (customerDue + businessDue));
+
+  const customerUpcoming = Number(vendorData?.customer_upcoming ?? (pendingCustomers * rateCustomer));
+  const businessUpcoming = Number(vendorData?.business_upcoming ?? (pendingBusinesses * rateBusiness));
+  const totalUpcomingIncome = Number(vendorData?.total_upcoming_income ?? (customerUpcoming + businessUpcoming));
+
+  const totalEarnings = vendorData?.total_earnings ?? totalVerifiedDue;
+  const paidEarnings = Number(vendorData?.paid_earnings ?? 0);
   const pendingPayout = vendorData?.pending_payout ?? Math.max(0, totalEarnings - paidEarnings);
   const teamMembers = vendorData?.team_members || [];
   const location = vendorData?.team_location || "Territory";
@@ -453,9 +488,28 @@ export default function VendorDashboardView({
                         )}
 
                         {isRejected && (
-                          <span className="text-[9.5px] font-black px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 inline-block uppercase tracking-wider">
-                            REJECTED
-                          </span>
+                          <div className="inline-flex items-center gap-1 justify-end">
+                            <span className="text-[9.5px] font-black px-1.5 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 uppercase tracking-wider">
+                              REJECT
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRejectionRemarkModal({
+                                  open: true,
+                                  name: acq.name || "Customer User",
+                                  remark: acq.rejection_reason || acq.remarks || "No specific rejection reason provided by Admin.",
+                                  phone: acq.phone,
+                                  date: acq.date,
+                                });
+                              }}
+                              className="w-4 h-4 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-700 flex items-center justify-center transition-colors shadow-2xs cursor-pointer shrink-0"
+                              title="View rejection remark from Admin"
+                            >
+                              <Info className="w-2.5 h-2.5 stroke-[2.5]" />
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -467,6 +521,55 @@ export default function VendorDashboardView({
           </div>
 
         </div>
+
+        {/* Admin Rejection Remark Modal (User Request 1) */}
+        {rejectionRemarkModal?.open && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-white rounded-2xl max-w-sm w-full p-4 border border-slate-200 shadow-xl space-y-3 animate-scale-in">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                    <AlertCircle className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900">Rejection Remark</h4>
+                    <p className="text-[10px] text-slate-500">
+                      {rejectionRemarkModal.name} {rejectionRemarkModal.phone ? `• ${rejectionRemarkModal.phone}` : ""}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setRejectionRemarkModal(null)}
+                  className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center text-xs font-bold transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="bg-rose-50/70 border border-rose-100 rounded-xl p-3 space-y-1">
+                <span className="text-[9.5px] font-bold uppercase tracking-wider text-rose-800 block">
+                  Admin Feedback / Reason:
+                </span>
+                <p className="text-xs text-slate-800 leading-relaxed font-medium">
+                  {rejectionRemarkModal.remark}
+                </p>
+              </div>
+
+              {rejectionRemarkModal.date && (
+                <p className="text-[10px] text-slate-400 text-right">
+                  Acquisition Date: {rejectionRemarkModal.date}
+                </p>
+              )}
+
+              <button
+                onClick={() => setRejectionRemarkModal(null)}
+                className="w-full py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors shadow-2xs"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -498,18 +601,18 @@ export default function VendorDashboardView({
           </div>
 
           <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-            Approved Vendor
+            Approved 
           </span>
         </div>
       </div>
 
-      <div className="max-w-md mx-auto px-4 pt-4 space-y-4">
+      <div className="max-w-md mx-auto px-3.5 pt-3 space-y-3">
         
         {/* Vendor Hero Code Card */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs space-y-4">
+        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
           <div className="text-center space-y-1">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-              Your Team Manager Vendor Code
+              Your  Vendor Code
             </span>
             <div className="flex items-center justify-center gap-2.5 pt-1">
               <span className="text-2xl font-black text-slate-900 tracking-widest font-mono bg-slate-100 border border-slate-200 px-4 py-2 rounded-xl">
@@ -526,18 +629,7 @@ export default function VendorDashboardView({
             </div>
           </div>
 
-          {/* Share Link */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1.5">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">
-              Freelancer Invite Link
-            </span>
-            <div className="flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
-              <span className="text-xs font-mono font-semibold text-slate-700 truncate select-all">
-                {shareUrl}
-              </span>
-            </div>
-          </div>
-
+      
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={handleCopyLink}
@@ -599,61 +691,178 @@ export default function VendorDashboardView({
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
-            <div className="bg-slate-50 rounded-xl p-2.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">
-                Unsettled Due
+          <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-100 text-center">
+            <div className="bg-slate-50 rounded-xl p-2">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block truncate">
+                Freelancer Count
               </span>
-              <span className="text-sm font-extrabold text-amber-700">
+              <span className="text-sm font-black text-slate-900">
+                {teamMembers.length}
+              </span>
+            </div>
+            <div className="bg-slate-50 rounded-xl p-2">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block truncate">
+                (Total) Unsettled Due
+              </span>
+              <span className="text-sm font-black text-amber-700">
                 ₹{Number(pendingPayout).toLocaleString()}
               </span>
             </div>
-            <div className="bg-slate-50 rounded-xl p-2.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">
+            <div className="bg-slate-50 rounded-xl p-2">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block truncate">
                 Paid by Admin
               </span>
-              <span className="text-sm font-extrabold text-slate-700">
+              <span className="text-sm font-black text-emerald-700">
                 ₹{Number(paidEarnings).toLocaleString()}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Team Performance Overview */}
-        <div className="space-y-2">
-          <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-            Team Acquisition Metrics
-          </h3>
-
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs text-center space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">
-                Freelancers
-              </span>
-              <p className="text-xl font-black text-slate-900">
-                {freelancersCount}
+        {/* ── Box 1: Status Breakdown (Verified, Pending, Reject) ── */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
+          <div className="grid grid-cols-3 gap-2 text-center divide-x divide-slate-100">
+            {/* TOTAL VERIFIED */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-center gap-1 text-[10px] font-black text-emerald-700 uppercase tracking-wider">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>TOTAL VERIFIED</span>
+              </div>
+              <p className="text-2xl font-black text-emerald-700 leading-none">
+                {totalVerified}
               </p>
-              <span className="text-[10px] font-medium text-slate-500">In your team</span>
+              <div className="pt-1 text-[11px] font-bold text-slate-700 flex items-center justify-center gap-1.5">
+                <span>{verifiedCustomers}</span>
+                <span className="text-slate-300">|</span>
+                <span>{verifiedBusinesses}</span>
+              </div>
+              <div className="text-[9px] font-semibold text-slate-400 flex items-center justify-center gap-2">
+                <span>User</span>
+                <span>|</span>
+                <span>Buss</span>
+              </div>
             </div>
 
-            <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs text-center space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">
-                Customers
-              </span>
-              <p className="text-xl font-black text-slate-900">
-                {totalCustomers}
+            {/* TOTAL PENDING */}
+            <div className="space-y-1 pl-1">
+              <div className="flex items-center justify-center gap-1 text-[10px] font-black text-amber-700 uppercase tracking-wider">
+                <Clock className="w-3.5 h-3.5" />
+                <span>TOTAL PENDING</span>
+              </div>
+              <p className="text-2xl font-black text-amber-700 leading-none">
+                {totalPending}
               </p>
-              <span className="text-[10px] font-bold text-emerald-600">{verifiedCustomers} verified</span>
+              <div className="pt-1 text-[11px] font-bold text-slate-700 flex items-center justify-center gap-1.5">
+                <span>{pendingCustomers}</span>
+                <span className="text-slate-300">|</span>
+                <span>{pendingBusinesses}</span>
+              </div>
+              <div className="text-[9px] font-semibold text-slate-400 flex items-center justify-center gap-2">
+                <span>User</span>
+                <span>|</span>
+                <span>Buss</span>
+              </div>
             </div>
 
-            <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs text-center space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">
-                Businesses
-              </span>
-              <p className="text-xl font-black text-slate-900">
-                {totalBusinesses}
+            {/* TOTAL REJECT */}
+            <div className="space-y-1 pl-1">
+              <div className="flex items-center justify-center gap-1 text-[10px] font-black text-rose-700 uppercase tracking-wider">
+                <XCircle className="w-3.5 h-3.5" />
+                <span>TOTAL REJECT</span>
+              </div>
+              <p className="text-2xl font-black text-rose-700 leading-none">
+                {totalRejected}
               </p>
-              <span className="text-[10px] font-bold text-blue-600">{verifiedBusinesses} verified</span>
+              <div className="pt-1 text-[11px] font-bold text-slate-700 flex items-center justify-center gap-1.5">
+                <span>{rejectedCustomers}</span>
+                <span className="text-slate-300">|</span>
+                <span>{rejectedBusinesses}</span>
+              </div>
+              <div className="text-[9px] font-semibold text-slate-400 flex items-center justify-center gap-2">
+                <span>User</span>
+                <span>|</span>
+                <span>Buss</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Box 2: APP INSTALL (Total Registration count) ── */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center">
+                <Download className="w-3.5 h-3.5" />
+              </div>
+              <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                APP INSTALL
+              </span>
+            </div>
+            <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              <Smartphone className="w-3 h-3" />
+              <span>Total Registration count</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 text-center divide-x divide-slate-100">
+            <div>
+              <span className="text-[11px] font-bold text-slate-600 block">User</span>
+              <p className="text-xl font-black text-slate-900 mt-0.5">{totalCustomers}</p>
+            </div>
+            <div className="pl-1">
+              <span className="text-[11px] font-bold text-slate-600 block">Business</span>
+              <p className="text-xl font-black text-slate-900 mt-0.5">{totalBusinesses}</p>
+            </div>
+            <div className="pl-1">
+              <span className="text-[11px] font-bold text-indigo-700 block">TOTAL INSTALL</span>
+              <p className="text-xl font-black text-indigo-700 mt-0.5">{totalInstall}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Box 3: Verified Due & Upcoming Income (Customer Due & Business Due) ── */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
+          <div className="grid grid-cols-2 gap-3 divide-x divide-slate-100">
+            {/* VERIFIED DUE */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5 text-[11px] font-black text-emerald-800 uppercase tracking-wider">
+                <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span>VERIFIED DUE</span>
+              </div>
+              <div className="flex items-center gap-2 pt-0.5">
+                <div className="flex-1 bg-emerald-50/60 rounded-xl p-2 text-center border border-emerald-100">
+                  <span className="text-sm font-black text-emerald-700 block">₹{customerDue.toLocaleString()}</span>
+                  <span className="text-[9.5px] font-bold text-emerald-800 uppercase tracking-tight">Customer</span>
+                </div>
+                <div className="flex-1 bg-blue-50/60 rounded-xl p-2 text-center border border-blue-100">
+                  <span className="text-sm font-black text-blue-700 block">₹{businessDue.toLocaleString()}</span>
+                  <span className="text-[9.5px] font-bold text-blue-800 uppercase tracking-tight">Business</span>
+                </div>
+              </div>
+              <div className="text-[10px] text-slate-500 font-medium text-center pt-0.5">
+                Total Due: <strong className="text-slate-900 font-bold">₹{totalVerifiedDue.toLocaleString()}</strong>
+              </div>
+            </div>
+
+            {/* UPCOMING INCOME */}
+            <div className="space-y-1.5 pl-3">
+              <div className="flex items-center gap-1.5 text-[11px] font-black text-amber-800 uppercase tracking-wider">
+                <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
+                <span>INCOME</span>
+              </div>
+              <div className="flex items-center gap-2 pt-0.5">
+                <div className="flex-1 bg-amber-50/60 rounded-xl p-2 text-center border border-amber-100">
+                  <span className="text-sm font-black text-amber-700 block">₹{customerUpcoming.toLocaleString()}</span>
+                  <span className="text-[9.5px] font-bold text-amber-800 uppercase tracking-tight">Customer</span>
+                </div>
+                <div className="flex-1 bg-indigo-50/60 rounded-xl p-2 text-center border border-indigo-100">
+                  <span className="text-sm font-black text-indigo-700 block">₹{businessUpcoming.toLocaleString()}</span>
+                  <span className="text-[9.5px] font-bold text-indigo-800 uppercase tracking-tight">Business</span>
+                </div>
+              </div>
+              <div className="text-[10px] text-slate-500 font-medium text-center pt-0.5">
+                Total Upcoming: <strong className="text-slate-900 font-bold">₹{totalUpcomingIncome.toLocaleString()}</strong>
+              </div>
             </div>
           </div>
         </div>
@@ -679,6 +888,9 @@ export default function VendorDashboardView({
                 const totalAcqs = m.total_users ?? ((m.customers_total ?? 0) + (m.businesses_total ?? 0));
                 const verAcqs = m.verified_count ?? ((m.customers_verified ?? 0) + (m.businesses_verified ?? 0));
                 const pendAcqs = m.pending_count ?? 0;
+                const rejAcqs = m.rejected_count ?? 0;
+                const custCount = m.customers_total ?? 0;
+                const bizCount = m.businesses_total ?? 0;
 
                 return (
                   <div
@@ -691,48 +903,58 @@ export default function VendorDashboardView({
                     className="p-3.5 space-y-2 hover:bg-slate-50/80 cursor-pointer transition-all active:scale-[0.99]"
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold shrink-0">
-                          {m.photo ? (
-                            <img src={m.photo} alt={m.name} className="w-full h-full object-cover rounded-xl" />
-                          ) : (
-                            <User className="w-4 h-4 text-emerald-700" />
-                          )}
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                            <span>{m.name}</span>
-                            <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              Active
-                            </span>
+                      <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                       
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 truncate">
+                            <span className="truncate">{m.name}</span>
+                            
                           </h4>
-                          <p className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
+                          <p className="text-[10.5px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5 truncate">
                             <span className="font-bold text-slate-700">{m.member_code}</span>
-                            {m.phone && <span>&bull; {m.phone}</span>}
+                            {m.phone && <span className="truncate">&bull; {m.phone}</span>}
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1 text-slate-400">
-                        <span className="text-[10.5px] font-semibold text-blue-600">View Details</span>
-                        <ChevronRight className="w-4 h-4 text-blue-600" />
+                      {/* Top Right: User & Business count badges + View Details */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="text-center px-1.5 py-0.5 rounded-lg bg-blue-50 border border-blue-100 shrink-0 min-w-[32px]">
+                          <span className="text-[11px] font-black text-blue-700 block leading-tight">{custCount}</span>
+                          <span className="text-[7.5px] font-bold text-blue-600 block uppercase tracking-tight">User</span>
+                        </div>
+                        <div className="text-center px-1.5 py-0.5 rounded-lg bg-purple-50 border border-purple-100 shrink-0 min-w-[32px]">
+                          <span className="text-[11px] font-black text-purple-700 block leading-tight">{bizCount}</span>
+                          <span className="text-[7.5px] font-bold text-purple-600 block uppercase tracking-tight">Busin</span>
+                        </div>
+                        <div className="flex items-center gap-0.5 px-2 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors whitespace-nowrap shrink-0">
+                          <span className="text-[10px] font-bold">More</span>
+                          <ChevronRight className="w-3 h-3 stroke-[2.5]" />
+                        </div>
                       </div>
                     </div>
 
-                    {/* Stats pills */}
-                    <div className="flex items-center justify-between bg-slate-50 rounded-xl px-3 py-2 text-xs">
-                      <span className="text-slate-600">
-                        Total Users: <strong className="text-slate-900 font-bold">{totalAcqs}</strong>
-                      </span>
-                      <span className="text-emerald-700 font-semibold">
-                        Ver: <strong className="font-bold">{verAcqs}</strong>
-                      </span>
-                      <span className="text-amber-700 font-semibold">
-                        Pend: <strong className="font-bold">{pendAcqs}</strong>
-                      </span>
-                      <span className="text-slate-400 text-[10.5px]">
-                        Joined {m.joined_at || "Recently"}
-                      </span>
+                    {/* Stats row (matches Image 2 bottom row: Total | Ver | Pend | Rej | Joined) */}
+                    <div className="grid grid-cols-5 items-center bg-slate-50 border border-slate-100 rounded-xl px-2 py-1.5 text-center text-xs">
+                      <div>
+                        <span className="text-[9px] text-slate-500 font-medium block leading-tight">Total</span>
+                        <strong className="text-[11px] font-black text-slate-900 leading-tight">{totalAcqs}</strong>
+                      </div>
+                      <div className="border-l border-slate-200 pl-1">
+                        <span className="text-[9px] text-emerald-700 font-bold block leading-tight">Ver: {verAcqs}</span>
+                        <span className="text-[9.5px] font-black text-emerald-700 block leading-tight">₹{Number(m.verified_earnings ?? 0).toLocaleString()}</span>
+                      </div>
+                      <div className="border-l border-slate-200 pl-1">
+                        <span className="text-[9px] text-amber-700 font-bold block leading-tight">Pend: {pendAcqs}</span>
+                        <span className="text-[9.5px] font-black text-amber-700 block leading-tight">₹{Number(m.pending_earnings ?? 0).toLocaleString()}</span>
+                      </div>
+                      <div className="border-l border-slate-200 pl-1">
+                        <span className="text-[9px] text-rose-700 font-bold block leading-tight">Rej: <strong className="font-black">{rejAcqs}</strong></span>
+                      </div>
+                      <div className="border-l border-slate-200 pl-1">
+                        <span className="text-[8.5px] text-slate-400 font-medium block leading-tight">Joined</span>
+                        <span className="text-[8.5px] text-slate-600 font-bold block leading-tight truncate">{m.joined_at || "Recent"}</span>
+                      </div>
                     </div>
                   </div>
                 );

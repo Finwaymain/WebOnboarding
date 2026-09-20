@@ -11,7 +11,10 @@ import {
   Briefcase,
   MapPin,
   UserCheck,
-  Phone
+  Phone,
+  CheckCircle2,
+  XCircle,
+  Smartphone,
 } from "lucide-react";
 
 interface TeamMemberDashboardViewProps {
@@ -67,9 +70,22 @@ export default function TeamMemberDashboardView({
     }
   };
 
-  const custCount = memberData?.acquired_customers_count ?? 0;
-  const bizCount = memberData?.acquired_businesses_count ?? 0;
-  const totalCount = memberData?.total_acquisitions_count ?? (custCount + bizCount);
+  const custCount = Number(memberData?.acquired_customers_count ?? memberData?.customer_joined ?? 0);
+  const bizCount = Number(memberData?.acquired_businesses_count ?? memberData?.business_joined ?? 0);
+  const totalCount = Number(memberData?.total_users ?? memberData?.total_acquisitions_count ?? (custCount + bizCount));
+
+  const custVer = Number(memberData?.customer_verified ?? 0);
+  const bizVer = Number(memberData?.business_verified ?? 0);
+  const totalVer = Number(memberData?.total_verified ?? (custVer + bizVer));
+
+  const custPend = Number(memberData?.customer_pending ?? Math.max(0, custCount - custVer));
+  const bizPend = Number(memberData?.business_pending ?? Math.max(0, bizCount - bizVer));
+  const totalPend = Number(memberData?.total_pending ?? (custPend + bizPend));
+
+  const custRej = Number(memberData?.customer_rejected ?? 0);
+  const bizRej = Number(memberData?.business_rejected ?? 0);
+  const totalRej = Number(memberData?.total_rejected ?? (custRej + bizRej));
+
   const location = memberData?.team_location || "Regional Territory";
   const teamType = memberData?.team_type || "Field Marketing";
   const recentAcquisitions = memberData?.recent_acquisitions || [];
@@ -103,7 +119,7 @@ export default function TeamMemberDashboardView({
           </div>
 
           <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-            Active Member
+            Active 
           </span>
         </div>
       </div>
@@ -114,7 +130,7 @@ export default function TeamMemberDashboardView({
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs space-y-4">
           <div className="text-center space-y-1">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-              Your Freelancer Member Code
+              Your  Code
             </span>
             <div className="flex items-center justify-center gap-2.5 pt-1">
               <span className="text-2xl font-black text-slate-900 tracking-widest font-mono bg-slate-100 border border-slate-200 px-4 py-2 rounded-xl">
@@ -131,17 +147,7 @@ export default function TeamMemberDashboardView({
             </div>
           </div>
 
-          {/* Share Link */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1.5">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">
-              Freelancer Registration Link
-            </span>
-            <div className="flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
-              <span className="text-xs font-mono font-semibold text-slate-700 truncate select-all">
-                {shareUrl}
-              </span>
-            </div>
-          </div>
+         
 
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -161,9 +167,6 @@ export default function TeamMemberDashboardView({
             </button>
           </div>
 
-          <p className="text-[11px] text-slate-500 text-center leading-relaxed">
-            Share your freelancer code when onboarding new customers and business drivers. All registrations are credited to your personal record.
-          </p>
         </div>
 
         {/* Performance Counters */}
@@ -229,6 +232,87 @@ export default function TeamMemberDashboardView({
               <span className="text-base font-black text-emerald-700">
                 {totalCount} Users
               </span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── 4 Work Identification Count Cards (Total User, Verified, Pending, Reject) ── */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+            Verification & Acquisition Breakdown
+          </h3>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            {/* 1. Total User */}
+            <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
+                    <Users className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-800">Total User</span>
+                </div>
+                <span className="text-lg font-black text-slate-900">{totalCount}</span>
+              </div>
+              <div className="flex items-center justify-between text-[10px] bg-slate-50 rounded-lg px-2 py-1 font-semibold text-slate-600">
+                <span>User: <strong className="text-blue-700 font-bold">{custCount}</strong></span>
+                <span className="text-slate-300">|</span>
+                <span>Buss: <strong className="text-indigo-700 font-bold">{bizCount}</strong></span>
+              </div>
+            </div>
+
+            {/* 2. Verified (user / business) */}
+            <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-800">Verified</span>
+                </div>
+                <span className="text-lg font-black text-emerald-700">{totalVer}</span>
+              </div>
+              <div className="flex items-center justify-between text-[10px] bg-emerald-50/50 border border-emerald-100 rounded-lg px-2 py-1 font-semibold text-emerald-900">
+                <span>User: <strong className="font-black">{custVer}</strong></span>
+                <span className="text-emerald-200">|</span>
+                <span>Buss: <strong className="font-black">{bizVer}</strong></span>
+              </div>
+            </div>
+
+            {/* 3. Pending (user / business) */}
+            <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+                    <Clock className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-800">Pending</span>
+                </div>
+                <span className="text-lg font-black text-amber-700">{totalPend}</span>
+              </div>
+              <div className="flex items-center justify-between text-[10px] bg-amber-50/50 border border-amber-100 rounded-lg px-2 py-1 font-semibold text-amber-900">
+                <span>User: <strong className="font-black">{custPend}</strong></span>
+                <span className="text-amber-200">|</span>
+                <span>Buss: <strong className="font-black">{bizPend}</strong></span>
+              </div>
+            </div>
+
+            {/* 4. Reject (user / business) */}
+            <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-700 flex items-center justify-center">
+                    <XCircle className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-800">Reject</span>
+                </div>
+                <span className="text-lg font-black text-rose-700">{totalRej}</span>
+              </div>
+              <div className="flex items-center justify-between text-[10px] bg-rose-50/50 border border-rose-100 rounded-lg px-2 py-1 font-semibold text-rose-900">
+                <span>User: <strong className="font-black">{custRej}</strong></span>
+                <span className="text-rose-200">|</span>
+                <span>Buss: <strong className="font-black">{bizRej}</strong></span>
+              </div>
             </div>
           </div>
         </div>
