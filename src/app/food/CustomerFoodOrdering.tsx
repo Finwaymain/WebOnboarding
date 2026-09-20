@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
@@ -24,6 +24,8 @@ import {
   CreditCard,
   Banknote
 } from 'lucide-react';
+
+const API_KEY = "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=";
 
 interface Restaurant {
   id: number;
@@ -182,7 +184,9 @@ export default function CustomerFoodOrdering({
     setRestaurantError('');
     try {
       const url = `/api/v1/food/customer/nearby?latitude=${lat}&longitude=${lng}&radius=${radiusKm}`;
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: { Accept: 'application/json', apikey: API_KEY }
+      });
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
         setRestaurants(json.data);
@@ -206,7 +210,9 @@ export default function CustomerFoodOrdering({
     setActiveRestaurant(restaurant);
     setLoadingMenu(true);
     try {
-      const res = await fetch(`/api/v1/food/customer/restaurant/${restaurant.id}/menu`);
+      const res = await fetch(`/api/v1/food/customer/restaurants/${restaurant.id}/menu`, {
+        headers: { Accept: 'application/json', apikey: API_KEY }
+      });
       const json = await res.json();
       if (json.success && json.data) {
         setCategories(json.data.categories || []);
@@ -302,9 +308,13 @@ export default function CustomerFoodOrdering({
         })),
       };
 
-      const res = await fetch('/api/v1/food/customer/order', {
+      const res = await fetch('/api/v1/food/customer/orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'apikey': API_KEY,
+        },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
