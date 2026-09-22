@@ -1810,19 +1810,19 @@ export default function RestaurantPartnerPortal({
                       <span>Ready</span>
                     </h3>
                     <span className="w-5 h-5 rounded-full bg-purple-200 text-purple-900 font-bold text-[11px] flex items-center justify-center">
-                      {activeOrders.filter((o) => o.order_status === "ready_for_pickup").length}
+                      {activeOrders.filter((o) => ["ready_for_pickup", "rider_assigned", "rider_at_restaurant"].includes(o.order_status)).length}
                     </span>
                   </div>
 
                   <div className="space-y-2.5">
                     {activeOrders
-                      .filter((o) => o.order_status === "ready_for_pickup")
+                      .filter((o) => ["ready_for_pickup", "rider_assigned", "rider_at_restaurant"].includes(o.order_status))
                       .map((order) => (
                         <div key={order.id} className="p-3 rounded-xl bg-white border border-purple-200 shadow-xs space-y-2">
                           <div className="flex justify-between items-baseline">
                             <span className="font-mono font-black text-xs text-slate-900">{order.order_number}</span>
                             <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
-                              Packed
+                              {order.order_status === "rider_at_restaurant" ? "Captain Arrived" : "Packed"}
                             </span>
                           </div>
 
@@ -1860,18 +1860,18 @@ export default function RestaurantPartnerPortal({
                       <span>On Route</span>
                     </h3>
                     <span className="w-5 h-5 rounded-full bg-emerald-200 text-emerald-900 font-bold text-[11px] flex items-center justify-center">
-                      {activeOrders.filter((o) => ["rider_assigned", "food_picked_up", "out_for_delivery"].includes(o.order_status)).length}
+                      {activeOrders.filter((o) => ["food_picked_up", "out_for_delivery", "rider_at_location"].includes(o.order_status)).length}
                     </span>
                   </div>
 
                   <div className="space-y-2.5">
-                    {activeOrders.filter((o) => ["rider_assigned", "food_picked_up", "out_for_delivery"].includes(o.order_status)).length === 0 ? (
+                    {activeOrders.filter((o) => ["food_picked_up", "out_for_delivery", "rider_at_location"].includes(o.order_status)).length === 0 ? (
                       <div className="text-center py-8 text-xs text-slate-400 font-medium">
                         No orders in transit.
                       </div>
                     ) : (
                       activeOrders
-                        .filter((o) => ["rider_assigned", "food_picked_up", "out_for_delivery"].includes(o.order_status))
+                        .filter((o) => ["food_picked_up", "out_for_delivery", "rider_at_location"].includes(o.order_status))
                         .map((order) => (
                           <div key={order.id} className="p-3 rounded-xl bg-white border border-emerald-200 shadow-xs space-y-1">
                             <div className="flex justify-between">
