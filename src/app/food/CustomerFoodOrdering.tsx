@@ -2054,11 +2054,8 @@ export default function CustomerFoodOrdering({
             )}
 
             {/* 4-Digit MPIN Input - 4 Discrete Security Boxes */}
-            <div className="py-2">
-              <div
-                className="flex items-center justify-center gap-3 cursor-pointer select-none"
-                onClick={() => mpinInputRef.current?.focus()}
-              >
+            <div className="py-2 relative">
+              <div className="flex items-center justify-center gap-3 select-none pointer-events-none">
                 {[0, 1, 2, 3].map((idx) => {
                   const digit = mpinInput[idx] || '';
                   const isCurrent = mpinInput.length === idx;
@@ -2079,7 +2076,7 @@ export default function CustomerFoodOrdering({
                 })}
               </div>
 
-              {/* Hidden input capturing numeric keystrokes cleanly on mobile/web */}
+              {/* Native input overlays boxes directly so mobile tap always activates soft keyboard */}
               <input
                 ref={mpinInputRef}
                 type="password"
@@ -2092,9 +2089,9 @@ export default function CustomerFoodOrdering({
                   const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 4);
                   setMpinInput(val);
                 }}
-                className="opacity-0 w-0 h-0 absolute -z-10"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
               />
-              <p className="text-[11px] text-zinc-400 mt-2 font-medium">Tap boxes to enter 4-digit secret PIN</p>
+              <p className="text-[11px] text-zinc-400 mt-2 font-medium pointer-events-none">Tap boxes to enter 4-digit secret PIN</p>
             </div>
 
             <div className="flex items-center gap-2 pt-1">
