@@ -1229,131 +1229,123 @@ export default function CustomerFoodOrdering({
         ) : bottomNav === 'orders' ? (
           /* VIEW C: MY ORDERS SCREEN */
           <div className="space-y-4">
-            {/* Orders Header */}
-            <div className="flex items-center justify-between bg-white rounded-2xl p-4 border border-gray-100 shadow-xs">
+            {/* Clean Section Header */}
+            <div className="flex items-center justify-between pt-1">
               <div>
-                <h1 className="text-base sm:text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-emerald-600" />
-                  My Food Orders
+                <h1 className="text-xl font-black text-zinc-950 tracking-tight">
+                  My Orders
                 </h1>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Track live orders, view past meals and delivery OTP
+                <p className="text-xs text-zinc-500 mt-0.5 font-medium">
+                  Active deliveries and past food receipts
                 </p>
               </div>
               <button
                 onClick={fetchCustomerOrders}
                 disabled={loadingOrders}
-                className="p-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-600 transition-colors"
+                className="w-9 h-9 rounded-full bg-white border border-zinc-200/80 hover:bg-zinc-50 text-zinc-600 flex items-center justify-center transition-colors shadow-2xs"
                 title="Refresh orders"
               >
-                <RefreshCw className={`w-4 h-4 ${loadingOrders ? 'animate-spin text-emerald-600' : ''}`} />
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingOrders ? 'animate-spin text-zinc-900' : ''}`} />
               </button>
             </div>
 
             {loadingOrders && customerOrders.length === 0 ? (
-              <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 shadow-xs">
-                <RefreshCw className="w-7 h-7 animate-spin text-emerald-600 mx-auto mb-2" />
-                <p className="text-xs text-gray-500 font-bold">Loading your orders...</p>
+              <div className="py-20 text-center space-y-2">
+                <RefreshCw className="w-6 h-6 animate-spin text-zinc-400 mx-auto" />
+                <p className="text-xs font-semibold text-zinc-400">Loading your orders...</p>
               </div>
             ) : customerOrders.length === 0 ? (
-              <div className="text-center py-16 bg-white rounded-3xl border border-gray-100 p-8 shadow-xs">
-                <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3">
-                  <ShoppingBag className="w-8 h-8 text-emerald-600" />
+              <div className="bg-white rounded-3xl border border-zinc-200/80 p-8 text-center space-y-3 shadow-2xs my-6">
+                <div className="w-12 h-12 rounded-2xl bg-zinc-100 text-zinc-600 flex items-center justify-center mx-auto">
+                  <ShoppingBag className="w-5 h-5" />
                 </div>
-                <h3 className="text-base font-black text-gray-900">No Food Orders Yet</h3>
-                <p className="text-xs text-gray-500 mt-1 max-w-xs mx-auto">
-                  Hungry? Explore top restaurants and popular meals around your location.
-                </p>
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-900">No Food Orders Yet</h3>
+                  <p className="text-xs text-zinc-400 mt-1 max-w-xs mx-auto">
+                    Explore top restaurants near you to place your first order.
+                  </p>
+                </div>
                 <button
                   onClick={() => handleBottomNavClick('food')}
-                  className="mt-4 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-md transition-colors"
+                  className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold rounded-xl transition-colors shadow-xs"
                 >
-                  Browse Food & Restaurants
+                  Explore Restaurants
                 </button>
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Active Orders Section */}
-                {customerOrders.filter((o) => !['delivered', 'completed', 'cancelled', 'rejected'].includes(String(o.order_status).toLowerCase())).length > 0 && (
-                  <div className="space-y-3">
-                    <h2 className="text-xs font-extrabold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      Active Orders In Progress
-                    </h2>
-                    {customerOrders
-                      .filter((o) => !['delivered', 'completed', 'cancelled', 'rejected'].includes(String(o.order_status).toLowerCase()))
-                      .map((order) => (
-                        <div
-                          key={order.id}
-                          className="bg-white rounded-2xl border-2 border-emerald-500/40 p-4 shadow-sm space-y-3"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-black text-gray-900">
-                                  #{order.order_number || order.id}
-                                </span>
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 uppercase tracking-tight">
-                                  {order.order_status?.replace(/_/g, ' ')}
-                                </span>
-                              </div>
-                              <h3 className="text-sm font-black text-gray-900 mt-1">
-                                {order.restaurant?.name || 'Fiinway Restaurant Partner'}
-                              </h3>
-                              <p className="text-xs text-gray-500 font-medium truncate max-w-xs">
-                                {order.delivery_address || 'Delivery address registered'}
-                              </p>
-                            </div>
-
-                            {order.delivery_otp && (
-                              <div className="text-right bg-emerald-50 border border-emerald-200 rounded-xl px-2.5 py-1.5">
-                                <span className="text-[10px] font-bold text-emerald-700 block uppercase tracking-wider">
-                                  Delivery PIN
-                                </span>
-                                <span className="text-base font-black text-emerald-900 tracking-wider">
-                                  {order.delivery_otp}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Items summary */}
-                          {order.items && order.items.length > 0 && (
-                            <div className="bg-gray-50 rounded-xl p-2.5 text-xs text-gray-700 space-y-1">
-                              {order.items.map((it: any) => (
-                                <div key={it.id || it.product_id} className="flex justify-between font-medium">
-                                  <span>{it.quantity}x {it.product_name}</span>
-                                  <span className="font-bold">₹{it.line_total || it.customer_unit_price * it.quantity}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          <div className="flex items-center justify-between pt-1 border-t border-gray-100">
-                            <div>
-                              <span className="text-[10px] text-gray-400 font-bold block">Total Paid</span>
-                              <span className="text-base font-black text-gray-900">₹{order.customer_payable}</span>
-                            </div>
-                            <button
-                              onClick={() => {
-                                setConfirmedOrder(order);
-                                setActiveTrackingOrderId(order.id);
-                                setIsTrackingModal(true);
-                              }}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs px-4 py-2.5 rounded-xl shadow-md flex items-center gap-1.5 transition-all"
-                            >
-                              <Navigation className="w-3.5 h-3.5" />
-                              <span>Live Track Order</span>
-                            </button>
-                          </div>
+                {/* Active Orders */}
+                {customerOrders.filter((o) => !['delivered', 'completed', 'cancelled', 'rejected'].includes(String(o.order_status).toLowerCase())).map((order) => (
+                  <div
+                    key={order.id}
+                    className="bg-white rounded-2xl border border-zinc-200/90 p-4 shadow-xs space-y-3.5"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-zinc-900">
+                            #{order.order_number || order.id}
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            {String(order.order_status || 'Pending').replace(/_/g, ' ')}
+                          </span>
                         </div>
-                      ))}
+                        <h3 className="text-sm font-bold text-zinc-900 mt-1">
+                          {order.restaurant?.name || 'Restaurant Partner'}
+                        </h3>
+                        <p className="text-xs text-zinc-400 truncate max-w-xs">
+                          {order.delivery_address || 'Delivery address'}
+                        </p>
+                      </div>
+
+                      {order.delivery_otp && (
+                        <div className="text-right bg-zinc-50 border border-zinc-200/80 rounded-xl px-2.5 py-1.5">
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 block">
+                            PIN
+                          </span>
+                          <span className="font-mono text-sm font-black text-zinc-900 tracking-wider">
+                            {order.delivery_otp}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Items snippet */}
+                    {order.items && order.items.length > 0 && (
+                      <div className="text-xs text-zinc-600 bg-zinc-50/80 rounded-xl p-2.5 space-y-1">
+                        {order.items.map((it: any, i: number) => (
+                          <div key={i} className="flex justify-between font-medium">
+                            <span className="truncate max-w-[220px]">{it.quantity}x {it.product_name}</span>
+                            <span className="font-mono text-zinc-800">₹{it.line_total || (Number(it.customer_unit_price || 0) * it.quantity)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between pt-1 border-t border-zinc-100">
+                      <div>
+                        <span className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider block">Total</span>
+                        <span className="font-bold text-sm text-zinc-950">₹{order.customer_payable}</span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setConfirmedOrder(order);
+                          setActiveTrackingOrderId(order.id);
+                          setIsTrackingModal(true);
+                        }}
+                        className="bg-zinc-950 hover:bg-zinc-800 text-white font-semibold text-xs px-4 py-2 rounded-xl shadow-xs flex items-center gap-1.5 transition-colors"
+                      >
+                        <Navigation className="w-3.5 h-3.5" />
+                        <span>Track Live</span>
+                      </button>
+                    </div>
                   </div>
-                )}
+                ))}
 
                 {/* Past Orders Section */}
-                <div className="space-y-3 pt-2">
-                  <h2 className="text-xs font-extrabold uppercase tracking-wider text-gray-500">
+                <div className="space-y-2.5 pt-2">
+                  <h2 className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">
                     Past Orders
                   </h2>
                   {customerOrders
@@ -1361,53 +1353,42 @@ export default function CustomerFoodOrdering({
                     .map((order) => (
                       <div
                         key={order.id}
-                        className="bg-white rounded-2xl border border-gray-200/80 p-4 shadow-xs space-y-3 opacity-95 hover:opacity-100 transition-opacity"
+                        className="bg-white rounded-2xl border border-zinc-200/70 p-4 shadow-2xs hover:border-zinc-300 transition-colors space-y-2"
                       >
-                        <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start justify-between">
                           <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-gray-700">
-                                #{order.order_number || order.id}
-                              </span>
-                              <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-tight ${
-                                  order.order_status === 'delivered' || order.order_status === 'completed'
-                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                    : 'bg-rose-50 text-rose-700 border border-rose-200'
-                                }`}
-                              >
-                                {order.order_status}
-                              </span>
-                            </div>
-                            <h3 className="text-sm font-black text-gray-900 mt-1">
-                              {order.restaurant?.name || 'Fiinway Restaurant'}
-                            </h3>
-                            <p className="text-[11px] text-gray-400">
-                              {order.created_at ? new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
-                            </p>
+                            <span className="text-xs font-bold text-zinc-900 block">
+                              {order.restaurant?.name || 'Restaurant'}
+                            </span>
+                            <span className="text-[11px] text-zinc-400">
+                              {order.created_at ? new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Recent'} • ₹{order.customer_payable}
+                            </span>
                           </div>
-                          <span className="text-sm font-black text-gray-900">
-                            ₹{order.customer_payable}
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            order.order_status === 'delivered' || order.order_status === 'completed'
+                              ? 'bg-zinc-100 text-zinc-700'
+                              : 'bg-rose-50 text-rose-700'
+                          }`}>
+                            {order.order_status}
                           </span>
                         </div>
 
-                        {/* Items summary */}
                         {order.items && order.items.length > 0 && (
-                          <p className="text-xs text-gray-600 font-medium line-clamp-1">
+                          <p className="text-xs text-zinc-500 truncate">
                             {order.items.map((it: any) => `${it.quantity}x ${it.product_name}`).join(', ')}
                           </p>
                         )}
 
-                        <div className="flex items-center justify-end gap-2 pt-1 border-t border-gray-100">
+                        <div className="flex justify-end pt-1 border-t border-zinc-100">
                           <button
                             onClick={() => {
                               setConfirmedOrder(order);
                               setActiveTrackingOrderId(order.id);
                               setIsTrackingModal(true);
                             }}
-                            className="text-xs font-bold text-gray-600 hover:text-emerald-700 px-3 py-1.5 rounded-lg border border-gray-200 hover:border-emerald-300 transition-colors"
+                            className="text-[11px] font-semibold text-zinc-600 hover:text-zinc-950 transition-colors"
                           >
-                            View Receipt & Details
+                            View details →
                           </button>
                         </div>
                       </div>
@@ -1427,33 +1408,31 @@ export default function CustomerFoodOrdering({
                   setActiveTrackingOrderId(activeOrder.id);
                   setIsTrackingModal(true);
                 }}
-                className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-2xl p-4 shadow-lg flex items-center justify-between cursor-pointer hover:shadow-xl transition-all"
+                className="bg-zinc-950 text-white rounded-2xl p-4 shadow-xl border border-zinc-800/80 flex items-center justify-between cursor-pointer hover:bg-zinc-900 transition-all active:scale-[0.99] group"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-xs flex items-center justify-center shrink-0">
-                    <Bike className="w-6 h-6 text-white animate-bounce" />
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700/50 flex items-center justify-center shrink-0">
+                    <Bike className="w-5 h-5 text-emerald-400" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full text-white">
-                        <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping" />
-                        Order in Progress
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Order in progress
                       </span>
                       {activeOrder.delivery_otp && (
-                        <span className="text-xs font-bold bg-black/25 px-2 py-0.5 rounded-md">
-                          PIN: {activeOrder.delivery_otp}
+                        <span className="font-mono text-[10px] font-bold bg-zinc-800 border border-zinc-700 px-1.5 py-0.5 rounded text-zinc-300">
+                          PIN {activeOrder.delivery_otp}
                         </span>
                       )}
                     </div>
-                    <h4 className="text-sm font-black text-white mt-1 truncate">
+                    <p className="text-xs font-bold text-zinc-100 truncate mt-0.5">
                       {activeOrder.restaurant?.name || 'Restaurant'} • ₹{activeOrder.customer_payable || activeOrder.grand_total}
-                    </h4>
-                    <p className="text-[11px] text-emerald-100 font-medium">
-                      Status: {String(activeOrder.order_status || '').replace(/_/g, ' ').toUpperCase()} • Tap to Live Track
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 bg-white text-emerald-800 text-xs font-extrabold px-3 py-2 rounded-xl shadow-xs shrink-0 ml-2">
+
+                <div className="flex items-center gap-1.5 bg-white text-zinc-950 text-xs font-bold px-3 py-1.5 rounded-xl shrink-0 group-hover:bg-zinc-100 transition-colors shadow-2xs">
                   <span>Track</span>
                   <ChevronRight className="w-3.5 h-3.5" />
                 </div>
@@ -2053,29 +2032,29 @@ export default function CustomerFoodOrdering({
         </div>
       )}
 
-      {/* 6. MPIN MODAL (Home Service Standard Security) */}
+      {/* 6. MPIN MODAL (Fintech Standard Security) */}
       {isMpinModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
-              <Lock className="w-6 h-6" />
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-xs sm:max-w-sm w-full p-6 shadow-2xl border border-zinc-100 text-center space-y-4">
+            <div className="w-10 h-10 rounded-2xl bg-zinc-100 text-zinc-900 flex items-center justify-center mx-auto">
+              <Lock className="w-5 h-5" />
             </div>
 
             <div>
-              <h3 className="text-lg font-black text-gray-900">Enter Wallet MPIN</h3>
-              <p className="text-xs text-gray-500 mt-1">
-                Authorize payment of <span className="font-extrabold text-gray-900">₹{grandTotal}</span> from your Fiinway Wallet.
+              <h3 className="text-base font-bold text-zinc-950">Enter Wallet PIN</h3>
+              <p className="text-xs text-zinc-500 mt-1 font-medium">
+                Authorize ₹{grandTotal} from your Fiinway Wallet
               </p>
             </div>
 
             {mpinError && (
-              <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl p-2.5">
+              <div className="bg-rose-50 border border-rose-200/80 text-rose-700 text-xs font-semibold rounded-xl p-2.5">
                 {mpinError}
               </div>
             )}
 
             {/* 4-Digit MPIN Input - 4 Discrete Security Boxes */}
-            <div className="py-3">
+            <div className="py-2">
               <div
                 className="flex items-center justify-center gap-3 cursor-pointer select-none"
                 onClick={() => mpinInputRef.current?.focus()}
@@ -2086,15 +2065,15 @@ export default function CustomerFoodOrdering({
                   return (
                     <div
                       key={idx}
-                      className={`w-13 h-14 rounded-2xl border-2 flex items-center justify-center text-2xl font-black transition-all ${
+                      className={`w-12 h-13 rounded-2xl border flex items-center justify-center text-xl font-mono font-bold transition-all ${
                         digit
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-800 shadow-xs'
+                          ? 'border-zinc-900 bg-zinc-50 text-zinc-950'
                           : isCurrent
-                          ? 'border-emerald-500 bg-white ring-4 ring-emerald-100 shadow-xs scale-105'
-                          : 'border-gray-200 bg-gray-50 text-gray-300'
+                          ? 'border-zinc-900 bg-white ring-2 ring-zinc-900/10 scale-105'
+                          : 'border-zinc-200 bg-zinc-50/50 text-zinc-300'
                       }`}
                     >
-                      {digit ? '●' : isCurrent ? <span className="w-2 h-0.5 bg-emerald-500 animate-pulse" /> : ''}
+                      {digit ? '●' : isCurrent ? <span className="w-1.5 h-0.5 bg-zinc-900 animate-pulse" /> : ''}
                     </div>
                   );
                 })}
@@ -2115,14 +2094,14 @@ export default function CustomerFoodOrdering({
                 }}
                 className="opacity-0 w-0 h-0 absolute -z-10"
               />
-              <p className="text-[11px] text-gray-400 mt-2 font-medium">Tap boxes to enter 4-digit secret M-PIN</p>
+              <p className="text-[11px] text-zinc-400 mt-2 font-medium">Tap boxes to enter 4-digit secret PIN</p>
             </div>
 
-            <div className="flex items-center gap-2 pt-2">
+            <div className="flex items-center gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setIsMpinModalOpen(false)}
-                className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-bold text-xs hover:bg-gray-50"
+                className="flex-1 py-3 rounded-2xl border border-zinc-200 text-zinc-600 font-semibold text-xs hover:bg-zinc-50 transition-colors"
               >
                 Cancel
               </button>
@@ -2130,10 +2109,10 @@ export default function CustomerFoodOrdering({
                 type="button"
                 onClick={() => executePlaceOrder(mpinInput)}
                 disabled={isPlacingOrder || mpinInput.length < 4}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black py-3 rounded-xl shadow-md text-xs transition-all flex items-center justify-center gap-1.5"
+                className="flex-1 bg-zinc-950 hover:bg-zinc-800 disabled:opacity-40 text-white font-bold py-3 rounded-2xl shadow-xs text-xs transition-colors flex items-center justify-center gap-1.5"
               >
                 {isPlacingOrder && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                <span>{isPlacingOrder ? 'Verifying...' : 'Confirm & Pay'}</span>
+                <span>{isPlacingOrder ? 'Verifying...' : 'Authorize'}</span>
               </button>
             </div>
           </div>
