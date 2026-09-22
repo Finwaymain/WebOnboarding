@@ -33,7 +33,6 @@ import {
   Sparkles,
   Check,
   Navigation,
-  Gift,
   Lock
 } from 'lucide-react';
 import LiveOrderTrackingModal from './LiveOrderTrackingModal';
@@ -241,7 +240,6 @@ export default function CustomerFoodOrdering({
   const [deliveryNotes, setDeliveryNotes] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<'wallet' | 'upi'>('wallet');
   const [adminTaxes, setAdminTaxes] = useState<AdminTax[]>([]);
-  const [applyPromo, setApplyPromo] = useState<boolean>(true); // Home service promotional bonus
   const [isPlacingOrder, setIsPlacingOrder] = useState<boolean>(false);
 
   // Sync phone number when props or URL parameters update
@@ -723,22 +721,25 @@ export default function CustomerFoodOrdering({
     return 95;
   }, [activeRestaurant, cartSubtotal]);
 
-  // Home Service standard Promo Bonus (20% up to ₹50)
-  const promoDiscountAmount = useMemo(() => {
-    if (!applyPromo || cartSubtotal <= 0) return 0;
-    return Math.min(50, Math.round(cartSubtotal * 0.2));
-  }, [applyPromo, cartSubtotal]);
-
-  // Dynamic admin taxes calculated on cart subtotal
+  // Dynamic admin taxes calculated on cart subtotal (filtered by payment method)
   const calculatedTaxes = useMemo(() => {
     if (cartSubtotal <= 0) return [];
-    return adminTaxes.map((t) => {
-      const amt = t.type === 'percentage'
-        ? Math.round(((cartSubtotal * t.value) / 100) * 100) / 100
-        : t.value;
-      return { ...t, amount: amt };
-    });
-  }, [cartSubtotal, adminTaxes]);
+    return adminTaxes
+      .filter((t) => {
+        const name = (t.name || '').toLowerCase();
+        // If wallet is selected, strictly exclude UPI Handling or gateway fee
+        if (paymentMethod === 'wallet' && (name.includes('upi') || name.includes('gateway'))) return false;
+        // If UPI is selected, strictly exclude wallet fees
+        if (paymentMethod === 'upi' && name.includes('wallet')) return false;
+        return true;
+      })
+      .map((t) => {
+        const amt = t.type === 'percentage'
+          ? Math.round(((cartSubtotal * t.value) / 100) * 100) / 100
+          : t.value;
+        return { ...t, amount: amt };
+      });
+  }, [cartSubtotal, adminTaxes, paymentMethod]);
 
   const totalAdminTaxes = useMemo(() => {
     return calculatedTaxes.reduce((sum, t) => sum + t.amount, 0);
@@ -747,8 +748,8 @@ export default function CustomerFoodOrdering({
   // If cart is empty, grandTotal is strictly 0!
   const grandTotal = useMemo(() => {
     if (cartSubtotal <= 0) return 0;
-    return Math.max(0, Math.round(cartSubtotal + deliveryFee + totalAdminTaxes - promoDiscountAmount));
-  }, [cartSubtotal, deliveryFee, totalAdminTaxes, promoDiscountAmount]);
+    return Math.max(0, Math.round(cartSubtotal + deliveryFee + totalAdminTaxes));
+  }, [cartSubtotal, deliveryFee, totalAdminTaxes]);
 
   // Initiate Order Flow (Checks MPIN if wallet is selected)
   const handleInitiateOrder = () => {
@@ -806,8 +807,6 @@ export default function CustomerFoodOrdering({
         delivery_lng: lng,
         special_instructions: deliveryNotes,
         payment_method: paymentMethod,
-        apply_promotional: applyPromo ? '1' : '0',
-        discount_amount: promoDiscountAmount,
         items: cartList.map((item) => ({
           product_id: item.product.id,
           quantity: item.quantity,
@@ -1869,33 +1868,6 @@ export default function CustomerFoodOrdering({
                 </div>
               </div>
 
-              {/* Home Service Promotional Bonus Banner */}
-              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
-                    <Gift className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <h4 className="text-xs font-black text-emerald-950">Promotion Bonus</h4>
-                      <span className="text-[10px] font-bold bg-emerald-200 text-emerald-800 px-1.5 py-0.2 rounded">
-                        -₹{promoDiscountAmount}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-emerald-700">Exclusive food discount applied</p>
-                  </div>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={applyPromo}
-                    onChange={(e) => setApplyPromo(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600" />
-                </label>
-              </div>
-
               {/* Home Service Style Payment Methods */}
               <div className="bg-gray-50 rounded-2xl p-3.5 space-y-3">
                 <div className="flex items-center justify-between">
@@ -1987,12 +1959,6 @@ export default function CustomerFoodOrdering({
                   <div className="flex justify-between text-gray-600">
                     <span>Delivery Partner Fee ({activeRestaurant?.distance_km !== undefined ? activeRestaurant.distance_km : 1.5} km)</span>
                     <span className="font-semibold text-gray-900">₹{deliveryFee}</span>
-                  </div>
-                )}
-                {applyPromo && promoDiscountAmount > 0 && (
-                  <div className="flex justify-between text-emerald-700 font-bold">
-                    <span>Promotion Bonus Discount</span>
-                    <span>-₹{promoDiscountAmount}</span>
                   </div>
                 )}
                 {/* Admin Dynamic Taxes from tj_tax */}
