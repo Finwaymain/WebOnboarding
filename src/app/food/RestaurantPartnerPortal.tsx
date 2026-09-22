@@ -554,22 +554,23 @@ export default function RestaurantPartnerPortal({
   };
 
   // Rider Handover Verification
-  const handleConfirmHandover = async () => {
-    if (!handoverOrderId) return;
+  const handleConfirmHandover = async (orderId?: number, otp?: string) => {
+    const targetId = orderId || handoverOrderId;
+    if (!targetId) return;
     const effectiveToken = resolveToken();
     try {
-      const res = await fetch(`https://api.fiinway.com/api/v1/food/restaurant/orders/${handoverOrderId}/handover`, {
+      const res = await fetch(`https://api.fiinway.com/api/v1/food/restaurant/orders/${targetId}/handover`, {
         method: "POST",
         headers: getApiHeaders(effectiveToken),
-        body: JSON.stringify({ pickup_otp: riderOtp })
+        body: JSON.stringify({ pickup_otp: otp || riderOtp || "" })
       });
       const data = await res.json();
       if (data?.success) {
-        showToast("Food handed over to captain successfully!");
+        showToast("Food handed over to delivery partner successfully!");
         setHandoverOrderId(null);
         setRiderOtp("");
       } else {
-        showToast(data?.error || "OTP verification failed.");
+        showToast(data?.error || "Handover failed.");
       }
     } catch (_) {
       showToast("Food handover confirmed.");
@@ -1831,19 +1832,20 @@ export default function RestaurantPartnerPortal({
                               <span>{order.rider_name || "Assigning Rider..."}</span>
                             </div>
                             {order.rider_phone && <div className="text-slate-500">Ph: {order.rider_phone}</div>}
-                            {order.pickup_otp && (
-                              <div className="font-mono font-bold text-purple-700 bg-purple-50 px-1 py-0.5 rounded inline-block text-[10px]">
-                                OTP: {order.pickup_otp}
-                              </div>
-                            )}
+                            <div className="flex items-center justify-between bg-purple-50 border border-purple-200 px-2 py-1 rounded-lg">
+                              <span className="text-[10px] text-purple-700 font-semibold">Handover Code:</span>
+                              <span className="font-mono font-black text-purple-800 text-xs tracking-wider">
+                                {order.pickup_otp || "----"}
+                              </span>
+                            </div>
                           </div>
 
                           <button
-                            onClick={() => setHandoverOrderId(order.id)}
+                            onClick={() => handleConfirmHandover(order.id, order.pickup_otp)}
                             className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-xs flex items-center justify-center gap-1 cursor-pointer"
                           >
                             <Check className="w-3.5 h-3.5" />
-                            <span>Handover</span>
+                            <span>Handover to Partner</span>
                           </button>
                         </div>
                       ))}
@@ -3449,7 +3451,7 @@ export default function RestaurantPartnerPortal({
         </div>
       )}
 
-      {/* MODAL: RIDER OTP */}
+      {/* MODAL: RIDER HANDOVER */}
       {handoverOrderId && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-3 text-center">
@@ -3457,20 +3459,14 @@ export default function RestaurantPartnerPortal({
               <Bike className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-black text-sm text-slate-900">Captain Handover OTP</h3>
+              <h3 className="font-black text-sm text-slate-900">Food Handover</h3>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                Enter the 4-digit OTP shown on captain's Fiinway app:
+                Share this 4-digit code with the delivery partner upon parcel handover:
               </p>
+              <div className="my-2 py-2 px-5 bg-purple-50 border border-purple-200 rounded-xl inline-block font-mono font-black text-2xl text-purple-700 tracking-widest">
+                {orders.find((o) => o.id === handoverOrderId)?.pickup_otp || "----"}
+              </div>
             </div>
-
-            <input
-              type="text"
-              maxLength={4}
-              placeholder="0000"
-              value={riderOtp}
-              onChange={(e) => setRiderOtp(e.target.value)}
-              className="w-full text-center tracking-widest text-xl font-black py-2.5 rounded-xl bg-slate-50 border border-slate-300 font-mono"
-            />
 
             <div className="flex gap-2 pt-1">
               <button
@@ -3480,13 +3476,18 @@ export default function RestaurantPartnerPortal({
                 }}
                 className="flex-1 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs cursor-pointer"
               >
-                Cancel
+                Close
               </button>
               <button
-                onClick={handleConfirmHandover}
+                onClick={() =>
+                  handleConfirmHandover(
+                    handoverOrderId,
+                    orders.find((o) => o.id === handoverOrderId)?.pickup_otp
+                  )
+                }
                 className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs cursor-pointer"
               >
-                Verify & Handover
+                Confirm Handed Over
               </button>
             </div>
           </div>
