@@ -36,6 +36,7 @@ import {
   Gift,
   Lock
 } from 'lucide-react';
+import LiveOrderTrackingModal from './LiveOrderTrackingModal';
 
 const API_KEY = "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=";
 const GOOGLE_MAPS_KEY = "AIzaSyBw7w6Sdryp7JAloPV0fBdAA-eFCtNv060";
@@ -1674,79 +1675,16 @@ export default function CustomerFoodOrdering({
 
       {/* 7. ORDER CONFIRMATION & LIVE TRACKING MODAL */}
       {isTrackingModal && confirmedOrder && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 text-center">
-            {/* Success Icon */}
-            <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
-              <CheckCircle2 className="w-10 h-10 stroke-[2.5]" />
-            </div>
-
-            <div>
-              <span className="text-[11px] font-bold bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full uppercase tracking-wider">
-                Order Placed Successfully
-              </span>
-              <h2 className="text-xl font-black text-gray-900 mt-2">
-                Order #{confirmedOrder.order_number || confirmedOrder.id}
-              </h2>
-              <div className="flex items-center justify-center gap-2 mt-1">
-                <span className="text-xs font-extrabold text-emerald-700">
-                  Paid ₹{confirmedOrder.customer_payable}
-                </span>
-                <span className="text-gray-300">•</span>
-                <span className="text-xs font-semibold text-gray-500 uppercase">
-                  {confirmedOrder.payment_method || 'Wallet'}
-                </span>
-              </div>
-            </div>
-
-            {/* Delivery OTP Card */}
-            <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-4 text-white shadow-md">
-              <p className="text-xs uppercase tracking-wider font-semibold text-emerald-100">
-                Delivery Verification PIN
-              </p>
-              <div className="text-3xl font-black tracking-widest my-1">
-                {confirmedOrder.delivery_otp || String(Math.floor(1000 + Math.random() * 9000))}
-              </div>
-              <p className="text-[11px] text-emerald-100">
-                Share this PIN with your delivery rider upon doorstep arrival.
-              </p>
-            </div>
-
-            {/* Live Progress Tracker */}
-            <div className="text-left space-y-3 bg-gray-50 rounded-2xl p-4">
-              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Live Status</h4>
-              <div className="space-y-2.5 text-xs font-semibold">
-                <div className="flex items-center gap-2.5 text-emerald-700">
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-600 shrink-0" />
-                  <span>Order Confirmed by Restaurant</span>
-                </div>
-                <div className="flex items-center gap-2.5 text-emerald-700">
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse shrink-0" />
-                  <span>Chef is preparing your fresh meal</span>
-                </div>
-                <div className="flex items-center gap-2.5 text-gray-400">
-                  <div className="w-2.5 h-2.5 rounded-full bg-gray-300 shrink-0" />
-                  <span>Delivery Partner reaching restaurant</span>
-                </div>
-                <div className="flex items-center gap-2.5 text-gray-400">
-                  <div className="w-2.5 h-2.5 rounded-full bg-gray-300 shrink-0" />
-                  <span>Out for doorstep delivery (Within 25km)</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Back to Home Button */}
-            <button
-              onClick={() => {
-                setIsTrackingModal(false);
-                setActiveRestaurant(null);
-              }}
-              className="w-full bg-gray-900 hover:bg-gray-800 text-white font-bold py-3.5 rounded-2xl shadow transition-colors text-sm"
-            >
-              Back to Food Discovery
-            </button>
-          </div>
-        </div>
+        <LiveOrderTrackingModal
+          orderId={confirmedOrder.id}
+          initialOrder={confirmedOrder}
+          apiKey={API_KEY}
+          googleMapsKey={GOOGLE_MAPS_KEY}
+          onClose={() => {
+            setIsTrackingModal(false);
+            setActiveRestaurant(null);
+          }}
+        />
       )}
 
       {/* 8. LOCATION PICKER / GPS MODAL */}
