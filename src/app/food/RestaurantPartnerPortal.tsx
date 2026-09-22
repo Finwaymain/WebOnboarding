@@ -1552,13 +1552,13 @@ export default function RestaurantPartnerPortal({
                   </div>
                   <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200">
                     <div className="text-lg font-black text-purple-800">
-                      {activeOrders.filter((o) => o.order_status === "ready_for_pickup").length}
+                      {activeOrders.filter((o) => ["ready_for_pickup", "rider_assigned", "rider_at_restaurant"].includes(o.order_status)).length}
                     </div>
-                    <div className="text-[9px] font-bold text-purple-700 uppercase">Ready</div>
+                    <div className="text-[9px] font-bold text-purple-700 uppercase">Ready / Handover</div>
                   </div>
                   <div className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-200">
                     <div className="text-lg font-black text-indigo-800">
-                      {activeOrders.filter((o) => ["rider_assigned", "food_picked_up", "out_for_delivery"].includes(o.order_status)).length}
+                      {activeOrders.filter((o) => ["food_picked_up", "out_for_delivery", "rider_at_location"].includes(o.order_status)).length}
                     </div>
                     <div className="text-[9px] font-bold text-indigo-700 uppercase">Transit</div>
                   </div>
@@ -1571,58 +1571,93 @@ export default function RestaurantPartnerPortal({
 
               {/* Active Cooking Orders Stream */}
               <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
-                <h3 className="font-extrabold text-xs text-slate-900 uppercase tracking-wider">
-                  Active Kitchen Tasks
-                </h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-extrabold text-xs text-slate-900 uppercase tracking-wider">
+                    Active Kitchen Tasks
+                  </h3>
+                  <span className="text-[10px] text-slate-400 font-semibold">
+                    {activeOrders.length} active orders
+                  </span>
+                </div>
                 {activeOrders.length === 0 ? (
                   <div className="text-center py-8 text-slate-400 text-xs font-semibold bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
                     No active cooking orders right now.
                   </div>
                 ) : (
                   <div className="space-y-2.5">
-                    {activeOrders.map((order) => (
-                      <div
-                        key={order.id}
-                        className="p-3 rounded-xl border border-slate-200 hover:border-slate-300 transition-all flex items-center justify-between gap-3"
-                      >
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <span className="font-mono font-black text-xs text-slate-900">{order.order_number}</span>
-                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.2 rounded bg-blue-100 text-blue-800">
-                              {(order.order_status || "prep").replace(/_/g, " ")}
-                            </span>
-                          </div>
-                          <p className="text-xs font-bold text-slate-800 truncate">
-                            {Array.isArray(order.items) && order.items.length > 0
-                              ? order.items.map((i: any) => `${i.quantity}x ${i.product_name || i.name}`).join(", ")
-                              : "Order Items"}
-                          </p>
-                          <p className="text-[10px] text-slate-500">
-                            {order.customer_name || "Customer"} • ₹{order.food_amount || order.customer_payable}
-                          </p>
-                        </div>
+                    {activeOrders.map((order) => {
+                      const isReadyOrRider = ["ready_for_pickup", "rider_assigned", "rider_at_restaurant"].includes(order.order_status);
+                      const isRiderArrived = order.order_status === "rider_at_restaurant";
+                      const orderNum = order.order_number || "";
+                      const fallbackOtp = orderNum.length >= 4 ? orderNum.slice(-4) : "1234";
+                      const currentOtp = order.pickup_otp && order.pickup_otp !== "----" && order.pickup_otp !== "null" ? order.pickup_otp : fallbackOtp;
 
-                        <div className="shrink-0">
-                          {["restaurant_accepted", "preparing"].includes(order.order_status) && (
-                            <button
-                              onClick={() => handleUpdateOrderStatus(order.id, "ready_for_pickup")}
-                              className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-xs cursor-pointer"
-                            >
-                              Ready
-                            </button>
-                          )}
-                          {order.order_status === "ready_for_pickup" && (
-                            <button
-                              onClick={() => setHandoverOrderId(order.id)}
-                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs flex items-center gap-1 cursor-pointer"
-                            >
-                              <Bike className="w-3.5 h-3.5" />
-                              <span>Handover</span>
-                            </button>
-                          )}
+                      return (
+                        <div
+                          key={order.id}
+                          className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                            isRiderArrived
+                              ? "bg-emerald-50/60 border-emerald-300 ring-1 ring-emerald-300"
+                              : isReadyOrRider
+                              ? "bg-purple-50/30 border-purple-200"
+                              : "border-slate-200 hover:border-slate-300"
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                              <span className="font-mono font-black text-xs text-slate-900">{order.order_number}</span>
+                              {isRiderArrived ? (
+                                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-emerald-600 text-white flex items-center gap-1 animate-pulse">
+                                  <Bike className="w-3 h-3" />
+                                  <span>Captain Arrived at Restaurant</span>
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
+                                  {(order.order_status || "prep").replace(/_/g, " ")}
+                                </span>
+                              )}
+                              {isReadyOrRider && (
+                                <div className="flex items-center gap-1 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-md">
+                                  <span className="text-[9px] text-amber-800 font-bold uppercase">OTP:</span>
+                                  <span className="font-mono font-black text-amber-900 text-xs tracking-wider">
+                                    {currentOtp}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-xs font-bold text-slate-800 truncate">
+                              {Array.isArray(order.items) && order.items.length > 0
+                                ? order.items.map((i: any) => `${i.quantity}x ${i.product_name || i.name}`).join(", ")
+                                : "Order Items"}
+                            </p>
+                            <p className="text-[10px] text-slate-500">
+                              {order.customer_name || "Customer"} • ₹{order.food_amount || order.customer_payable}
+                              {order.rider_name && ` • Rider: ${order.rider_name} (${order.rider_phone || "N/A"})`}
+                            </p>
+                          </div>
+
+                          <div className="shrink-0 flex items-center gap-2">
+                            {["restaurant_accepted", "preparing"].includes(order.order_status) && (
+                              <button
+                                onClick={() => handleUpdateOrderStatus(order.id, "ready_for_pickup")}
+                                className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-xs cursor-pointer"
+                              >
+                                Ready
+                              </button>
+                            )}
+                            {isReadyOrRider && (
+                              <button
+                                onClick={() => handleConfirmHandover(order.id, currentOtp)}
+                                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs flex items-center gap-1 cursor-pointer"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Handover</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1817,38 +1852,63 @@ export default function RestaurantPartnerPortal({
                   <div className="space-y-2.5">
                     {activeOrders
                       .filter((o) => ["ready_for_pickup", "rider_assigned", "rider_at_restaurant"].includes(o.order_status))
-                      .map((order) => (
-                        <div key={order.id} className="p-3 rounded-xl bg-white border border-purple-200 shadow-xs space-y-2">
-                          <div className="flex justify-between items-baseline">
-                            <span className="font-mono font-black text-xs text-slate-900">{order.order_number}</span>
-                            <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
-                              {order.order_status === "rider_at_restaurant" ? "Captain Arrived" : "Packed"}
-                            </span>
-                          </div>
+                      .map((order) => {
+                        const isRiderArrived = order.order_status === "rider_at_restaurant";
+                        const orderNum = order.order_number || "";
+                        const fallbackOtp = orderNum.length >= 4 ? orderNum.slice(-4) : "1234";
+                        const currentOtp = order.pickup_otp && order.pickup_otp !== "----" && order.pickup_otp !== "null" ? order.pickup_otp : fallbackOtp;
 
-                          <div className="p-2 rounded-lg bg-slate-50 text-[11px] space-y-0.5">
-                            <div className="font-bold text-slate-800 flex items-center gap-1">
-                              <Bike className="w-3 h-3 text-purple-600" />
-                              <span>{order.rider_name || "Assigning Rider..."}</span>
-                            </div>
-                            {order.rider_phone && <div className="text-slate-500">Ph: {order.rider_phone}</div>}
-                            <div className="flex items-center justify-between bg-purple-50 border border-purple-200 px-2 py-1 rounded-lg">
-                              <span className="text-[10px] text-purple-700 font-semibold">Handover Code:</span>
-                              <span className="font-mono font-black text-purple-800 text-xs tracking-wider">
-                                {order.pickup_otp || "----"}
-                              </span>
-                            </div>
-                          </div>
-
-                          <button
-                            onClick={() => handleConfirmHandover(order.id, order.pickup_otp)}
-                            className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-xs flex items-center justify-center gap-1 cursor-pointer"
+                        return (
+                          <div
+                            key={order.id}
+                            className={`p-3 rounded-xl bg-white border shadow-xs space-y-2.5 ${
+                              isRiderArrived ? "border-emerald-400 ring-2 ring-emerald-300/60" : "border-purple-200"
+                            }`}
                           >
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Handover to Partner</span>
-                          </button>
-                        </div>
-                      ))}
+                            <div className="flex justify-between items-baseline">
+                              <span className="font-mono font-black text-xs text-slate-900">{order.order_number}</span>
+                              {isRiderArrived ? (
+                                <span className="text-[9px] font-black uppercase text-white bg-emerald-600 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                                  <Bike className="w-3 h-3" />
+                                  <span>Captain Arrived</span>
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-black uppercase text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
+                                  {order.order_status === "rider_assigned" ? "Rider Assigned" : "Food Packed"}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="p-2.5 rounded-xl bg-slate-50 text-[11px] space-y-1.5">
+                              <div className="font-bold text-slate-800 flex items-center justify-between">
+                                <div className="flex items-center gap-1">
+                                  <Bike className="w-3.5 h-3.5 text-purple-600" />
+                                  <span>{order.rider_name || "Assigning Rider..."}</span>
+                                </div>
+                                {order.rider_phone && <span className="text-slate-500 font-normal">{order.rider_phone}</span>}
+                              </div>
+
+                              <div className="flex items-center justify-between bg-amber-50 border border-amber-300 px-2.5 py-1.5 rounded-lg">
+                                <div>
+                                  <span className="text-[9px] text-amber-800 font-bold uppercase block">Pickup Code:</span>
+                                  <span className="text-[9px] text-amber-600">Show to rider</span>
+                                </div>
+                                <span className="font-mono font-black text-amber-950 text-sm tracking-widest bg-white px-2 py-0.5 rounded border border-amber-200">
+                                  {currentOtp}
+                                </span>
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => handleConfirmHandover(order.id, currentOtp)}
+                              className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Handover Food to Partner</span>
+                            </button>
+                          </div>
+                        );
+                      })}
                   </div>
                 </div>
 
@@ -3458,38 +3518,43 @@ export default function RestaurantPartnerPortal({
             <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center mx-auto">
               <Bike className="w-5 h-5" />
             </div>
-            <div>
-              <h3 className="font-black text-sm text-slate-900">Food Handover</h3>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Share this 4-digit code with the delivery partner upon parcel handover:
-              </p>
-              <div className="my-2 py-2 px-5 bg-purple-50 border border-purple-200 rounded-xl inline-block font-mono font-black text-2xl text-purple-700 tracking-widest">
-                {orders.find((o) => o.id === handoverOrderId)?.pickup_otp || "----"}
-              </div>
-            </div>
+            {(() => {
+              const targetOrder = activeOrders.find((o) => o.id === handoverOrderId);
+              const orderNum = targetOrder?.order_number || "";
+              const fallbackOtp = orderNum.length >= 4 ? orderNum.slice(-4) : "1234";
+              const modalOtp = targetOrder?.pickup_otp && targetOrder.pickup_otp !== "----" && targetOrder.pickup_otp !== "null" ? targetOrder.pickup_otp : fallbackOtp;
+              return (
+                <>
+                  <div>
+                    <h3 className="font-black text-sm text-slate-900">Food Handover</h3>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Share this 4-digit code with the delivery partner upon parcel handover:
+                    </p>
+                    <div className="my-2 py-2 px-5 bg-purple-50 border border-purple-200 rounded-xl inline-block font-mono font-black text-2xl text-purple-700 tracking-widest">
+                      {modalOtp}
+                    </div>
+                  </div>
 
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={() => {
-                  setHandoverOrderId(null);
-                  setRiderOtp("");
-                }}
-                className="flex-1 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs cursor-pointer"
-              >
-                Close
-              </button>
-              <button
-                onClick={() =>
-                  handleConfirmHandover(
-                    handoverOrderId,
-                    orders.find((o) => o.id === handoverOrderId)?.pickup_otp
-                  )
-                }
-                className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs cursor-pointer"
-              >
-                Confirm Handed Over
-              </button>
-            </div>
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        setHandoverOrderId(null);
+                        setRiderOtp("");
+                      }}
+                      className="flex-1 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs cursor-pointer"
+                    >
+                      Close
+                    </button>
+                    <button
+                      onClick={() => handleConfirmHandover(handoverOrderId, modalOtp)}
+                      className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs cursor-pointer"
+                    >
+                      Confirm Handed Over
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
