@@ -1671,9 +1671,7 @@ export default function CustomerFoodOrdering({
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-extrabold text-sm text-gray-900">Fiinway Wallet</span>
-                            <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
-                              MPIN Secured
-                            </span>
+                           
                           </div>
                           <p className="text-xs text-gray-500 mt-0.5">
                             {walletBalance >= grandTotal
@@ -1691,28 +1689,6 @@ export default function CustomerFoodOrdering({
                       />
                     </div>
 
-                    {/* Inline MPIN Input when Wallet is selected */}
-                    {paymentMethod === 'wallet' && (
-                      <div className="mt-3 pt-3 border-t border-emerald-200/60 flex items-center justify-between bg-white/70 rounded-xl p-2">
-                        <div className="flex items-center gap-1.5 text-xs text-emerald-900 font-bold">
-                          <Lock className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Wallet 4-Digit MPIN:</span>
-                        </div>
-                        <input
-                          type="password"
-                          maxLength={4}
-                          value={mpinInput}
-                          onChange={(e) => setMpinInput(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
-                          placeholder="● ● ● ●"
-                          className="w-24 text-center tracking-[0.4em] text-sm font-black bg-white border border-emerald-300 rounded-xl py-1 focus:border-emerald-600 outline-none"
-                        />
-                      </div>
-                    )}
-                    {paymentMethod === 'wallet' && walletBalance < grandTotal && (
-                      <p className="text-[11px] text-rose-600 font-bold mt-2">
-                        ⚠️ Available balance (₹{walletBalance}) is less than total payable (₹{grandTotal}). Please top up wallet or choose UPI / Online Payment.
-                      </p>
-                    )}
                   </div>
 
                   {/* Option 2: UPI / Online Payment */}
