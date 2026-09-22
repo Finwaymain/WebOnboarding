@@ -206,7 +206,7 @@ export default function CustomerFoodOrdering({
   const [filterRating4Plus, setFilterRating4Plus] = useState<boolean>(false);
 
   // Bottom Navigation Bar
-  const [bottomNav, setBottomNav] = useState<'food' | 'bolt' | 'store' | 'offers' | 'cart'>('food');
+  const [bottomNav, setBottomNav] = useState<'food' | 'bolt' | 'orders' | 'offers' | 'cart'>('food');
 
   // Restaurant & Menu State
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -267,10 +267,49 @@ export default function CustomerFoodOrdering({
   const [isMpinModalOpen, setIsMpinModalOpen] = useState<boolean>(false);
   const [mpinInput, setMpinInput] = useState<string>('');
   const [mpinError, setMpinError] = useState<string>('');
+  const mpinInputRef = useRef<HTMLInputElement>(null);
 
-  // Live Order Tracking
+  // Live Order Tracking & My Orders
   const [confirmedOrder, setConfirmedOrder] = useState<OrderConfirmation | null>(null);
   const [isTrackingModal, setIsTrackingModal] = useState<boolean>(false);
+  const [customerOrders, setCustomerOrders] = useState<any[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState<boolean>(false);
+  const [activeTrackingOrderId, setActiveTrackingOrderId] = useState<number | null>(null);
+
+  // Fetch Customer Food Orders
+  const fetchCustomerOrders = useCallback(async () => {
+    try {
+      setLoadingOrders(true);
+      const qp = new URLSearchParams();
+      if (userId) qp.set('user_id', String(userId));
+      if (customerPhone) qp.set('customer_phone', customerPhone);
+      qp.set('all', '1');
+
+      const res = await fetch(`/api/v1/food/customer/orders?${qp.toString()}`, {
+        headers: { Accept: 'application/json', apikey: API_KEY },
+      });
+      const data = await res.json();
+      if (data.success) {
+        const list = Array.isArray(data.data) ? data.data : (Array.isArray(data.data?.data) ? data.data.data : []);
+        setCustomerOrders(list);
+      }
+    } catch (_) {
+    } finally {
+      setLoadingOrders(false);
+    }
+  }, [userId, customerPhone]);
+
+  useEffect(() => {
+    fetchCustomerOrders();
+  }, [fetchCustomerOrders]);
+
+  // Ongoing active order
+  const activeOrder = useMemo(() => {
+    return customerOrders.find((o) => {
+      const st = String(o.order_status || '').toLowerCase();
+      return !['delivered', 'completed', 'cancelled', 'rejected'].includes(st);
+    });
+  }, [customerOrders]);
 
   // Fetch Live Admin Taxes from tj_tax
   const fetchAdminTaxes = useCallback(async () => {
@@ -793,18 +832,26 @@ export default function CustomerFoodOrdering({
       const data = await res.json();
 
       if (data.success && data.data) {
-        setConfirmedOrder({
+        const orderData = {
           ...data.data,
           payment_method: paymentMethod,
           customer_payable: grandTotal,
           restaurant: targetRestaurant,
-        });
+        };
+        setConfirmedOrder(orderData);
+        setActiveTrackingOrderId(orderData.id);
         setCart({});
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('fiinway_food_cart');
+          localStorage.removeItem('fiinway_food_active_restaurant');
+          localStorage.setItem('fiinway_latest_order_id', String(orderData.id));
+        }
         setIsMpinModalOpen(false);
         setIsCheckoutOpen(false);
         setIsTrackingModal(true);
-        // Refresh updated wallet balance
+        // Refresh updated wallet balance and orders list
         fetchWalletBalance();
+        fetchCustomerOrders();
       } else if (data.require_mpin) {
         setIsMpinModalOpen(true);
         setMpinError(data.error || 'Please enter valid 4-digit MPIN.');
@@ -855,16 +902,16 @@ export default function CustomerFoodOrdering({
     });
   }, [products, vegOnly, selectedCategory, activeRestaurant]);
 
-  const handleBottomNavClick = (tab: 'food' | 'bolt' | 'store' | 'offers' | 'cart') => {
+  const handleBottomNavClick = (tab: 'food' | 'bolt' | 'orders' | 'offers' | 'cart') => {
     setBottomNav(tab);
     if (tab === 'cart') {
       setIsCheckoutOpen(true);
+    } else if (tab === 'orders') {
+      setActiveRestaurant(null);
+      fetchCustomerOrders();
     } else if (tab === 'bolt') {
       setActiveRestaurant(null);
       setTopTab('bolt');
-    } else if (tab === 'store') {
-      setActiveRestaurant(null);
-      setTopTab('store');
     } else if (tab === 'offers') {
       setActiveRestaurant(null);
       setTopTab('offers');
@@ -890,12 +937,10 @@ export default function CustomerFoodOrdering({
             <div className="min-w-0">
               <div className="flex items-center gap-1">
                 <span className="font-extrabold text-base text-gray-900 tracking-tight flex items-center gap-1">
-                  {cityName || 'Ujjain'}
+                  {cityName}
                   <ChevronDown className="w-4 h-4 text-emerald-600 ml-0.5" />
                 </span>
-                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full uppercase tracking-wider ml-1">
-                  Nearby (25km)
-                </span>
+               
               </div>
               <p className="text-xs text-gray-500 truncate max-w-[240px] sm:max-w-md font-medium">
                 {isLocating ? 'Detecting your delivery location...' : (deliveryAddress ? deliveryAddress.slice(0, 50) : (cityName || 'Ujjain'))}
@@ -1181,9 +1226,239 @@ export default function CustomerFoodOrdering({
               </div>
             )}
           </div>
+        ) : bottomNav === 'orders' ? (
+          /* VIEW C: MY ORDERS SCREEN */
+          <div className="space-y-4">
+            {/* Orders Header */}
+            <div className="flex items-center justify-between bg-white rounded-2xl p-4 border border-gray-100 shadow-xs">
+              <div>
+                <h1 className="text-base sm:text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-emerald-600" />
+                  My Food Orders
+                </h1>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Track live orders, view past meals and delivery OTP
+                </p>
+              </div>
+              <button
+                onClick={fetchCustomerOrders}
+                disabled={loadingOrders}
+                className="p-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-600 transition-colors"
+                title="Refresh orders"
+              >
+                <RefreshCw className={`w-4 h-4 ${loadingOrders ? 'animate-spin text-emerald-600' : ''}`} />
+              </button>
+            </div>
+
+            {loadingOrders && customerOrders.length === 0 ? (
+              <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 shadow-xs">
+                <RefreshCw className="w-7 h-7 animate-spin text-emerald-600 mx-auto mb-2" />
+                <p className="text-xs text-gray-500 font-bold">Loading your orders...</p>
+              </div>
+            ) : customerOrders.length === 0 ? (
+              <div className="text-center py-16 bg-white rounded-3xl border border-gray-100 p-8 shadow-xs">
+                <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3">
+                  <ShoppingBag className="w-8 h-8 text-emerald-600" />
+                </div>
+                <h3 className="text-base font-black text-gray-900">No Food Orders Yet</h3>
+                <p className="text-xs text-gray-500 mt-1 max-w-xs mx-auto">
+                  Hungry? Explore top restaurants and popular meals around your location.
+                </p>
+                <button
+                  onClick={() => handleBottomNavClick('food')}
+                  className="mt-4 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-md transition-colors"
+                >
+                  Browse Food & Restaurants
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Active Orders Section */}
+                {customerOrders.filter((o) => !['delivered', 'completed', 'cancelled', 'rejected'].includes(String(o.order_status).toLowerCase())).length > 0 && (
+                  <div className="space-y-3">
+                    <h2 className="text-xs font-extrabold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      Active Orders In Progress
+                    </h2>
+                    {customerOrders
+                      .filter((o) => !['delivered', 'completed', 'cancelled', 'rejected'].includes(String(o.order_status).toLowerCase()))
+                      .map((order) => (
+                        <div
+                          key={order.id}
+                          className="bg-white rounded-2xl border-2 border-emerald-500/40 p-4 shadow-sm space-y-3"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-black text-gray-900">
+                                  #{order.order_number || order.id}
+                                </span>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 uppercase tracking-tight">
+                                  {order.order_status?.replace(/_/g, ' ')}
+                                </span>
+                              </div>
+                              <h3 className="text-sm font-black text-gray-900 mt-1">
+                                {order.restaurant?.name || 'Fiinway Restaurant Partner'}
+                              </h3>
+                              <p className="text-xs text-gray-500 font-medium truncate max-w-xs">
+                                {order.delivery_address || 'Delivery address registered'}
+                              </p>
+                            </div>
+
+                            {order.delivery_otp && (
+                              <div className="text-right bg-emerald-50 border border-emerald-200 rounded-xl px-2.5 py-1.5">
+                                <span className="text-[10px] font-bold text-emerald-700 block uppercase tracking-wider">
+                                  Delivery PIN
+                                </span>
+                                <span className="text-base font-black text-emerald-900 tracking-wider">
+                                  {order.delivery_otp}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Items summary */}
+                          {order.items && order.items.length > 0 && (
+                            <div className="bg-gray-50 rounded-xl p-2.5 text-xs text-gray-700 space-y-1">
+                              {order.items.map((it: any) => (
+                                <div key={it.id || it.product_id} className="flex justify-between font-medium">
+                                  <span>{it.quantity}x {it.product_name}</span>
+                                  <span className="font-bold">₹{it.line_total || it.customer_unit_price * it.quantity}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+                            <div>
+                              <span className="text-[10px] text-gray-400 font-bold block">Total Paid</span>
+                              <span className="text-base font-black text-gray-900">₹{order.customer_payable}</span>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setConfirmedOrder(order);
+                                setActiveTrackingOrderId(order.id);
+                                setIsTrackingModal(true);
+                              }}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs px-4 py-2.5 rounded-xl shadow-md flex items-center gap-1.5 transition-all"
+                            >
+                              <Navigation className="w-3.5 h-3.5" />
+                              <span>Live Track Order</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+
+                {/* Past Orders Section */}
+                <div className="space-y-3 pt-2">
+                  <h2 className="text-xs font-extrabold uppercase tracking-wider text-gray-500">
+                    Past Orders
+                  </h2>
+                  {customerOrders
+                    .filter((o) => ['delivered', 'completed', 'cancelled', 'rejected'].includes(String(o.order_status).toLowerCase()))
+                    .map((order) => (
+                      <div
+                        key={order.id}
+                        className="bg-white rounded-2xl border border-gray-200/80 p-4 shadow-xs space-y-3 opacity-95 hover:opacity-100 transition-opacity"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-gray-700">
+                                #{order.order_number || order.id}
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-tight ${
+                                  order.order_status === 'delivered' || order.order_status === 'completed'
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                }`}
+                              >
+                                {order.order_status}
+                              </span>
+                            </div>
+                            <h3 className="text-sm font-black text-gray-900 mt-1">
+                              {order.restaurant?.name || 'Fiinway Restaurant'}
+                            </h3>
+                            <p className="text-[11px] text-gray-400">
+                              {order.created_at ? new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                            </p>
+                          </div>
+                          <span className="text-sm font-black text-gray-900">
+                            ₹{order.customer_payable}
+                          </span>
+                        </div>
+
+                        {/* Items summary */}
+                        {order.items && order.items.length > 0 && (
+                          <p className="text-xs text-gray-600 font-medium line-clamp-1">
+                            {order.items.map((it: any) => `${it.quantity}x ${it.product_name}`).join(', ')}
+                          </p>
+                        )}
+
+                        <div className="flex items-center justify-end gap-2 pt-1 border-t border-gray-100">
+                          <button
+                            onClick={() => {
+                              setConfirmedOrder(order);
+                              setActiveTrackingOrderId(order.id);
+                              setIsTrackingModal(true);
+                            }}
+                            className="text-xs font-bold text-gray-600 hover:text-emerald-700 px-3 py-1.5 rounded-lg border border-gray-200 hover:border-emerald-300 transition-colors"
+                          >
+                            View Receipt & Details
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
         ) : (
           /* VIEW B: DISCOVERY & RESTAURANT FEED */
           <div className="space-y-5">
+            {/* Active Order in Progress Sticky Banner */}
+            {activeOrder && (
+              <div
+                onClick={() => {
+                  setConfirmedOrder(activeOrder);
+                  setActiveTrackingOrderId(activeOrder.id);
+                  setIsTrackingModal(true);
+                }}
+                className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-2xl p-4 shadow-lg flex items-center justify-between cursor-pointer hover:shadow-xl transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-xs flex items-center justify-center shrink-0">
+                    <Bike className="w-6 h-6 text-white animate-bounce" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full text-white">
+                        <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping" />
+                        Order in Progress
+                      </span>
+                      {activeOrder.delivery_otp && (
+                        <span className="text-xs font-bold bg-black/25 px-2 py-0.5 rounded-md">
+                          PIN: {activeOrder.delivery_otp}
+                        </span>
+                      )}
+                    </div>
+                    <h4 className="text-sm font-black text-white mt-1 truncate">
+                      {activeOrder.restaurant?.name || 'Restaurant'} • ₹{activeOrder.customer_payable || activeOrder.grand_total}
+                    </h4>
+                    <p className="text-[11px] text-emerald-100 font-medium">
+                      Status: {String(activeOrder.order_status || '').replace(/_/g, ' ').toUpperCase()} • Tap to Live Track
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 bg-white text-emerald-800 text-xs font-extrabold px-3 py-2 rounded-xl shadow-xs shrink-0 ml-2">
+                  <span>Track</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </div>
+              </div>
+            )}
             {/* "What's on your mind?" Story Carousel */}
             <div>
               <div className="flex items-center justify-between mb-2.5">
@@ -1481,7 +1756,7 @@ export default function CustomerFoodOrdering({
           {[
             { id: 'food', label: 'Food', icon: UtensilsCrossed },
             { id: 'bolt', label: 'Bolt', icon: Zap },
-            { id: 'store', label: '99 Store', icon: Tag },
+            { id: 'orders', label: 'My Orders', icon: Clock, badge: activeOrder ? 1 : undefined },
             { id: 'offers', label: 'Offers', icon: BadgePercent },
             { id: 'cart', label: 'Cart', icon: ShoppingBag, badge: cartItemCount },
           ].map((item) => {
@@ -1799,17 +2074,48 @@ export default function CustomerFoodOrdering({
               </div>
             )}
 
-            {/* 4-Digit MPIN Input */}
-            <div className="py-2">
+            {/* 4-Digit MPIN Input - 4 Discrete Security Boxes */}
+            <div className="py-3">
+              <div
+                className="flex items-center justify-center gap-3 cursor-pointer select-none"
+                onClick={() => mpinInputRef.current?.focus()}
+              >
+                {[0, 1, 2, 3].map((idx) => {
+                  const digit = mpinInput[idx] || '';
+                  const isCurrent = mpinInput.length === idx;
+                  return (
+                    <div
+                      key={idx}
+                      className={`w-13 h-14 rounded-2xl border-2 flex items-center justify-center text-2xl font-black transition-all ${
+                        digit
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-800 shadow-xs'
+                          : isCurrent
+                          ? 'border-emerald-500 bg-white ring-4 ring-emerald-100 shadow-xs scale-105'
+                          : 'border-gray-200 bg-gray-50 text-gray-300'
+                      }`}
+                    >
+                      {digit ? '●' : isCurrent ? <span className="w-2 h-0.5 bg-emerald-500 animate-pulse" /> : ''}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Hidden input capturing numeric keystrokes cleanly on mobile/web */}
               <input
+                ref={mpinInputRef}
                 type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 maxLength={4}
                 autoFocus
                 value={mpinInput}
-                onChange={(e) => setMpinInput(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
-                placeholder="● ● ● ●"
-                className="w-40 text-center tracking-[1em] text-2xl font-black bg-gray-100 border border-gray-300 rounded-2xl py-3 focus:border-emerald-500 focus:bg-white outline-none mx-auto block"
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 4);
+                  setMpinInput(val);
+                }}
+                className="opacity-0 w-0 h-0 absolute -z-10"
               />
+              <p className="text-[11px] text-gray-400 mt-2 font-medium">Tap boxes to enter 4-digit secret M-PIN</p>
             </div>
 
             <div className="flex items-center gap-2 pt-2">
@@ -1835,15 +2141,16 @@ export default function CustomerFoodOrdering({
       )}
 
       {/* 7. ORDER CONFIRMATION & LIVE TRACKING MODAL */}
-      {isTrackingModal && confirmedOrder && (
+      {isTrackingModal && (confirmedOrder || activeTrackingOrderId) && (
         <LiveOrderTrackingModal
-          orderId={confirmedOrder.id}
+          orderId={confirmedOrder?.id || activeTrackingOrderId!}
           initialOrder={confirmedOrder}
           apiKey={API_KEY}
           googleMapsKey={GOOGLE_MAPS_KEY}
           onClose={() => {
             setIsTrackingModal(false);
-            setActiveRestaurant(null);
+            setConfirmedOrder(null);
+            fetchCustomerOrders();
           }}
         />
       )}
