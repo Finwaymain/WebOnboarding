@@ -140,13 +140,36 @@ export default function CustomerFoodOrdering({
   userId = '',
   userType = 'customer',
 }: Props) {
-  // Real coordinates — starts from Flutter props or auto-detect
-  const [lat, setLat] = useState<number | null>(initialLat || null);
-  const [lng, setLng] = useState<number | null>(initialLng || null);
+  // Real coordinates — starts from Flutter props, URL searchParams, or auto-detect
+  const [lat, setLat] = useState<number | null>(() => {
+    if (initialLat) return initialLat;
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      const val = p.get('lat') || p.get('latitude');
+      if (val && !isNaN(Number(val))) return Number(val);
+    }
+    return null;
+  });
+  const [lng, setLng] = useState<number | null>(() => {
+    if (initialLng) return initialLng;
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      const val = p.get('lng') || p.get('longitude');
+      if (val && !isNaN(Number(val))) return Number(val);
+    }
+    return null;
+  });
   const [radiusKm] = useState<number>(25);
   const [locationName, setLocationName] = useState<string>('Detecting your delivery location...');
   const [locationArea, setLocationArea] = useState<string>('Locating...');
-  const [isLocating, setIsLocating] = useState<boolean>(!initialLat);
+  const [isLocating, setIsLocating] = useState<boolean>(() => {
+    if (initialLat) return false;
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      if (p.has('lat') || p.has('latitude')) return false;
+    }
+    return true;
+  });
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState<boolean>(false);
   const [manualAddressInput, setManualAddressInput] = useState<string>('');
   const [isGeocodingManual, setIsGeocodingManual] = useState<boolean>(false);
@@ -238,12 +261,18 @@ export default function CustomerFoodOrdering({
       const googleData = await googleRes.json();
       if (googleData.status === 'OK' && googleData.results?.length > 0) {
         const comps = googleData.results[0].address_components || [];
-        const sub = comps.find((c: any) => c.types.includes('sublocality') || c.types.includes('neighborhood'));
+        const sub3 = comps.find((c: any) => c.types.includes('sublocality_level_3'));
+        const sub2 = comps.find((c: any) => c.types.includes('sublocality_level_2'));
+        const neighborhood = comps.find((c: any) => c.types.includes('neighborhood'));
+        const sub1 = comps.find((c: any) => c.types.includes('sublocality_level_1'));
+        const subAny = comps.find((c: any) => c.types.includes('sublocality'));
         const city = comps.find((c: any) => c.types.includes('locality'));
-        const mainArea = sub ? sub.long_name : (city ? city.long_name : 'Current Area');
+
+        const specificArea = sub3?.long_name || sub2?.long_name || neighborhood?.long_name;
+        const mainArea = specificArea || sub1?.long_name || subAny?.long_name || city?.long_name || 'Current Area';
         setLocationArea(mainArea);
-        setLocationName(googleData.results[0].formatted_address?.slice(0, 48));
-        setDeliveryAddress((prev) => prev || googleData.results[0].formatted_address);
+        setLocationName(googleData.results[0].formatted_address?.slice(0, 55));
+        setDeliveryAddress(googleData.results[0].formatted_address);
         return;
       }
     } catch (_) {}
@@ -255,13 +284,13 @@ export default function CustomerFoodOrdering({
         { headers: { 'User-Agent': 'FiinwayFood/1.0' } }
       );
       const osmData = await osmRes.json();
-      const road = osmData.address?.road || osmData.address?.suburb || osmData.address?.neighbourhood || '';
-      const city = osmData.address?.city || osmData.address?.town || osmData.address?.state_district || '';
-      const area = road || city || 'Current Location';
-      const formatted = [road, city].filter(Boolean).join(', ') || osmData.display_name?.slice(0, 48);
+      const specific = osmData.address?.suburb || osmData.address?.neighbourhood || osmData.address?.residential || osmData.address?.road || '';
+      const city = osmData.address?.city || osmData.address?.town || osmData.address?.county || osmData.address?.state_district || '';
+      const area = specific || city || 'Current Location';
+      const formatted = [specific, city].filter(Boolean).join(', ') || osmData.display_name?.slice(0, 55);
       setLocationArea(area);
       setLocationName(formatted);
-      setDeliveryAddress((prev) => prev || formatted);
+      setDeliveryAddress(osmData.display_name || formatted);
     } catch (_) {
       setLocationArea('My Location');
       setLocationName(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
@@ -342,17 +371,54 @@ export default function CustomerFoodOrdering({
     }
   }, [reverseGeocode]);
 
-  // Initial location bootstrap from Flutter params or browser GPS
+  // Initial location bootstrap from Flutter params, URL searchParams, or browser GPS
   useEffect(() => {
-    if (initialLat && initialLng) {
-      setLat(initialLat);
-      setLng(initialLng);
+    let effectiveLat = initialLat;
+    let effectiveLng = initialLng;
+
+    if (!effectiveLat || !effectiveLng) {
+      if (typeof window !== 'undefined') {
+        const p = new URLSearchParams(window.location.search);
+        const l = p.get('lat') || p.get('latitude');
+        const r = p.get('lng') || p.get('longitude');
+        if (l && r && !isNaN(Number(l)) && !isNaN(Number(r))) {
+          effectiveLat = Number(l);
+          effectiveLng = Number(r);
+        }
+      }
+    }
+
+    if (effectiveLat && effectiveLng) {
+      setLat(effectiveLat);
+      setLng(effectiveLng);
       setIsLocating(false);
-      reverseGeocode(initialLat, initialLng);
+      reverseGeocode(effectiveLat, effectiveLng);
       return;
     }
     detectLiveGPS();
   }, [initialLat, initialLng, detectLiveGPS, reverseGeocode]);
+
+  // Listen for native AppBridge location updates
+  useEffect(() => {
+    const handleWindowMessage = (event: MessageEvent) => {
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data && (data.type === 'LOCATION_UPDATE' || data.action === 'location_update')) {
+          const newLat = Number(data.lat || data.latitude);
+          const newLng = Number(data.lng || data.longitude);
+          if (!isNaN(newLat) && !isNaN(newLng)) {
+            setLat(newLat);
+            setLng(newLng);
+            setIsLocating(false);
+            reverseGeocode(newLat, newLng);
+          }
+        }
+      } catch (_) {}
+    };
+
+    window.addEventListener('message', handleWindowMessage);
+    return () => window.removeEventListener('message', handleWindowMessage);
+  }, [reverseGeocode]);
 
   // Manual location search
   const handleManualLocationSearch = async (queryText: string) => {
@@ -1722,7 +1788,7 @@ export default function CustomerFoodOrdering({
                 Quick Select Area
               </span>
               <div className="flex items-center gap-1.5 flex-wrap">
-                {['Ujjain', 'Freeganj, Ujjain', 'Indore', 'Dewas'].map((city) => (
+                {['Abdalpura, Ujjain', 'Freeganj, Ujjain', 'Ujjain', 'Indore', 'Dewas'].map((city) => (
                   <button
                     key={city}
                     onClick={() => handleManualLocationSearch(city)}
