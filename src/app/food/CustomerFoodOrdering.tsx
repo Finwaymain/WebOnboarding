@@ -73,11 +73,21 @@ interface Product {
   restaurant_price?: number;
   base_price?: number;
   final_price?: number;
+  mrp?: number;
   price?: number;
   image_url?: string;
   food_type?: 'veg' | 'non-veg' | 'egg';
   is_available?: boolean;
   restaurant_name?: string;
+}
+
+interface AdminTax {
+  id: number;
+  name: string;
+  value: number;
+  type: 'percentage' | 'flat';
+  label: string;
+  applicable_on?: string;
 }
 
 interface Category {
@@ -218,12 +228,40 @@ export default function CustomerFoodOrdering({
 
   // Checkout Form Details
   const [customerName, setCustomerName] = useState<string>(userName || '');
-  const [customerPhone, setCustomerPhone] = useState<string>(userPhone);
+  const [customerPhone, setCustomerPhone] = useState<string>(() => {
+    if (userPhone) return userPhone.replace(/^\+91/, '').replace(/[^0-9]/g, '').trim();
+    if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search);
+      const raw = sp.get('phone') || sp.get('customer_phone') || sp.get('mobile') || localStorage.getItem('fiinway_user_phone') || '';
+      return raw.replace(/^\+91/, '').replace(/[^0-9]/g, '').trim();
+    }
+    return '';
+  });
   const [deliveryAddress, setDeliveryAddress] = useState<string>('');
   const [deliveryNotes, setDeliveryNotes] = useState<string>('');
-  const [paymentMethod, setPaymentMethod] = useState<'wallet' | 'upi' | 'cod'>('wallet');
+  const [paymentMethod, setPaymentMethod] = useState<'wallet' | 'upi'>('wallet');
+  const [adminTaxes, setAdminTaxes] = useState<AdminTax[]>([]);
   const [applyPromo, setApplyPromo] = useState<boolean>(true); // Home service promotional bonus
   const [isPlacingOrder, setIsPlacingOrder] = useState<boolean>(false);
+
+  // Sync phone number when props or URL parameters update
+  useEffect(() => {
+    if (userPhone) {
+      const clean = userPhone.replace(/^\+91/, '').replace(/[^0-9]/g, '').trim();
+      if (clean && clean.length >= 10) setCustomerPhone(clean);
+    }
+  }, [userPhone]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search);
+      const raw = sp.get('phone') || sp.get('customer_phone') || sp.get('mobile') || localStorage.getItem('fiinway_user_phone') || '';
+      const clean = raw.replace(/^\+91/, '').replace(/[^0-9]/g, '').trim();
+      if (clean && clean.length >= 10 && (!customerPhone || customerPhone.length < 10)) {
+        setCustomerPhone(clean);
+      }
+    }
+  }, [customerPhone]);
 
   // MPIN Verification Modal (Home Service standard)
   const [isMpinModalOpen, setIsMpinModalOpen] = useState<boolean>(false);
@@ -233,6 +271,23 @@ export default function CustomerFoodOrdering({
   // Live Order Tracking
   const [confirmedOrder, setConfirmedOrder] = useState<OrderConfirmation | null>(null);
   const [isTrackingModal, setIsTrackingModal] = useState<boolean>(false);
+
+  // Fetch Live Admin Taxes from tj_tax
+  const fetchAdminTaxes = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/v1/food/customer/taxes?payment_method=${paymentMethod}`, {
+        headers: { Accept: 'application/json', apikey: API_KEY },
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setAdminTaxes(data.data);
+      }
+    } catch (_) {}
+  }, [paymentMethod]);
+
+  useEffect(() => {
+    fetchAdminTaxes();
+  }, [fetchAdminTaxes]);
 
   // Fetch Live Wallet Balance from API
   const fetchWalletBalance = useCallback(async () => {
@@ -251,9 +306,13 @@ export default function CustomerFoodOrdering({
         if (data.data.name && !customerName) {
           setCustomerName(data.data.name);
         }
+        if (data.data.phone && (!customerPhone || customerPhone.length < 10)) {
+          const clean = String(data.data.phone).replace(/^\+91/, '').replace(/[^0-9]/g, '').trim();
+          if (clean) setCustomerPhone(clean);
+        }
       }
     } catch (_) {}
-  }, [userId, userPhone, userType, customerName]);
+  }, [userId, userPhone, userType, customerName, customerPhone]);
 
   useEffect(() => {
     fetchWalletBalance();
@@ -530,11 +589,17 @@ export default function CustomerFoodOrdering({
       if (json.success && json.data) {
         setCategories(json.data.categories || []);
         const rawProducts: any[] = json.data.products || [];
-        const normalized: Product[] = rawProducts.map((p) => ({
-          ...p,
-          final_price: p.customer_price || p.final_price || p.restaurant_price || p.base_price || p.price || 0,
-          restaurant_name: restaurant.name,
-        }));
+        const normalized: Product[] = rawProducts.map((p) => {
+          const restPrice = Number(p.restaurant_price || p.price || 0);
+          const custPrice = p.customer_price !== undefined ? Number(p.customer_price) : (p.base_price ? Number(p.base_price) : restPrice);
+          const mrpVal = p.mrp ? Number(p.mrp) : (p.discount_price && Number(p.discount_price) > restPrice ? Number(p.discount_price) : undefined);
+          return {
+            ...p,
+            final_price: custPrice || restPrice || 0,
+            mrp: mrpVal,
+            restaurant_name: restaurant.name,
+          };
+        });
         setProducts(normalized);
         if (json.data.categories && json.data.categories.length > 0) {
           setSelectedCategory(json.data.categories[0].id);
@@ -559,11 +624,17 @@ export default function CustomerFoodOrdering({
         .then((r) => r.json())
         .then((json) => {
           if (json.success && json.data?.products && Array.isArray(json.data.products)) {
-            const items: Product[] = json.data.products.map((p: any) => ({
-              ...p,
-              final_price: p.customer_price || p.final_price || p.restaurant_price || p.base_price || 99,
-              restaurant_name: firstRes.name,
-            }));
+            const items: Product[] = json.data.products.map((p: any) => {
+              const restPrice = Number(p.restaurant_price || p.price || 99);
+              const custPrice = p.customer_price !== undefined ? Number(p.customer_price) : restPrice;
+              const mrpVal = p.mrp ? Number(p.mrp) : (p.discount_price && Number(p.discount_price) > restPrice ? Number(p.discount_price) : undefined);
+              return {
+                ...p,
+                final_price: custPrice || 99,
+                mrp: mrpVal,
+                restaurant_name: firstRes.name,
+              };
+            });
             setQuickMeals(items);
           }
         })
@@ -619,17 +690,35 @@ export default function CustomerFoodOrdering({
     return Math.min(50, Math.round(cartSubtotal * 0.2));
   }, [applyPromo, cartSubtotal]);
 
-  const platformFee = 3;
-  const taxesAndGst = useMemo(() => Math.round(cartSubtotal * 0.05), [cartSubtotal]);
-  const grandTotal = useMemo(
-    () => Math.max(0, Math.round(cartSubtotal + deliveryFee + platformFee + taxesAndGst - promoDiscountAmount)),
-    [cartSubtotal, deliveryFee, platformFee, taxesAndGst, promoDiscountAmount]
-  );
+  // Dynamic admin taxes calculated on cart subtotal
+  const calculatedTaxes = useMemo(() => {
+    if (cartSubtotal <= 0) return [];
+    return adminTaxes.map((t) => {
+      const amt = t.type === 'percentage'
+        ? Math.round(((cartSubtotal * t.value) / 100) * 100) / 100
+        : t.value;
+      return { ...t, amount: amt };
+    });
+  }, [cartSubtotal, adminTaxes]);
+
+  const totalAdminTaxes = useMemo(() => {
+    return calculatedTaxes.reduce((sum, t) => sum + t.amount, 0);
+  }, [calculatedTaxes]);
+
+  // If cart is empty, grandTotal is strictly 0!
+  const grandTotal = useMemo(() => {
+    if (cartSubtotal <= 0) return 0;
+    return Math.max(0, Math.round(cartSubtotal + deliveryFee + totalAdminTaxes - promoDiscountAmount));
+  }, [cartSubtotal, deliveryFee, totalAdminTaxes, promoDiscountAmount]);
 
   // Initiate Order Flow (Checks MPIN if wallet is selected)
   const handleInitiateOrder = () => {
     const targetRestaurant = activeRestaurant || (restaurants.length > 0 ? restaurants[0] : null);
     if (!targetRestaurant) return;
+    if (cartSubtotal <= 0) {
+      alert('Your cart is empty. Please add items to proceed.');
+      return;
+    }
     if (!customerPhone || customerPhone.length < 10) {
       alert('Please enter a valid 10-digit mobile number for order delivery & OTP.');
       return;
@@ -641,13 +730,15 @@ export default function CustomerFoodOrdering({
 
     if (paymentMethod === 'wallet') {
       if (walletBalance < grandTotal) {
-        alert(`Insufficient wallet balance (Available: ₹${walletBalance}, Required: ₹${grandTotal}). Please add money or choose UPI/Cash on Delivery.`);
+        alert(`Insufficient wallet balance (Available: ₹${walletBalance}, Required: ₹${grandTotal}). Please top up your wallet or choose UPI / Online Payment.`);
         return;
       }
-      // Open MPIN modal like Home Service
-      setMpinInput('');
-      setMpinError('');
-      setIsMpinModalOpen(true);
+      if (!mpinInput || mpinInput.length < 4) {
+        setMpinError('');
+        setIsMpinModalOpen(true);
+        return;
+      }
+      executePlaceOrder(mpinInput);
       return;
     }
 
@@ -1034,7 +1125,14 @@ export default function CustomerFoodOrdering({
                           </span>
                         </div>
                         <h3 className="text-sm font-bold text-gray-900 tracking-tight leading-snug">{dish.name}</h3>
-                        <p className="text-sm font-black text-gray-900 mt-1">₹{dish.final_price || 99}</p>
+                        <p className="text-sm font-black text-gray-900 mt-1 flex items-center gap-1.5">
+                          <span>₹{dish.final_price || 99}</span>
+                          {Boolean(dish.mrp && dish.mrp > (dish.final_price || 99)) && (
+                            <span className="line-through text-gray-400 text-xs font-semibold">
+                              ₹{dish.mrp}
+                            </span>
+                          )}
+                        </p>
                         {dish.description && (
                           <p className="text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">
                             {dish.description}
@@ -1147,14 +1245,21 @@ export default function CustomerFoodOrdering({
                             className="w-full h-24 object-cover rounded-lg"
                           />
                           <span className="absolute top-1.5 left-1.5 bg-gray-950/80 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded">
-                            ₹99
+                            ₹{meal.final_price || 99}
                           </span>
                         </div>
                         <div className="mt-2 min-w-0">
                           <h4 className="text-xs font-bold text-gray-900 truncate">{meal.name}</h4>
                           <p className="text-[10px] text-gray-500 truncate">{meal.restaurant_name}</p>
                           <div className="mt-2 flex items-center justify-between">
-                            <span className="text-xs font-black text-gray-900">₹99</span>
+                            <span className="text-xs font-black text-gray-900">
+                              ₹{meal.final_price || 99}
+                              {Boolean(meal.mrp && meal.mrp > (meal.final_price || 99)) && (
+                                <span className="line-through text-gray-400 text-[10px] font-semibold ml-1">
+                                  ₹{meal.mrp}
+                                </span>
+                              )}
+                            </span>
                             {qty > 0 ? (
                               <div className="flex items-center bg-emerald-50 text-emerald-700 border border-emerald-500 rounded px-1.5 py-0.5 text-xs font-bold gap-1.5">
                                 <button onClick={() => removeFromCart(meal.id)}><Minus className="w-2.5 h-2.5" /></button>
@@ -1552,7 +1657,7 @@ export default function CustomerFoodOrdering({
                   {/* Option 1: Fiinway Wallet */}
                   <div
                     onClick={() => setPaymentMethod('wallet')}
-                    className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
                       paymentMethod === 'wallet'
                         ? 'bg-emerald-50/80 border-emerald-500 ring-1 ring-emerald-400'
                         : 'bg-white border-gray-200 hover:border-gray-300'
@@ -1567,7 +1672,7 @@ export default function CustomerFoodOrdering({
                           <div className="flex items-center gap-2">
                             <span className="font-extrabold text-sm text-gray-900">Fiinway Wallet</span>
                             <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
-                              Fast MPIN Pay
+                              MPIN Secured
                             </span>
                           </div>
                           <p className="text-xs text-gray-500 mt-0.5">
@@ -1585,12 +1690,35 @@ export default function CustomerFoodOrdering({
                         className="accent-emerald-600 w-4 h-4"
                       />
                     </div>
+
+                    {/* Inline MPIN Input when Wallet is selected */}
+                    {paymentMethod === 'wallet' && (
+                      <div className="mt-3 pt-3 border-t border-emerald-200/60 flex items-center justify-between bg-white/70 rounded-xl p-2">
+                        <div className="flex items-center gap-1.5 text-xs text-emerald-900 font-bold">
+                          <Lock className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Wallet 4-Digit MPIN:</span>
+                        </div>
+                        <input
+                          type="password"
+                          maxLength={4}
+                          value={mpinInput}
+                          onChange={(e) => setMpinInput(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
+                          placeholder="● ● ● ●"
+                          className="w-24 text-center tracking-[0.4em] text-sm font-black bg-white border border-emerald-300 rounded-xl py-1 focus:border-emerald-600 outline-none"
+                        />
+                      </div>
+                    )}
+                    {paymentMethod === 'wallet' && walletBalance < grandTotal && (
+                      <p className="text-[11px] text-rose-600 font-bold mt-2">
+                        ⚠️ Available balance (₹{walletBalance}) is less than total payable (₹{grandTotal}). Please top up wallet or choose UPI / Online Payment.
+                      </p>
+                    )}
                   </div>
 
                   {/* Option 2: UPI / Online Payment */}
                   <div
                     onClick={() => setPaymentMethod('upi')}
-                    className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
                       paymentMethod === 'upi'
                         ? 'bg-emerald-50/80 border-emerald-500 ring-1 ring-emerald-400'
                         : 'bg-white border-gray-200 hover:border-gray-300'
@@ -1603,7 +1731,7 @@ export default function CustomerFoodOrdering({
                         </div>
                         <div>
                           <span className="font-extrabold text-sm text-gray-900">UPI / Online Payment</span>
-                          <p className="text-xs text-gray-500 mt-0.5">GPay, PhonePe, Paytm & Net Banking</p>
+                          <p className="text-xs text-gray-500 mt-0.5">GPay, PhonePe, Paytm, Cards & Net Banking</p>
                         </div>
                       </div>
                       <input
@@ -1611,35 +1739,6 @@ export default function CustomerFoodOrdering({
                         name="paymentMethod"
                         checked={paymentMethod === 'upi'}
                         onChange={() => setPaymentMethod('upi')}
-                        className="accent-emerald-600 w-4 h-4"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Option 3: Cash on Delivery */}
-                  <div
-                    onClick={() => setPaymentMethod('cod')}
-                    className={`p-3 rounded-2xl border transition-all cursor-pointer ${
-                      paymentMethod === 'cod'
-                        ? 'bg-emerald-50/80 border-emerald-500 ring-1 ring-emerald-400'
-                        : 'bg-white border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
-                          <Banknote className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <span className="font-extrabold text-sm text-gray-900">Cash on Delivery</span>
-                          <p className="text-xs text-gray-500 mt-0.5">Pay cash to delivery partner at doorstep</p>
-                        </div>
-                      </div>
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        checked={paymentMethod === 'cod'}
-                        onChange={() => setPaymentMethod('cod')}
                         className="accent-emerald-600 w-4 h-4"
                       />
                     </div>
@@ -1654,24 +1753,25 @@ export default function CustomerFoodOrdering({
                   <span>Item Total</span>
                   <span className="font-semibold text-gray-900">₹{cartSubtotal}</span>
                 </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>Delivery Partner Fee ({activeRestaurant?.distance_km !== undefined ? activeRestaurant.distance_km : 1.5} km)</span>
-                  <span className="font-semibold text-gray-900">₹{deliveryFee}</span>
-                </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>Platform Fee</span>
-                  <span className="font-semibold text-gray-900">₹{platformFee}</span>
-                </div>
+                {deliveryFee > 0 && (
+                  <div className="flex justify-between text-gray-600">
+                    <span>Delivery Partner Fee ({activeRestaurant?.distance_km !== undefined ? activeRestaurant.distance_km : 1.5} km)</span>
+                    <span className="font-semibold text-gray-900">₹{deliveryFee}</span>
+                  </div>
+                )}
                 {applyPromo && promoDiscountAmount > 0 && (
                   <div className="flex justify-between text-emerald-700 font-bold">
                     <span>Promotion Bonus Discount</span>
                     <span>-₹{promoDiscountAmount}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-gray-600">
-                  <span>GST & Restaurant Taxes (5%)</span>
-                  <span className="font-semibold text-gray-900">₹{taxesAndGst}</span>
-                </div>
+                {/* Admin Dynamic Taxes from tj_tax */}
+                {calculatedTaxes.map((tx) => (
+                  <div key={tx.id} className="flex justify-between text-gray-600">
+                    <span>{tx.label}</span>
+                    <span className="font-semibold text-gray-900">₹{tx.amount}</span>
+                  </div>
+                ))}
                 <div className="border-t border-gray-200 pt-2 flex justify-between text-sm font-black text-gray-900">
                   <span>Total Payable</span>
                   <span>₹{grandTotal}</span>

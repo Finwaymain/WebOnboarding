@@ -805,11 +805,11 @@ export default function RestaurantPartnerPortal({
     setIsSavingProduct(true);
     const effectiveToken = resolveToken();
     const formData = new FormData();
-    formData.append("name", newProdName.trim());
-    formData.append("category_id", String(newProdCategory ? Number(newProdCategory) : (categories[0]?.id || "")));
-    formData.append("restaurant_price", newProdPrice);
-    if (newProdOriginalPrice) {
-      formData.append("discount_price", newProdOriginalPrice);
+    const restPriceNum = Number(newProdPrice);
+    const mrpNum = newProdOriginalPrice ? Number(newProdOriginalPrice) : null;
+    formData.append("restaurant_price", String(restPriceNum));
+    if (mrpNum && mrpNum > restPriceNum) {
+      formData.append("discount_price", String(mrpNum));
     }
     formData.append("food_type", newProdVeg ? "veg" : "non_veg");
     formData.append("description", newProdDesc);
@@ -3008,18 +3008,18 @@ export default function RestaurantPartnerPortal({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">Price (₹) *</label>
+                  <label className="block text-slate-700 font-bold mb-1">Selling Price (₹) *</label>
                   <input
                     type="number"
                     required
-                    placeholder="280"
+                    placeholder="250"
                     value={newProdPrice}
                     onChange={(e) => setNewProdPrice(e.target.value)}
                     className="w-full p-2.5 rounded-xl border border-slate-200 font-bold text-slate-900 focus:ring-2 focus:ring-[#FF5200]"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">Original MRP</label>
+                  <label className="block text-slate-700 font-bold mb-1">Original MRP (Strikethrough)</label>
                   <input
                     type="number"
                     placeholder="320"
