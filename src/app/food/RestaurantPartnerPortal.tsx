@@ -1050,6 +1050,8 @@ export default function RestaurantPartnerPortal({
       try {
         localStorage.removeItem("restaurant_token");
         localStorage.removeItem("token");
+        localStorage.removeItem("is_restaurant_portal");
+        localStorage.removeItem("restaurant_phone");
       } catch (_) {}
 
       if ((window as any).FiinwayBridge?.postMessage) {
