@@ -39,7 +39,7 @@ import {
 import LiveOrderTrackingModal from './LiveOrderTrackingModal';
 
 const API_KEY = "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=";
-const GOOGLE_MAPS_KEY = "AIzaSyBw7w6Sdryp7JAloPV0fBdAA-eFCtNv060";
+const GOOGLE_MAPS_KEY = "AIzaSyAx_5V0k3AP2ZxGMNZ7TSy0LnhwChWuDoE";
 
 interface Restaurant {
   id: number;
@@ -313,53 +313,22 @@ export default function CustomerFoodOrdering({
     }
   }, []);
 
-  // Multi-tier location detection (Device GPS -> IP Geolocation Fallback)
+  // Multi-tier location detection (AppBridge Native GPS -> HTML5 Device Geolocation)
   const detectLiveGPS = useCallback(async () => {
     setIsLocating(true);
 
-    const runIPFallback = async () => {
+    // 1. First priority: Request high-accuracy GPS directly from Flutter native AppBridge
+    if (typeof window !== 'undefined' && (window as any).AppBridge?.postMessage) {
       try {
-        const ipRes = await fetch('https://ipwho.is/');
-        const ipData = await ipRes.json();
-        if (ipData.success && ipData.latitude && ipData.longitude) {
-          const detectedLat = Number(ipData.latitude);
-          const detectedLng = Number(ipData.longitude);
-          setLat(detectedLat);
-          setLng(detectedLng);
-          if (ipData.city) {
-            setCityName(ipData.city);
-          }
-          setLocationArea(ipData.city || ipData.region || 'Current City');
-          const fullLoc = [ipData.city, ipData.region, ipData.postal].filter(Boolean).join(', ');
-          setLocationName(fullLoc);
-          setDeliveryAddress((prev) => prev || fullLoc);
-          setIsLocating(false);
-          reverseGeocode(detectedLat, detectedLng);
-          return true;
-        }
+        (window as any).AppBridge.postMessage('getLocation');
+        // Give native bridge up to 3 seconds
+        setTimeout(() => {
+          setIsLocating((curr) => (curr ? false : curr));
+        }, 3000);
       } catch (_) {}
+    }
 
-      try {
-        const bgRes = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client');
-        const bgData = await bgRes.json();
-        if (bgData.latitude && bgData.longitude) {
-          const detectedLat = Number(bgData.latitude);
-          const detectedLng = Number(bgData.longitude);
-          setLat(detectedLat);
-          setLng(detectedLng);
-          setLocationArea(bgData.city || bgData.principalSubdivision || 'Current City');
-          const fullLoc = [bgData.locality, bgData.city, bgData.principalSubdivision].filter(Boolean).join(', ');
-          setLocationName(fullLoc);
-          setDeliveryAddress((prev) => prev || fullLoc);
-          setIsLocating(false);
-          reverseGeocode(detectedLat, detectedLng);
-          return true;
-        }
-      } catch (_) {}
-
-      return false;
-    };
-
+    // 2. Second priority: HTML5 Geolocation API
     if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -370,23 +339,15 @@ export default function CustomerFoodOrdering({
           setIsLocating(false);
           reverseGeocode(latitude, longitude);
         },
-        async () => {
-          const ipOk = await runIPFallback();
-          if (!ipOk) {
-            setIsLocating(false);
-            setLocationArea('Select Location');
-            setLocationName('Tap here to set your delivery area');
-          }
+        () => {
+          setIsLocating(false);
+          setCityName((prev) => prev || 'Ujjain');
         },
-        { timeout: 7000, enableHighAccuracy: true, maximumAge: 0 }
+        { timeout: 8000, enableHighAccuracy: true, maximumAge: 0 }
       );
     } else {
-      const ipOk = await runIPFallback();
-      if (!ipOk) {
-        setIsLocating(false);
-        setLocationArea('Select Location');
-        setLocationName('Tap here to set your delivery area');
-      }
+      setIsLocating(false);
+      setCityName((prev) => prev || 'Ujjain');
     }
   }, [reverseGeocode]);
 
@@ -417,8 +378,23 @@ export default function CustomerFoodOrdering({
     detectLiveGPS();
   }, [initialLat, initialLng, detectLiveGPS, reverseGeocode]);
 
-  // Listen for native AppBridge location updates
+  // Listen for native AppBridge location updates and callbacks
   useEffect(() => {
+    // Native callback invoked by WebViewScreen when getLocation message is processed
+    (window as any).receiveLocation = (nativeLat: number, nativeLng: number) => {
+      const nLat = Number(nativeLat);
+      const nLng = Number(nativeLng);
+      if (!isNaN(nLat) && !isNaN(nLng) && nLat && nLng) {
+        setLat(nLat);
+        setLng(nLng);
+        setIsLocating(false);
+        reverseGeocode(nLat, nLng);
+      }
+    };
+    (window as any).receiveLocationError = () => {
+      setIsLocating(false);
+    };
+
     const handleWindowMessage = (event: MessageEvent) => {
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
@@ -436,7 +412,11 @@ export default function CustomerFoodOrdering({
     };
 
     window.addEventListener('message', handleWindowMessage);
-    return () => window.removeEventListener('message', handleWindowMessage);
+    return () => {
+      window.removeEventListener('message', handleWindowMessage);
+      delete (window as any).receiveLocation;
+      delete (window as any).receiveLocationError;
+    };
   }, [reverseGeocode]);
 
   // Manual location search
