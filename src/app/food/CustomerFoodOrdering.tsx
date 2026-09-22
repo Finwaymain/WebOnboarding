@@ -170,6 +170,14 @@ export default function CustomerFoodOrdering({
     }
     return true;
   });
+  const [cityName, setCityName] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      const c = p.get('city');
+      if (c) return c;
+    }
+    return 'Ujjain';
+  });
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState<boolean>(false);
   const [manualAddressInput, setManualAddressInput] = useState<string>('');
   const [isGeocodingManual, setIsGeocodingManual] = useState<boolean>(false);
@@ -266,7 +274,12 @@ export default function CustomerFoodOrdering({
         const neighborhood = comps.find((c: any) => c.types.includes('neighborhood'));
         const sub1 = comps.find((c: any) => c.types.includes('sublocality_level_1'));
         const subAny = comps.find((c: any) => c.types.includes('sublocality'));
-        const city = comps.find((c: any) => c.types.includes('locality'));
+        const city = comps.find((c: any) => c.types.includes('locality'))
+          || comps.find((c: any) => c.types.includes('administrative_area_level_2'));
+
+        if (city?.long_name) {
+          setCityName(city.long_name);
+        }
 
         const specificArea = sub3?.long_name || sub2?.long_name || neighborhood?.long_name;
         const mainArea = specificArea || sub1?.long_name || subAny?.long_name || city?.long_name || 'Current Area';
@@ -286,6 +299,9 @@ export default function CustomerFoodOrdering({
       const osmData = await osmRes.json();
       const specific = osmData.address?.suburb || osmData.address?.neighbourhood || osmData.address?.residential || osmData.address?.road || '';
       const city = osmData.address?.city || osmData.address?.town || osmData.address?.county || osmData.address?.state_district || '';
+      if (city) {
+        setCityName(city);
+      }
       const area = specific || city || 'Current Location';
       const formatted = [specific, city].filter(Boolean).join(', ') || osmData.display_name?.slice(0, 55);
       setLocationArea(area);
@@ -310,6 +326,9 @@ export default function CustomerFoodOrdering({
           const detectedLng = Number(ipData.longitude);
           setLat(detectedLat);
           setLng(detectedLng);
+          if (ipData.city) {
+            setCityName(ipData.city);
+          }
           setLocationArea(ipData.city || ipData.region || 'Current City');
           const fullLoc = [ipData.city, ipData.region, ipData.postal].filter(Boolean).join(', ');
           setLocationName(fullLoc);
@@ -426,6 +445,11 @@ export default function CustomerFoodOrdering({
     if (!q) return;
     setIsGeocodingManual(true);
 
+    const pureCity = q.split(',')[0].trim();
+    if (pureCity) {
+      setCityName(pureCity);
+    }
+
     try {
       const gRes = await fetch(
         `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&key=${GOOGLE_MAPS_KEY}`
@@ -451,8 +475,8 @@ export default function CustomerFoodOrdering({
       );
       const osmData = await osmRes.json();
       if (Array.isArray(osmData) && osmData.length > 0) {
-        const newLat = parseFloat(osmData[0].lat);
-        const newLng = parseFloat(osmData[0].lon);
+        const newLat = Number(osmData[0].lat);
+        const newLng = Number(osmData[0].lon);
         setLat(newLat);
         setLng(newLng);
         setLocationArea(q);
@@ -470,20 +494,35 @@ export default function CustomerFoodOrdering({
 
   // Fetch Nearby Restaurants (within 25 km of user's resolved location)
   const fetchNearbyRestaurants = useCallback(async () => {
-    if (lat === null || lng === null) return;
     setLoadingRestaurants(true);
     setRestaurantError('');
     try {
-      const url = `/api/v1/food/customer/nearby?latitude=${lat}&longitude=${lng}&radius=${radiusKm}`;
+      const params = new URLSearchParams({
+        radius: String(radiusKm),
+      });
+      if (lat !== null) params.set('latitude', String(lat));
+      if (lng !== null) params.set('longitude', String(lng));
+      if (userId) params.set('user_id', userId);
+      if (userPhone) params.set('phone', userPhone);
+      if (userType) params.set('user_type', userType);
+      if (cityName) params.set('city', cityName);
+      if (deliveryAddress) params.set('address', deliveryAddress);
+
+      const url = `/api/v1/food/customer/nearby?${params.toString()}`;
       const res = await fetch(url, {
         headers: { Accept: 'application/json', apikey: API_KEY },
       });
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
         setRestaurants(json.data);
+        if (json.city && !cityName) {
+          setCityName(json.city);
+        }
+        if (json.user_lat && lat === null) setLat(Number(json.user_lat));
+        if (json.user_lng && lng === null) setLng(Number(json.user_lng));
       } else {
         setRestaurants([]);
-        setRestaurantError(json.error || 'No open restaurants found within 25 km.');
+        setRestaurantError(json.error || `No open restaurants found within 25 km of ${cityName || 'your area'}.`);
       }
     } catch {
       setRestaurantError('Could not connect to food service. Please check network.');
@@ -491,7 +530,7 @@ export default function CustomerFoodOrdering({
     } finally {
       setLoadingRestaurants(false);
     }
-  }, [lat, lng, radiusKm]);
+  }, [lat, lng, radiusKm, userId, userPhone, userType, cityName, deliveryAddress]);
 
   useEffect(() => {
     if (lat !== null && lng !== null) {
@@ -779,16 +818,16 @@ export default function CustomerFoodOrdering({
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1">
-                <span className="font-extrabold text-sm text-gray-900 tracking-tight flex items-center gap-1">
-                  Deliver to {locationArea}
-                  <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
+                <span className="font-extrabold text-base text-gray-900 tracking-tight flex items-center gap-1">
+                  {cityName || 'Ujjain'}
+                  <ChevronDown className="w-4 h-4 text-emerald-600 ml-0.5" />
                 </span>
-                <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full uppercase tracking-wider ml-1">
-                  25km Radius
+                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full uppercase tracking-wider ml-1">
+                  Nearby (25km)
                 </span>
               </div>
               <p className="text-xs text-gray-500 truncate max-w-[240px] sm:max-w-md font-medium">
-                {isLocating ? 'Detecting your delivery location...' : locationName}
+                {isLocating ? 'Detecting your delivery location...' : (deliveryAddress ? deliveryAddress.slice(0, 50) : (cityName || 'Ujjain'))}
               </p>
             </div>
           </div>
@@ -1208,7 +1247,7 @@ export default function CustomerFoodOrdering({
               <h2 className="text-base font-black text-gray-900 tracking-tight">
                 Restaurants near you ({filteredRestaurants.length})
               </h2>
-              <span className="text-xs text-gray-500 font-medium">Delivering to {locationArea}</span>
+              <span className="text-xs text-gray-500 font-medium">Delivering in {cityName || 'Ujjain'}</span>
             </div>
 
             {/* Restaurant Grid / Cards */}
@@ -1229,10 +1268,10 @@ export default function CustomerFoodOrdering({
               <div className="bg-white rounded-2xl p-8 text-center border border-gray-100 shadow-sm">
                 <UtensilsCrossed className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <h3 className="text-base font-bold text-gray-800">
-                  No restaurants delivering to {locationArea} yet
+                  No restaurants delivering to {cityName || 'Ujjain'} yet
                 </h3>
                 <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
-                  {restaurantError || `We couldn't find any operational restaurants within 25km of ${locationArea}. Try changing your area or refresh location.`}
+                  {restaurantError || `We couldn't find any operational restaurants within 25km of ${cityName || 'Ujjain'}. Try changing your area or refresh location.`}
                 </p>
                 <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
                   <button
