@@ -21,10 +21,9 @@ function FoodPortalContent() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const savedToken = localStorage.getItem("restaurant_token") || localStorage.getItem("token") || "";
-      const savedPhone = localStorage.getItem("restaurant_phone") || "";
-      const t = p.get("token") || p.get("accesstoken") || searchParams.get("token") || searchParams.get("accesstoken") || savedToken;
-      const ph = p.get("phone") || searchParams.get("phone") || savedPhone;
+      const p = new URLSearchParams(window.location.search);
+      const t = p.get("token") || p.get("accesstoken") || searchParams.get("token") || searchParams.get("accesstoken") || "";
+      const ph = p.get("phone") || searchParams.get("phone") || "";
       const nm = p.get("name") || p.get("username") || p.get("customer_name") || searchParams.get("name") || searchParams.get("username") || "";
       const wb = p.get("wallet_balance") || p.get("balance") || searchParams.get("wallet_balance") || searchParams.get("balance") || "0";
       const uid = p.get("user_id") || p.get("id_user") || p.get("driver_id") || p.get("id_driver") || searchParams.get("user_id") || searchParams.get("id_user") || searchParams.get("driver_id") || "";
@@ -36,14 +35,8 @@ function FoodPortalContent() {
       const rawLat = p.get("lat") || p.get("latitude") || searchParams.get("lat") || searchParams.get("latitude");
       const rawLng = p.get("lng") || p.get("longitude") || searchParams.get("lng") || searchParams.get("longitude");
 
-      if (t) {
-        setToken(t);
-        try { localStorage.setItem("restaurant_token", t); } catch (_) {}
-      }
-      if (ph) {
-        setPhone(ph);
-        try { localStorage.setItem("restaurant_phone", ph); } catch (_) {}
-      }
+      if (t) setToken(t);
+      if (ph) setPhone(ph);
       if (nm) setName(nm);
       if (wb) setWalletBalance(parseFloat(wb) || 0);
       if (uid) setUserId(uid);
@@ -52,13 +45,7 @@ function FoodPortalContent() {
       if (rawLat) setLat(Number(rawLat));
       if (rawLng) setLng(Number(rawLng));
 
-      const isPortalParam = view === "portal" || role === "restaurant" || uType === "restaurant" || (p.has("tab") && uType !== "customer" && uType !== "driver");
-      const localPortal = localStorage.getItem("is_restaurant_portal") === "true";
-      const isPortal = isPortalParam || (localPortal && uType !== "customer" && uType !== "driver");
-      
-      if (isPortal) {
-        try { localStorage.setItem("is_restaurant_portal", "true"); } catch (_) {}
-      }
+      const isPortal = view === "portal" || role === "restaurant" || uType === "restaurant" || (p.has("tab") && uType !== "customer" && uType !== "driver");
       setPortalMode(isPortal);
     }
   }, [searchParams]);

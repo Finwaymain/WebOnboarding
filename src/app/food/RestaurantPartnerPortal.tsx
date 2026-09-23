@@ -118,6 +118,7 @@ export default function RestaurantPartnerPortal({
 
   // Sound alert toggle
   const [isAudioMuted, setIsAudioMuted] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   // Dashboard Stats
   const [stats, setStats] = useState<any>({
@@ -315,6 +316,7 @@ export default function RestaurantPartnerPortal({
       } catch (_) {}
     }
 
+    setIsRefreshing(true);
     try {
       const headers = getApiHeaders(effectiveToken);
 
@@ -445,6 +447,8 @@ export default function RestaurantPartnerPortal({
       }
     } catch (e) {
       console.warn("Error fetching portal data", e);
+    } finally {
+      setIsRefreshing(false);
     }
   }, [resolveToken, incomingOrders.length, playChime, phone]);
 
@@ -1050,8 +1054,6 @@ export default function RestaurantPartnerPortal({
       try {
         localStorage.removeItem("restaurant_token");
         localStorage.removeItem("token");
-        localStorage.removeItem("is_restaurant_portal");
-        localStorage.removeItem("restaurant_phone");
       } catch (_) {}
 
       if ((window as any).FiinwayBridge?.postMessage) {
@@ -1076,6 +1078,12 @@ export default function RestaurantPartnerPortal({
   const upiVpa = "fiinway@icici";
   const upiDueString = `upi://pay?pa=${upiVpa}&pn=Fiinway%20Technologies&am=${stats.pending_due}&cu=INR&tn=Due%20Payment%20Restaurant%20${restaurant.id}`;
   const upiQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(upiDueString)}`;
+
+  const isPendingVerification = Boolean(
+    restaurant?.id &&
+    restaurant?.onboarding_status &&
+    !["active", "approved", "verified"].includes(String(restaurant.onboarding_status).toLowerCase().trim())
+  );
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-sans selection:bg-[#FF5200] selection:text-white">
@@ -1119,98 +1127,107 @@ export default function RestaurantPartnerPortal({
 
           {/* Right: Status Pill Switcher & Controls */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* Status Dropdown Pill */}
-            <div className="relative">
-              <button
-                onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
-                className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold flex items-center gap-1.5 border transition-all cursor-pointer shadow-xs ${
-                  restaurant.operational_status === "open"
-                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                    : restaurant.operational_status === "busy"
-                    ? "bg-amber-50 text-amber-800 border-amber-300"
-                    : "bg-red-50 text-red-800 border-red-300"
-                }`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full shrink-0 ${
-                    restaurant.operational_status === "open"
-                      ? "bg-emerald-500 animate-pulse"
-                      : restaurant.operational_status === "busy"
-                      ? "bg-amber-500"
-                      : "bg-red-500"
-                  }`}
-                />
-                <span className="hidden xs:inline">
-                  {restaurant.operational_status === "open"
-                    ? "Accepting Orders"
-                    : restaurant.operational_status === "busy"
-                    ? "Rush Mode"
-                    : "Kitchen Closed"}
-                </span>
-                <span className="xs:hidden">
-                  {restaurant.operational_status === "open"
-                    ? "Online"
-                    : restaurant.operational_status === "busy"
-                    ? "Busy"
-                    : "Closed"}
-                </span>
-                <ChevronDown className="w-3 h-3 opacity-60 ml-0.5" />
-              </button>
+            {isPendingVerification ? (
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1.5 shadow-xs">
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                <span>Under Review</span>
+              </span>
+            ) : (
+              <>
+                {/* Status Dropdown Pill */}
+                <div className="relative">
+                  <button
+                    onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold flex items-center gap-1.5 border transition-all cursor-pointer shadow-xs ${
+                      restaurant.operational_status === "open"
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                        : restaurant.operational_status === "busy"
+                        ? "bg-amber-50 text-amber-800 border-amber-300"
+                        : "bg-red-50 text-red-800 border-red-300"
+                    }`}
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full shrink-0 ${
+                        restaurant.operational_status === "open"
+                          ? "bg-emerald-500 animate-pulse"
+                          : restaurant.operational_status === "busy"
+                          ? "bg-amber-500"
+                          : "bg-red-500"
+                      }`}
+                    />
+                    <span className="hidden xs:inline">
+                      {restaurant.operational_status === "open"
+                        ? "Accepting Orders"
+                        : restaurant.operational_status === "busy"
+                        ? "Rush Mode"
+                        : "Kitchen Closed"}
+                    </span>
+                    <span className="xs:hidden">
+                      {restaurant.operational_status === "open"
+                        ? "Online"
+                        : restaurant.operational_status === "busy"
+                        ? "Busy"
+                        : "Closed"}
+                    </span>
+                    <ChevronDown className="w-3 h-3 opacity-60 ml-0.5" />
+                  </button>
 
-              {isStatusDropdownOpen && (
-                <div className="absolute right-0 top-full mt-1.5 w-44 bg-white border border-slate-200 rounded-2xl shadow-xl p-1 z-50 space-y-0.5">
-                  <button
-                    onClick={() => {
-                      handleToggleOperationalStatus("open");
-                      setIsStatusDropdownOpen(false);
-                    }}
-                    className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer ${
-                      restaurant.operational_status === "open" ? "bg-emerald-50 text-emerald-800" : "hover:bg-slate-50 text-slate-700"
-                    }`}
-                  >
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                    <span>Accepting (Open)</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleToggleOperationalStatus("busy");
-                      setIsStatusDropdownOpen(false);
-                    }}
-                    className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer ${
-                      restaurant.operational_status === "busy" ? "bg-amber-50 text-amber-800" : "hover:bg-slate-50 text-slate-700"
-                    }`}
-                  >
-                    <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                    <span>Rush (Busy Mode)</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleToggleOperationalStatus("closed");
-                      setIsStatusDropdownOpen(false);
-                    }}
-                    className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer ${
-                      restaurant.operational_status === "closed" ? "bg-red-50 text-red-800" : "hover:bg-slate-50 text-slate-700"
-                    }`}
-                  >
-                    <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-                    <span>Closed (Pause)</span>
-                  </button>
+                  {isStatusDropdownOpen && (
+                    <div className="absolute right-0 top-full mt-1.5 w-44 bg-white border border-slate-200 rounded-2xl shadow-xl p-1 z-50 space-y-0.5">
+                      <button
+                        onClick={() => {
+                          handleToggleOperationalStatus("open");
+                          setIsStatusDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer ${
+                          restaurant.operational_status === "open" ? "bg-emerald-50 text-emerald-800" : "hover:bg-slate-50 text-slate-700"
+                        }`}
+                      >
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                        <span>Accepting (Open)</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleToggleOperationalStatus("busy");
+                          setIsStatusDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer ${
+                          restaurant.operational_status === "busy" ? "bg-amber-50 text-amber-800" : "hover:bg-slate-50 text-slate-700"
+                        }`}
+                      >
+                        <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                        <span>Rush (Busy Mode)</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleToggleOperationalStatus("closed");
+                          setIsStatusDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer ${
+                          restaurant.operational_status === "closed" ? "bg-red-50 text-red-800" : "hover:bg-slate-50 text-slate-700"
+                        }`}
+                      >
+                        <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                        <span>Closed (Pause)</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {/* Audio Alert Toggle */}
-            <button
-              onClick={() => setIsAudioMuted(!isAudioMuted)}
-              title={isAudioMuted ? "Unmute Alarm" : "Mute Alarm"}
-              className={`p-1.5 rounded-xl border text-xs font-bold flex items-center justify-center cursor-pointer ${
-                isAudioMuted
-                  ? "border-slate-300 text-slate-400 bg-slate-100"
-                  : "border-emerald-200 text-emerald-700 bg-emerald-50"
-              }`}
-            >
-              {isAudioMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-emerald-600 animate-pulse" />}
-            </button>
+                {/* Audio Alert Toggle */}
+                <button
+                  onClick={() => setIsAudioMuted(!isAudioMuted)}
+                  title={isAudioMuted ? "Unmute Alarm" : "Mute Alarm"}
+                  className={`p-1.5 rounded-xl border text-xs font-bold flex items-center justify-center cursor-pointer ${
+                    isAudioMuted
+                      ? "border-slate-300 text-slate-400 bg-slate-100"
+                      : "border-emerald-200 text-emerald-700 bg-emerald-50"
+                  }`}
+                >
+                  {isAudioMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-emerald-600 animate-pulse" />}
+                </button>
+              </>
+            )}
 
             {/* Refresh */}
             <button
@@ -1218,27 +1235,91 @@ export default function RestaurantPartnerPortal({
               title="Refresh"
               className="p-1.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 cursor-pointer"
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
             </button>
           </div>
         </div>
       </header>
 
-      {/* Verification Notice if pending */}
-      {restaurant.onboarding_status === "pending_approval" && (
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-[11px] font-semibold text-amber-900 flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-            <span>Document verification in progress. You can add your dishes and set timings.</span>
-          </div>
-          <span className="bg-amber-200 text-amber-900 text-[9px] font-black uppercase px-1.5 py-0.5 rounded">
-            In Review
-          </span>
-        </div>
-      )}
+      {isPendingVerification ? (
+        <div className="flex-1 flex items-center justify-center p-4 sm:p-6 bg-slate-50 overflow-y-auto">
+          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 text-center my-auto">
+            {/* Status Icon */}
+            <div className="mx-auto w-14 h-14 rounded-full flex items-center justify-center mb-4 bg-amber-50 text-amber-600 border border-amber-100">
+              <Clock className="w-7 h-7" />
+            </div>
 
-      {/* MAIN CONTAINER */}
-      <div className="flex-1 flex overflow-hidden">
+            {/* Title & Description */}
+            <h2 className="text-xl font-bold text-slate-900 mb-1.5 tracking-tight">Under Review</h2>
+            <p className="text-xs text-slate-500 mb-6 leading-relaxed">
+              Application submitted. Our verification team is reviewing your documents (typically 2–4 hours).
+            </p>
+
+            {/* Restaurant Pill */}
+            <div className="bg-slate-50 rounded-xl p-3.5 flex items-center gap-3 text-left mb-6 border border-slate-100">
+              <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 text-slate-600">
+                <Store className="w-4 h-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold text-slate-900 truncate">{restaurant.name || "Partner Kitchen"}</div>
+                <div className="text-[11px] text-slate-500 truncate">
+                  {[restaurant.id ? `ID: #${restaurant.id}` : "", restaurant.city].filter(Boolean).join(" • ")}
+                </div>
+              </div>
+            </div>
+
+            {/* Timeline */}
+            <div className="flex items-center justify-between mb-7 px-2">
+              <div className="flex flex-col items-center">
+                <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs shadow-xs">
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                </div>
+                <span className="text-[11px] font-medium text-slate-900 mt-1.5">Submitted</span>
+              </div>
+              <div className="flex-1 h-0.5 bg-slate-200 mx-2 -mt-4" />
+              <div className="flex flex-col items-center">
+                <div className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center text-xs font-bold shadow-xs">
+                  2
+                </div>
+                <span className="text-[11px] font-semibold text-slate-900 mt-1.5">Verification</span>
+              </div>
+              <div className="flex-1 h-0.5 bg-slate-200 mx-2 -mt-4" />
+              <div className="flex flex-col items-center">
+                <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-400 border border-slate-200 flex items-center justify-center text-xs font-bold">
+                  3
+                </div>
+                <span className="text-[11px] font-medium text-slate-400 mt-1.5">Go Live</span>
+              </div>
+            </div>
+
+            {/* Rejection / Action Required Notes */}
+            {restaurant.rejection_reason && (
+              <div className="mb-5 p-3 rounded-xl bg-red-50 border border-red-200 text-left text-xs text-red-800">
+                <div className="font-bold text-[11px] text-red-900 mb-0.5">Verification Feedback</div>
+                <div>{restaurant.rejection_reason}</div>
+              </div>
+            )}
+
+            {/* Action Button */}
+            <button
+              onClick={fetchPortalData}
+              disabled={isRefreshing}
+              className="w-full py-2.5 px-4 rounded-xl border border-slate-300 text-slate-800 text-xs font-semibold hover:bg-slate-50 flex items-center justify-center gap-2 cursor-pointer transition-colors disabled:opacity-60"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+              <span>Check Status</span>
+            </button>
+
+            {/* Support Note */}
+            <p className="text-[11px] text-slate-400 mt-5">
+              Need assistance? Contact Partner Support
+            </p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* MAIN CONTAINER */}
+          <div className="flex-1 flex overflow-hidden">
         {/* DESKTOP SIDEBAR */}
         <aside
           className={`w-60 bg-white border-r border-slate-200 flex flex-col shrink-0 sm:flex ${
@@ -3067,6 +3148,8 @@ export default function RestaurantPartnerPortal({
           <span className="text-[10px] font-bold">More</span>
         </button>
       </div>
+      </>
+      )}
 
       {/* MODAL: ADD / EDIT DISH WITH UNBLOCKABLE NATIVE CAMERA & GALLERY */}
       {isProductModalOpen && (
