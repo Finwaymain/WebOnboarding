@@ -147,6 +147,37 @@ function GiftIcon({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
+function CoinPercentIcon({ className = "w-5 h-5 text-emerald-600" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <ellipse cx="8" cy="6" rx="6" ry="2.2" />
+      <path d="M2 6v3c0 1.22 2.69 2.2 6 2.2s6-.98 6-2.2V6" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M2 9.5v3c0 1.22 2.69 2.2 6 2.2 1.34 0 2.58-.16 3.61-.45" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M2 13v3c0 1.22 2.69 2.2 6 2.2.82 0 1.61-.06 2.33-.18" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <circle cx="17.5" cy="15.5" r="5" fill="#16A34A" />
+      <text x="17.5" y="18.5" textAnchor="middle" fill="#FFFFFF" fontSize="7" fontWeight="bold" fontFamily="system-ui, -apple-system, sans-serif">%</text>
+    </svg>
+  );
+}
+
+function ClipboardCheckIcon({ className = "w-5 h-5 text-blue-600" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path fillRule="evenodd" d="M19 4h-2a3 3 0 00-6 0H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2zm-6-1a1 1 0 011 1v1h-4V4a1 1 0 011-1h2zm3.707 9.707a1 1 0 00-1.414-1.414L11 13.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
+function SpeedometerIcon({ className = "w-5 h-5 text-amber-500" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 14v-4" />
+      <path d="M3.34 17a10 10 0 1 1 17.32 0" />
+      <circle cx="12" cy="14" r="1.8" fill="currentColor" />
+    </svg>
+  );
+}
+
 function readUrlParams() {
   if (typeof window === 'undefined') {
     return { 
@@ -156,6 +187,9 @@ function readUrlParams() {
       userType: 'driver' as 'driver' | 'user',
       isDark: false,
       showHeader: false,
+      name: '',
+      phone: '',
+      pocketNumber: '',
     };
   }
   const params = new URLSearchParams(window.location.search);
@@ -167,6 +201,9 @@ function readUrlParams() {
   const themeParam = params.get('theme');
   const isDark = themeParam === 'dark' || themeParam === '1' || themeParam === 'true';
   const showHeader = params.get('show_header') === 'true' || params.get('show_app_bar') === 'true';
+  const name = params.get('name') || params.get('customer_name') || params.get('username') || '';
+  const phone = params.get('phone') || params.get('mobile') || '';
+  const pocketNumber = params.get('pocket_number') || params.get('ac_no') || params.get('acNo') || '';
 
   return {
     driverId: driverId || resolvedId,
@@ -175,6 +212,9 @@ function readUrlParams() {
     userType: (isDriverType ? 'driver' : 'user') as 'driver' | 'user',
     isDark,
     showHeader,
+    name,
+    phone,
+    pocketNumber,
   };
 }
 
@@ -187,6 +227,9 @@ export default function WalletPage() {
     userType: 'driver' | 'user';
     isDark: boolean;
     showHeader: boolean;
+    name: string;
+    phone: string;
+    pocketNumber: string;
   }>({
     driverId: null,
     userId: null,
@@ -194,6 +237,9 @@ export default function WalletPage() {
     userType: 'driver',
     isDark: false,
     showHeader: false,
+    name: '',
+    phone: '',
+    pocketNumber: '',
   });
 
   useEffect(() => {
@@ -343,6 +389,24 @@ export default function WalletPage() {
     if (!handled) {
       showToast("Standard Smart Value Membership Plan Active");
     }
+  };
+
+  const handleLoanClick = (cardType: string, title: string, amount: string) => {
+    const finalPocket = params.pocketNumber || (bankDetails?.account_number ? String(bankDetails.account_number) : (userId || ''));
+    const finalName = params.name || (isDriver ? 'Driver Partner' : 'Fiinway User');
+    const finalMobile = params.phone || '';
+
+    const queryParams = new URLSearchParams({
+      card_type: cardType,
+      title: title,
+      amount: amount,
+      name: finalName,
+      mobile: finalMobile,
+      pocket_number: finalPocket,
+    });
+
+    const targetUrl = `/loans/coming-soon?${queryParams.toString()}`;
+    window.location.href = targetUrl;
   };
 
   // API Call Headers
@@ -914,6 +978,110 @@ export default function WalletPage() {
                       <QrCodeIcon className="w-5 h-5 text-[#6AA720]" />
                       <span className={`text-[11px] font-medium ${themeClasses.textMain}`}>My QR</span>
                     </button>
+                  </div>
+                </div>
+
+                {/* Loans & Credit Section */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <h3 className={`text-sm font-bold ${themeClasses.textMain}`}>Loans & Credit</h3>
+                    <button 
+                      type="button"
+                      onClick={() => handleLoanClick('all', 'Loans & Credit Services', 'Upto ₹5,00,000')}
+                      className="text-xs font-semibold text-[#16A34A] hover:underline flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <span>View Details</span>
+                      <ChevronRightIcon className="w-3.5 h-3.5 text-[#16A34A]" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
+                    {/* Card 1: Interest Free Loan */}
+                    <div 
+                      onClick={() => handleLoanClick('interest_free', 'Interest Free Loan', 'Upto ₹2,00,000')}
+                      className="bg-[#F0FDF4] border border-[#DCFCE7] dark:bg-emerald-950/20 dark:border-emerald-800/40 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                    >
+                      <div>
+                        <div className="w-8 h-8 rounded-full bg-[#DCFCE7] dark:bg-emerald-900/60 flex items-center justify-center mb-2">
+                          <CoinPercentIcon className="w-4 h-4 text-[#16A34A]" />
+                        </div>
+                        <h4 className="text-[12px] sm:text-[13px] font-bold leading-tight text-slate-800 dark:text-slate-100 min-h-[32px]">
+                          Interest Free Loan
+                        </h4>
+                        <p className="text-[10px] sm:text-[11px] font-semibold text-[#16A34A] mt-1">
+                          Upto ₹2,00,000
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleLoanClick('interest_free', 'Interest Free Loan', 'Upto ₹2,00,000');
+                        }}
+                        className="mt-2.5 w-full bg-[#16A34A] hover:bg-[#15803D] text-white text-[10px] sm:text-[11px] font-bold py-1.5 px-2 rounded-full flex items-center justify-center gap-0.5 shadow-sm transition-colors cursor-pointer"
+                      >
+                        <span>Apply Now</span>
+                        <ChevronRightIcon className="w-3 h-3" />
+                      </button>
+                    </div>
+
+                    {/* Card 2: 0 CIBIL Loan */}
+                    <div 
+                      onClick={() => handleLoanClick('zero_cibil', '0 CIBIL Loan', 'Upto ₹5,00,000')}
+                      className="bg-[#EFF6FF] border border-[#DBEAFE] dark:bg-blue-950/20 dark:border-blue-800/40 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                    >
+                      <div>
+                        <div className="w-8 h-8 rounded-full bg-[#DBEAFE] dark:bg-blue-900/60 flex items-center justify-center mb-2">
+                          <ClipboardCheckIcon className="w-4 h-4 text-[#2563EB]" />
+                        </div>
+                        <h4 className="text-[12px] sm:text-[13px] font-bold leading-tight text-slate-800 dark:text-slate-100 min-h-[32px]">
+                          0 CIBIL Loan
+                        </h4>
+                        <p className="text-[10px] sm:text-[11px] font-semibold text-[#2563EB] mt-1">
+                          Upto ₹5,00,000
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleLoanClick('zero_cibil', '0 CIBIL Loan', 'Upto ₹5,00,000');
+                        }}
+                        className="mt-2.5 w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-[10px] sm:text-[11px] font-bold py-1.5 px-2 rounded-full flex items-center justify-center gap-0.5 shadow-sm transition-colors cursor-pointer"
+                      >
+                        <span>Apply Now</span>
+                        <ChevronRightIcon className="w-3 h-3" />
+                      </button>
+                    </div>
+
+                    {/* Card 3: Low CIBIL Loan */}
+                    <div 
+                      onClick={() => handleLoanClick('low_cibil', 'Low CIBIL Loan', 'Fast Approval')}
+                      className="bg-[#FFFBEB] border border-[#FEF3C7] dark:bg-amber-950/20 dark:border-amber-800/40 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                    >
+                      <div>
+                        <div className="w-8 h-8 rounded-full bg-[#FEF3C7] dark:bg-amber-900/60 flex items-center justify-center mb-2">
+                          <SpeedometerIcon className="w-4 h-4 text-[#EA580C]" />
+                        </div>
+                        <h4 className="text-[12px] sm:text-[13px] font-bold leading-tight text-slate-800 dark:text-slate-100 min-h-[32px]">
+                          Low CIBIL Loan
+                        </h4>
+                        <p className="text-[10px] sm:text-[11px] font-semibold text-[#EA580C] mt-1">
+                          Fast Approval
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleLoanClick('low_cibil', 'Low CIBIL Loan', 'Fast Approval');
+                        }}
+                        className="mt-2.5 w-full bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-[10px] sm:text-[11px] font-bold py-1.5 px-2 rounded-full flex items-center justify-center gap-0.5 shadow-sm transition-colors cursor-pointer"
+                      >
+                        <span>Apply Now</span>
+                        <ChevronRightIcon className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
