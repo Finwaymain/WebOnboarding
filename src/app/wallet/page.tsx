@@ -999,7 +999,8 @@ export default function WalletPage() {
                     {/* Card 1: Interest Free Loan */}
                     <div 
                       onClick={() => handleLoanClick('interest_free', 'Interest Free Loan', 'Upto ₹2,00,000')}
-                      className="bg-[#EDFDF4] border border-[#DCFCE7] dark:bg-emerald-950/30 dark:border-emerald-800/40 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                      className="bg-[#EBFAF3] border border-[#DCFCE7] rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                      style={{ backgroundColor: '#EBFAF3' }}
                     >
                       <div>
                         <div className="w-10 h-10 rounded-full overflow-hidden mb-2.5 shadow-sm bg-[#DCFCE7] flex items-center justify-center">
@@ -1012,7 +1013,7 @@ export default function WalletPage() {
                             }}
                           />
                         </div>
-                        <h4 className="text-[12.5px] sm:text-[13px] font-bold leading-tight text-slate-800 dark:text-slate-100 min-h-[32px]">
+                        <h4 className="text-[12.5px] sm:text-[13px] font-bold leading-tight text-[#0F172A] min-h-[32px]">
                           Interest Free<br />Loan
                         </h4>
                         <p className="text-[11px] font-semibold text-[#16A34A] mt-1.5">
@@ -1035,7 +1036,8 @@ export default function WalletPage() {
                     {/* Card 2: 0 CIBIL Loan */}
                     <div 
                       onClick={() => handleLoanClick('zero_cibil', '0 CIBIL Loan', 'Upto ₹5,00,000')}
-                      className="bg-[#EFF6FF] border border-[#DBEAFE] dark:bg-blue-950/30 dark:border-blue-800/40 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                      className="bg-[#EDF5FF] border border-[#DBEAFE] rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                      style={{ backgroundColor: '#EDF5FF', opacity: 1 }}
                     >
                       <div>
                         <div className="w-10 h-10 rounded-full overflow-hidden mb-2.5 shadow-sm bg-[#DBEAFE] flex items-center justify-center">
@@ -1048,10 +1050,10 @@ export default function WalletPage() {
                             }}
                           />
                         </div>
-                        <h4 className="text-[12.5px] sm:text-[13px] font-bold leading-tight text-slate-800 dark:text-slate-100 min-h-[32px]">
+                        <h4 className="text-[12.5px] sm:text-[13px] font-bold leading-tight text-[#0F172A] min-h-[32px]">
                           0 CIBIL Loan
                         </h4>
-                        <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1.5">
+                        <p className="text-[11px] font-medium text-[#64748B] mt-1.5">
                           Upto ₹5,00,000
                         </p>
                       </div>
@@ -1071,10 +1073,11 @@ export default function WalletPage() {
                     {/* Card 3: Low CIBIL Loan */}
                     <div 
                       onClick={() => handleLoanClick('low_cibil', 'Low CIBIL Loan', 'Fast Approval')}
-                      className="bg-[#FFFBEB] border border-[#FEF3C7] dark:bg-amber-950/30 dark:border-amber-800/40 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                      className="bg-[#FEF4E8] border border-[#FED7AA] rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                      style={{ backgroundColor: '#FEF4E8', opacity: 1 }}
                     >
                       <div>
-                        <div className="w-10 h-10 rounded-full overflow-hidden mb-2.5 shadow-sm bg-[#FEF3C7] flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-full overflow-hidden mb-2.5 shadow-sm bg-[#FED7AA] flex items-center justify-center">
                           <img 
                             src="/images/loans/low_cibil.png" 
                             alt="Low CIBIL Loan" 
@@ -1084,10 +1087,10 @@ export default function WalletPage() {
                             }}
                           />
                         </div>
-                        <h4 className="text-[12.5px] sm:text-[13px] font-bold leading-tight text-slate-800 dark:text-slate-100 min-h-[32px]">
+                        <h4 className="text-[12.5px] sm:text-[13px] font-bold leading-tight text-[#0F172A] min-h-[32px]">
                           Low CIBIL Loan
                         </h4>
-                        <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1.5">
+                        <p className="text-[11px] font-medium text-[#64748B] mt-1.5">
                           Fast Approval
                         </p>
                       </div>

@@ -839,6 +839,10 @@ export default function RestaurantPartnerPortal({
     const formData = new FormData();
     const restPriceNum = Number(newProdPrice);
     const mrpNum = newProdOriginalPrice ? Number(newProdOriginalPrice) : null;
+    formData.append("name", newProdName.trim());
+    if (newProdCategory) {
+      formData.append("category_id", String(newProdCategory));
+    }
     formData.append("restaurant_price", String(restPriceNum));
     if (mrpNum && mrpNum > restPriceNum) {
       formData.append("discount_price", String(mrpNum));
