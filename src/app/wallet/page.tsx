@@ -982,9 +982,9 @@ export default function WalletPage() {
                 </div>
 
                 {/* Loans & Credit Section */}
-                <div className="space-y-2.5">
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <h3 className={`text-sm font-bold ${themeClasses.textMain}`}>Loans & Credit</h3>
+                    <h3 className={`text-[15px] font-bold tracking-tight ${themeClasses.textMain}`}>Loans & Credit</h3>
                     <button 
                       type="button"
                       onClick={() => handleLoanClick('all', 'Loans & Credit Services', 'Upto ₹5,00,000')}
@@ -999,16 +999,23 @@ export default function WalletPage() {
                     {/* Card 1: Interest Free Loan */}
                     <div 
                       onClick={() => handleLoanClick('interest_free', 'Interest Free Loan', 'Upto ₹2,00,000')}
-                      className="bg-[#F0FDF4] border border-[#DCFCE7] dark:bg-emerald-950/20 dark:border-emerald-800/40 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                      className="bg-[#EDFDF4] border border-[#DCFCE7] dark:bg-emerald-950/30 dark:border-emerald-800/40 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
                     >
                       <div>
-                        <div className="w-8 h-8 rounded-full bg-[#DCFCE7] dark:bg-emerald-900/60 flex items-center justify-center mb-2">
-                          <CoinPercentIcon className="w-4 h-4 text-[#16A34A]" />
+                        <div className="w-10 h-10 rounded-full overflow-hidden mb-2.5 shadow-sm bg-[#DCFCE7] flex items-center justify-center">
+                          <img 
+                            src="/images/loans/interest_free.png" 
+                            alt="Interest Free Loan" 
+                            className="w-full h-full object-cover rounded-full" 
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/onboarding-assets/images/loans/interest_free.png';
+                            }}
+                          />
                         </div>
-                        <h4 className="text-[12px] sm:text-[13px] font-bold leading-tight text-slate-800 dark:text-slate-100 min-h-[32px]">
-                          Interest Free Loan
+                        <h4 className="text-[12.5px] sm:text-[13px] font-bold leading-tight text-slate-800 dark:text-slate-100 min-h-[32px]">
+                          Interest Free<br />Loan
                         </h4>
-                        <p className="text-[10px] sm:text-[11px] font-semibold text-[#16A34A] mt-1">
+                        <p className="text-[11px] font-semibold text-[#16A34A] mt-1.5">
                           Upto ₹2,00,000
                         </p>
                       </div>
@@ -1018,26 +1025,33 @@ export default function WalletPage() {
                           e.stopPropagation();
                           handleLoanClick('interest_free', 'Interest Free Loan', 'Upto ₹2,00,000');
                         }}
-                        className="mt-2.5 w-full bg-[#16A34A] hover:bg-[#15803D] text-white text-[10px] sm:text-[11px] font-bold py-1.5 px-2 rounded-full flex items-center justify-center gap-0.5 shadow-sm transition-colors cursor-pointer"
+                        className="mt-3 w-full bg-[#16A34A] hover:bg-[#15803D] text-white text-[11px] font-bold py-1.5 px-2 rounded-full flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer"
                       >
                         <span>Apply Now</span>
-                        <ChevronRightIcon className="w-3 h-3" />
+                        <ChevronRightIcon className="w-3 h-3 text-white" />
                       </button>
                     </div>
 
                     {/* Card 2: 0 CIBIL Loan */}
                     <div 
                       onClick={() => handleLoanClick('zero_cibil', '0 CIBIL Loan', 'Upto ₹5,00,000')}
-                      className="bg-[#EFF6FF] border border-[#DBEAFE] dark:bg-blue-950/20 dark:border-blue-800/40 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                      className="bg-[#EFF6FF] border border-[#DBEAFE] dark:bg-blue-950/30 dark:border-blue-800/40 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
                     >
                       <div>
-                        <div className="w-8 h-8 rounded-full bg-[#DBEAFE] dark:bg-blue-900/60 flex items-center justify-center mb-2">
-                          <ClipboardCheckIcon className="w-4 h-4 text-[#2563EB]" />
+                        <div className="w-10 h-10 rounded-full overflow-hidden mb-2.5 shadow-sm bg-[#DBEAFE] flex items-center justify-center">
+                          <img 
+                            src="/images/loans/zero_cibil.png" 
+                            alt="0 CIBIL Loan" 
+                            className="w-full h-full object-cover rounded-full" 
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/onboarding-assets/images/loans/zero_cibil.png';
+                            }}
+                          />
                         </div>
-                        <h4 className="text-[12px] sm:text-[13px] font-bold leading-tight text-slate-800 dark:text-slate-100 min-h-[32px]">
+                        <h4 className="text-[12.5px] sm:text-[13px] font-bold leading-tight text-slate-800 dark:text-slate-100 min-h-[32px]">
                           0 CIBIL Loan
                         </h4>
-                        <p className="text-[10px] sm:text-[11px] font-semibold text-[#2563EB] mt-1">
+                        <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1.5">
                           Upto ₹5,00,000
                         </p>
                       </div>
@@ -1047,26 +1061,33 @@ export default function WalletPage() {
                           e.stopPropagation();
                           handleLoanClick('zero_cibil', '0 CIBIL Loan', 'Upto ₹5,00,000');
                         }}
-                        className="mt-2.5 w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-[10px] sm:text-[11px] font-bold py-1.5 px-2 rounded-full flex items-center justify-center gap-0.5 shadow-sm transition-colors cursor-pointer"
+                        className="mt-3 w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-[11px] font-bold py-1.5 px-2 rounded-full flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer"
                       >
                         <span>Apply Now</span>
-                        <ChevronRightIcon className="w-3 h-3" />
+                        <ChevronRightIcon className="w-3 h-3 text-white" />
                       </button>
                     </div>
 
                     {/* Card 3: Low CIBIL Loan */}
                     <div 
                       onClick={() => handleLoanClick('low_cibil', 'Low CIBIL Loan', 'Fast Approval')}
-                      className="bg-[#FFFBEB] border border-[#FEF3C7] dark:bg-amber-950/20 dark:border-amber-800/40 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                      className="bg-[#FFFBEB] border border-[#FEF3C7] dark:bg-amber-950/30 dark:border-amber-800/40 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
                     >
                       <div>
-                        <div className="w-8 h-8 rounded-full bg-[#FEF3C7] dark:bg-amber-900/60 flex items-center justify-center mb-2">
-                          <SpeedometerIcon className="w-4 h-4 text-[#EA580C]" />
+                        <div className="w-10 h-10 rounded-full overflow-hidden mb-2.5 shadow-sm bg-[#FEF3C7] flex items-center justify-center">
+                          <img 
+                            src="/images/loans/low_cibil.png" 
+                            alt="Low CIBIL Loan" 
+                            className="w-full h-full object-cover rounded-full" 
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/onboarding-assets/images/loans/low_cibil.png';
+                            }}
+                          />
                         </div>
-                        <h4 className="text-[12px] sm:text-[13px] font-bold leading-tight text-slate-800 dark:text-slate-100 min-h-[32px]">
+                        <h4 className="text-[12.5px] sm:text-[13px] font-bold leading-tight text-slate-800 dark:text-slate-100 min-h-[32px]">
                           Low CIBIL Loan
                         </h4>
-                        <p className="text-[10px] sm:text-[11px] font-semibold text-[#EA580C] mt-1">
+                        <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1.5">
                           Fast Approval
                         </p>
                       </div>
@@ -1076,10 +1097,10 @@ export default function WalletPage() {
                           e.stopPropagation();
                           handleLoanClick('low_cibil', 'Low CIBIL Loan', 'Fast Approval');
                         }}
-                        className="mt-2.5 w-full bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-[10px] sm:text-[11px] font-bold py-1.5 px-2 rounded-full flex items-center justify-center gap-0.5 shadow-sm transition-colors cursor-pointer"
+                        className="mt-3 w-full bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-[11px] font-bold py-1.5 px-2 rounded-full flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer"
                       >
                         <span>Apply Now</span>
-                        <ChevronRightIcon className="w-3 h-3" />
+                        <ChevronRightIcon className="w-3 h-3 text-white" />
                       </button>
                     </div>
                   </div>
