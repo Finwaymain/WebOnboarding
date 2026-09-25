@@ -1245,85 +1245,8 @@ export default function RestaurantPartnerPortal({
         </div>
       </header>
 
-      {isPendingVerification ? (
-        <div className="flex-1 flex items-center justify-center p-4 sm:p-6 bg-slate-50 overflow-y-auto">
-          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 text-center my-auto">
-            {/* Status Icon */}
-            <div className="mx-auto w-14 h-14 rounded-full flex items-center justify-center mb-4 bg-amber-50 text-amber-600 border border-amber-100">
-              <Clock className="w-7 h-7" />
-            </div>
-
-            {/* Title & Description */}
-            <h2 className="text-xl font-bold text-slate-900 mb-1.5 tracking-tight">Under Review</h2>
-            <p className="text-xs text-slate-500 mb-6 leading-relaxed">
-              Application submitted. Our verification team is reviewing your documents (typically 2–4 hours).
-            </p>
-
-            {/* Restaurant Pill */}
-            <div className="bg-slate-50 rounded-xl p-3.5 flex items-center gap-3 text-left mb-6 border border-slate-100">
-              <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 text-slate-600">
-                <Store className="w-4 h-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-slate-900 truncate">{restaurant.name || "Partner Kitchen"}</div>
-                <div className="text-[11px] text-slate-500 truncate">
-                  {[restaurant.id ? `ID: #${restaurant.id}` : "", restaurant.city].filter(Boolean).join(" • ")}
-                </div>
-              </div>
-            </div>
-
-            {/* Timeline */}
-            <div className="flex items-center justify-between mb-7 px-2">
-              <div className="flex flex-col items-center">
-                <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs shadow-xs">
-                  <Check className="w-3.5 h-3.5 stroke-[3]" />
-                </div>
-                <span className="text-[11px] font-medium text-slate-900 mt-1.5">Submitted</span>
-              </div>
-              <div className="flex-1 h-0.5 bg-slate-200 mx-2 -mt-4" />
-              <div className="flex flex-col items-center">
-                <div className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center text-xs font-bold shadow-xs">
-                  2
-                </div>
-                <span className="text-[11px] font-semibold text-slate-900 mt-1.5">Verification</span>
-              </div>
-              <div className="flex-1 h-0.5 bg-slate-200 mx-2 -mt-4" />
-              <div className="flex flex-col items-center">
-                <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-400 border border-slate-200 flex items-center justify-center text-xs font-bold">
-                  3
-                </div>
-                <span className="text-[11px] font-medium text-slate-400 mt-1.5">Go Live</span>
-              </div>
-            </div>
-
-            {/* Rejection / Action Required Notes */}
-            {restaurant.rejection_reason && (
-              <div className="mb-5 p-3 rounded-xl bg-red-50 border border-red-200 text-left text-xs text-red-800">
-                <div className="font-bold text-[11px] text-red-900 mb-0.5">Verification Feedback</div>
-                <div>{restaurant.rejection_reason}</div>
-              </div>
-            )}
-
-            {/* Action Button */}
-            <button
-              onClick={fetchPortalData}
-              disabled={isRefreshing}
-              className="w-full py-2.5 px-4 rounded-xl border border-slate-300 text-slate-800 text-xs font-semibold hover:bg-slate-50 flex items-center justify-center gap-2 cursor-pointer transition-colors disabled:opacity-60"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-              <span>Check Status</span>
-            </button>
-
-            {/* Support Note */}
-            <p className="text-[11px] text-slate-400 mt-5">
-              Need assistance? Contact Partner Support
-            </p>
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* MAIN CONTAINER */}
-          <div className="flex-1 flex overflow-hidden">
+      {/* MAIN CONTAINER */}
+      <div className="flex-1 flex overflow-hidden">
         {/* DESKTOP SIDEBAR */}
         <aside
           className={`w-60 bg-white border-r border-slate-200 flex flex-col shrink-0 sm:flex ${
@@ -1468,8 +1391,8 @@ export default function RestaurantPartnerPortal({
               }`}
             >
               <div className="flex items-center gap-2.5">
-                <Sliders className="w-4 h-4" />
-                <span>Kitchen Settings</span>
+                <User className="w-4 h-4" />
+                <span>Profile & Settings</span>
               </div>
             </button>
           </nav>
@@ -1537,6 +1460,70 @@ export default function RestaurantPartnerPortal({
                   </button>
                 </div>
               </div>
+
+              {/* Account Pending Status Card */}
+              {isPendingVerification && (
+                <div className="bg-gradient-to-br from-amber-50 via-orange-50/50 to-amber-50 border border-amber-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5">
+                  <div className="flex items-start gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-300 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                      <Clock className="w-5 h-5 stroke-[2.5]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <h2 className="font-extrabold text-sm sm:text-base text-amber-950 tracking-tight">
+                          Dashboard Status: Pending Admin Approval & Verification
+                        </h2>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-amber-200 text-amber-900 border border-amber-300">
+                          {restaurant.onboarding_status || "Pending"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-amber-800 leading-relaxed">
+                        Your restaurant registration has been submitted. While our verification team reviews your application and onboarding fee, you have full access to configure your kitchen!
+                      </p>
+
+                      <div className="mt-2.5 p-2.5 bg-amber-100/70 rounded-xl border border-amber-200 flex items-start gap-2 text-[11px] text-amber-900 font-medium">
+                        <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="font-bold text-amber-950">Customer Visibility Locked: </strong>
+                          You can create categories and add dishes now, but your restaurant and menu will remain hidden from customer apps until onboarding fee is verified and your account is approved by admin.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {restaurant.rejection_reason && (
+                    <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-left text-xs text-red-800">
+                      <div className="font-bold text-[11px] text-red-900 mb-0.5">Verification Feedback from Admin</div>
+                      <div>{restaurant.rejection_reason}</div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                    <button
+                      onClick={() => setActiveTab("menu")}
+                      className="px-3.5 py-2 bg-[#FF5200] hover:bg-[#e04800] text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <Utensils className="w-3.5 h-3.5" />
+                      <span>Create Categories & Menu</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("profile")}
+                      className="px-3.5 py-2 bg-white border border-amber-200 text-slate-700 hover:bg-amber-50/50 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <User className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Edit Kitchen Profile</span>
+                    </button>
+                    <button
+                      onClick={fetchPortalData}
+                      disabled={isRefreshing}
+                      className="px-3.5 py-2 bg-white border border-amber-200 text-amber-900 hover:bg-amber-100/50 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-60 ml-auto"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+                      <span>Check Status</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Company Due Alert if any */}
               {stats.pending_due > 0 && (
@@ -3145,15 +3132,15 @@ export default function RestaurantPartnerPortal({
         </button>
 
         <button
-          onClick={() => setIsMobileMenuOpen(true)}
-          className="flex flex-col items-center gap-0.5 p-1 text-slate-400 cursor-pointer"
+          onClick={() => setActiveTab("profile")}
+          className={`flex flex-col items-center gap-0.5 p-1 cursor-pointer ${
+            activeTab === "profile" ? "text-[#FF5200]" : "text-slate-400"
+          }`}
         >
-          <MenuIcon className="w-4 h-4" />
-          <span className="text-[10px] font-bold">More</span>
+          <User className="w-4 h-4" />
+          <span className="text-[10px] font-bold">Profile</span>
         </button>
       </div>
-      </>
-      )}
 
       {/* MODAL: ADD / EDIT DISH WITH UNBLOCKABLE NATIVE CAMERA & GALLERY */}
       {isProductModalOpen && (
