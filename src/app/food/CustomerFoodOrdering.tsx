@@ -638,11 +638,7 @@ export default function CustomerFoodOrdering({
           };
         });
         setProducts(normalized);
-        if (json.data.categories && json.data.categories.length > 0) {
-          setSelectedCategory(json.data.categories[0].id);
-        } else {
-          setSelectedCategory(null);
-        }
+        setSelectedCategory(null);
       }
     } catch (err) {
       console.error('Menu load error:', err);
