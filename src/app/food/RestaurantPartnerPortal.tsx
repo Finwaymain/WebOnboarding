@@ -470,6 +470,9 @@ export default function RestaurantPartnerPortal({
   }, [resolveToken]);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      (window as any).fetchPortalData = fetchPortalData;
+    }
     fetchPortalData();
     const interval = setInterval(fetchPortalData, 8000);
     return () => clearInterval(interval);
@@ -1089,6 +1092,153 @@ export default function RestaurantPartnerPortal({
     !["active", "approved", "verified"].includes(String(restaurant.onboarding_status).toLowerCase().trim())
   );
 
+  const feePaid = Number(restaurant?.onboarding_fee_paid ?? 0);
+  const isPaymentPending = Boolean(
+    isPendingVerification &&
+    (feePaid <= 0 || String(restaurant?.onboarding_status).toLowerCase().trim() === "payment_pending")
+  );
+
+  const [isPayingOnboardingFee, setIsPayingOnboardingFee] = useState<boolean>(false);
+
+  const loadRazorpayScript = () => {
+    return new Promise<boolean>((resolve) => {
+      if (typeof window === "undefined") {
+        resolve(false);
+        return;
+      }
+      if ((window as any).Razorpay) {
+        resolve(true);
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  const handlePayOnboardingFee = async () => {
+    setIsPayingOnboardingFee(true);
+    try {
+      const effectiveToken = resolveToken();
+      const headers = getApiHeaders(effectiveToken);
+
+      // 1. Check if running inside Flutter app with FiinwayBridge
+      if (typeof window !== "undefined" && (window as any).FiinwayBridge) {
+        try {
+          (window as any).FiinwayBridge.postMessage(JSON.stringify({
+            type: "start_onboarding_payment",
+            restaurant_id: restaurant.id
+          }));
+          setIsPayingOnboardingFee(false);
+          return;
+        } catch (_) {}
+      }
+
+      // 2. Initiate payment order with backend
+      const initRes = await fetch("https://api.fiinway.com/api/v1/food/restaurant/onboarding/payment/init", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({})
+      });
+      const initData = await initRes.json();
+      if (!initData.success || !initData.data) {
+        alert(initData.error || "Unable to initiate payment with Razorpay.");
+        setIsPayingOnboardingFee(false);
+        return;
+      }
+
+      const {
+        razorpay_key,
+        gateway_order_id,
+        amount,
+        amount_paise,
+        payment_id,
+        owner_name,
+        owner_phone,
+        owner_email
+      } = initData.data;
+
+      // 3. Load Razorpay Web Checkout JS
+      const loaded = await loadRazorpayScript();
+      if (!loaded || !(window as any).Razorpay) {
+        // Fallback: Direct UPI link
+        const fallbackUpi = `upi://pay?pa=fiinway@icici&pn=Fiinway%20Technologies&am=${amount || 499}&cu=INR&tn=Onboarding%20Fee%20Restaurant%20${restaurant.id}`;
+        window.location.href = fallbackUpi;
+        setIsPayingOnboardingFee(false);
+        return;
+      }
+
+      const options: any = {
+        key: razorpay_key,
+        amount: amount_paise || ((amount || 499) * 100),
+        currency: "INR",
+        name: "Fiinway Food Partner",
+        description: "Restaurant Onboarding Fee",
+        order_id: gateway_order_id,
+        prefill: {
+          name: owner_name || restaurant.name || "Partner",
+          contact: owner_phone || phone || "",
+          email: owner_email || "partner@fiinway.com"
+        },
+        theme: {
+          color: "#FF5200"
+        },
+        method: {
+          netbanking: false,
+          card: false,
+          wallet: false,
+          emi: false,
+          paylater: false,
+          upi: true
+        },
+        modal: {
+          ondismiss: () => {
+            setIsPayingOnboardingFee(false);
+          }
+        },
+        handler: async function(response: any) {
+          try {
+            const confirmRes = await fetch("https://api.fiinway.com/api/v1/food/restaurant/onboarding/payment/confirm", {
+              method: "POST",
+              headers,
+              body: JSON.stringify({
+                payment_id,
+                gateway_order_id: response.razorpay_order_id || gateway_order_id,
+                gateway_payment_id: response.razorpay_payment_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature
+              })
+            });
+            const confirmData = await confirmRes.json();
+            if (confirmData.success) {
+              setToastMessage("Payment received successfully! Documents under review.");
+              fetchPortalData();
+            } else {
+              alert(confirmData.error || "Payment confirmation failed.");
+            }
+          } catch (e: any) {
+            alert("Error confirming payment: " + e.message);
+          } finally {
+            setIsPayingOnboardingFee(false);
+          }
+        }
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.on("payment.failed", function(response: any) {
+        setIsPayingOnboardingFee(false);
+        alert("Payment cancelled or failed: " + (response.error?.description || ""));
+      });
+      rzp.open();
+    } catch (err: any) {
+      setIsPayingOnboardingFee(false);
+      alert("Payment error: " + err.message);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-sans selection:bg-[#FF5200] selection:text-white">
       {/* Toast Alert */}
@@ -1461,36 +1611,90 @@ export default function RestaurantPartnerPortal({
                 </div>
               </div>
 
-              {/* Account Pending Status Card */}
+              {/* Account Onboarding & Verification Flow Box */}
               {isPendingVerification && (
-                <div className="bg-gradient-to-br from-amber-50 via-orange-50/50 to-amber-50 border border-amber-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5">
-                  <div className="flex items-start gap-3.5">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-300 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
-                      <Clock className="w-5 h-5 stroke-[2.5]" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <h2 className="font-extrabold text-sm sm:text-base text-amber-950 tracking-tight">
-                          Dashboard Status: Pending Admin Approval & Verification
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
+                  {/* Header Row */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center shrink-0">
+                        <Clock className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h2 className="font-extrabold text-sm text-slate-900 tracking-tight">
+                          {isPaymentPending ? "Registration Submitted" : "Verification in Progress"}
                         </h2>
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-amber-200 text-amber-900 border border-amber-300">
-                          {restaurant.onboarding_status || "Pending"}
-                        </span>
+                        <p className="text-[11px] text-slate-500">
+                          {isPaymentPending ? "Step 2: Onboarding Fee Pending" : "Step 3: Document Review under Admin"}
+                        </p>
                       </div>
-                      <p className="text-xs text-amber-800 leading-relaxed">
-                        Your restaurant registration has been submitted. While our verification team reviews your application and onboarding fee, you have full access to configure your kitchen!
-                      </p>
+                    </div>
 
-                      <div className="mt-2.5 p-2.5 bg-amber-100/70 rounded-xl border border-amber-200 flex items-start gap-2 text-[11px] text-amber-900 font-medium">
-                        <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                        <div>
-                          <strong className="font-bold text-amber-950">Customer Visibility Locked: </strong>
-                          You can create categories and add dishes now, but your restaurant and menu will remain hidden from customer apps until onboarding fee is verified and your account is approved by admin.
-                        </div>
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide border shrink-0 ${
+                      isPaymentPending
+                        ? "bg-amber-50 text-amber-800 border-amber-200"
+                        : "bg-blue-50 text-blue-800 border-blue-200"
+                    }`}>
+                      {isPaymentPending ? "Payment Pending" : "In Review"}
+                    </span>
+                  </div>
+
+                  {/* Flow Stepper */}
+                  <div className="flex items-center justify-between px-1 py-1">
+                    {/* Step 1: Registered */}
+                    <div className="flex flex-col items-center">
+                      <div className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs shadow-xs">
+                        <Check className="w-4 h-4 stroke-[3]" />
                       </div>
+                      <span className="text-[10px] font-bold text-slate-900 mt-1">Registration</span>
+                      <span className="text-[9px] text-emerald-600 font-semibold">Done ✓</span>
+                    </div>
+
+                    <div className={`flex-1 h-0.5 mx-1.5 -mt-5 ${!isPaymentPending ? "bg-emerald-500" : "bg-amber-300"}`} />
+
+                    {/* Step 2: Payment */}
+                    <div className="flex flex-col items-center">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shadow-xs ${
+                        !isPaymentPending
+                          ? "bg-emerald-500 text-white"
+                          : "bg-amber-500 text-white animate-pulse"
+                      }`}>
+                        {!isPaymentPending ? <Check className="w-4 h-4 stroke-[3]" /> : "₹"}
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-900 mt-1">Onboarding Fee</span>
+                      <span className={`text-[9px] font-semibold ${!isPaymentPending ? "text-emerald-600" : "text-amber-600"}`}>
+                        {!isPaymentPending ? "Paid ✓" : "Pending"}
+                      </span>
+                    </div>
+
+                    <div className={`flex-1 h-0.5 mx-1.5 -mt-5 ${!isPaymentPending ? "bg-amber-300" : "bg-slate-200"}`} />
+
+                    {/* Step 3: Admin Approval */}
+                    <div className="flex flex-col items-center">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                        !isPaymentPending
+                          ? "bg-amber-500 text-white shadow-xs"
+                          : "bg-slate-100 text-slate-400 border border-slate-200"
+                      }`}>
+                        3
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-900 mt-1">Verification</span>
+                      <span className="text-[9px] text-slate-400 font-medium">Admin</span>
+                    </div>
+
+                    <div className="flex-1 h-0.5 bg-slate-200 mx-1.5 -mt-5" />
+
+                    {/* Step 4: Go Live */}
+                    <div className="flex flex-col items-center">
+                      <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 border border-slate-200 flex items-center justify-center text-xs font-bold">
+                        4
+                      </div>
+                      <span className="text-[10px] font-medium text-slate-400 mt-1">Go Live</span>
+                      <span className="text-[9px] text-slate-400 font-medium">Active</span>
                     </div>
                   </div>
 
+                  {/* Rejection / Feedback Note if any */}
                   {restaurant.rejection_reason && (
                     <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-left text-xs text-red-800">
                       <div className="font-bold text-[11px] text-red-900 mb-0.5">Verification Feedback from Admin</div>
@@ -1498,25 +1702,34 @@ export default function RestaurantPartnerPortal({
                     </div>
                   )}
 
-                  <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                  {/* Actions Row */}
+                  <div className="pt-1 flex items-center gap-2 flex-wrap">
+                    {/* Pay Button if payment is pending */}
+                    {isPaymentPending && (
+                      <button
+                        onClick={handlePayOnboardingFee}
+                        disabled={isPayingOnboardingFee}
+                        className="px-4 py-2 bg-gradient-to-r from-[#FF5200] to-[#E04800] hover:from-[#E04800] hover:to-[#C83E00] text-white rounded-xl text-xs font-black shadow-xs hover:shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
+                      >
+                        <CreditCard className="w-4 h-4" />
+                        <span>
+                          {isPayingOnboardingFee ? "Opening Payment..." : `Pay ₹${restaurant.business_type === "actual_restaurant" ? "999" : "499"} with UPI / Razorpay`}
+                        </span>
+                      </button>
+                    )}
+
                     <button
                       onClick={() => setActiveTab("menu")}
-                      className="px-3.5 py-2 bg-[#FF5200] hover:bg-[#e04800] text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      className="px-3 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
                     >
-                      <Utensils className="w-3.5 h-3.5" />
-                      <span>Create Categories & Menu</span>
+                      <Utensils className="w-3.5 h-3.5 text-[#FF5200]" />
+                      <span>Setup Categories & Menu</span>
                     </button>
-                    <button
-                      onClick={() => setActiveTab("profile")}
-                      className="px-3.5 py-2 bg-white border border-amber-200 text-slate-700 hover:bg-amber-50/50 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-                    >
-                      <User className="w-3.5 h-3.5 text-slate-500" />
-                      <span>Edit Kitchen Profile</span>
-                    </button>
+
                     <button
                       onClick={fetchPortalData}
                       disabled={isRefreshing}
-                      className="px-3.5 py-2 bg-white border border-amber-200 text-amber-900 hover:bg-amber-100/50 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-60 ml-auto"
+                      className="px-3 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-60 ml-auto"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
                       <span>Check Status</span>
