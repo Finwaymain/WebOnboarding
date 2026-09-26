@@ -401,11 +401,25 @@ export default function WalletPage() {
       title: title,
       amount: amount,
       name: finalName,
+      phone: finalMobile,
       mobile: finalMobile,
       pocket_number: finalPocket,
     });
 
-    const targetUrl = `/loans/coming-soon?${queryParams.toString()}`;
+    let targetPath = '/finance';
+    if (cardType === 'interest_free' || cardType === 'zero_cibil') {
+      targetPath = '/finance/zero-cibil/intro';
+    } else if (cardType === 'low_cibil' || cardType === 'cash') {
+      targetPath = '/finance/cash-loan/apply';
+    } else if (cardType === 'business') {
+      targetPath = '/finance/business-loan/apply';
+    } else if (cardType === 'virtual') {
+      targetPath = '/finance/virtual-loan/apply';
+    } else if (cardType === 'student') {
+      targetPath = '/finance/student-credit/apply';
+    }
+
+    const targetUrl = `${targetPath}?${queryParams.toString()}`;
     window.location.href = targetUrl;
   };
 
