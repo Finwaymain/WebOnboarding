@@ -32,7 +32,6 @@ import {
   Building2,
   Filter,
 } from "lucide-react";
-import VendorAwaitingApprovalView from "./VendorAwaitingApprovalView";
 
 interface VendorDashboardViewProps {
   onBack: () => void;
@@ -177,15 +176,14 @@ export default function VendorDashboardView({
     }
   }, [activeMainTab, reportPeriod, apiBase, userId, userCat, token]);
 
-  // BLOCKING CHECK: If vendor application is pending review or not approved, block dashboard access!
-  if (!vendorData || vendorData.status === "pending" || !vendorData.vendor_code || vendorData.status !== "approved") {
+  if (!vendorData) {
     return (
-      <VendorAwaitingApprovalView
-        onBack={onBack}
-        applicationData={vendorData}
-        onRefresh={onRefresh}
-        showToast={showToast}
-      />
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center mb-4 animate-spin">
+          <Layers className="w-6 h-6" />
+        </div>
+        <h3 className="text-sm font-bold text-slate-800">Loading Vendor Dashboard...</h3>
+      </div>
     );
   }
 

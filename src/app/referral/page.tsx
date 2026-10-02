@@ -165,7 +165,11 @@ function ReferralDashboardContent() {
             if (vRes.ok) {
               const vJson = await vRes.json();
               if (vJson.success && vJson.data) {
-                setVendorData(vJson.data);
+                setVendorData({
+                  ...vJson.data,
+                  status: vJson.data.status || "approved",
+                  is_approved: true,
+                });
               }
             }
           } else if (role === "team_member") {
@@ -1152,7 +1156,7 @@ function ReferralDashboardContent() {
       {/* ──────────────────────────────────────────────────────────────────────────
           SCREEN 4: VENDOR / TEAM MANAGER DASHBOARD (Approved Vendors Only)
          ────────────────────────────────────────────────────────────────────────── */}
-      {viewMode === "vendor_dashboard" && (vendorRoleStatus === "vendor" || vendorData?.status === "approved" || vendorData?.is_approved) && (
+      {viewMode === "vendor_dashboard" && (vendorRoleStatus === "vendor" || vendorData?.status === "approved" || vendorData?.is_approved || vendorData?.vendor_code) && vendorRoleStatus !== "pending" && vendorData?.status !== "pending" && (
         <VendorDashboardView
           onBack={handleBack}
           vendorData={vendorData}
@@ -1169,7 +1173,7 @@ function ReferralDashboardContent() {
           SCREEN 5: AWAITING APPROVAL / REVIEW STATE (BLOCKED DASHBOARD)
          ────────────────────────────────────────────────────────────────────────── */}
       {(viewMode === "awaiting_approval" || 
-        (viewMode === "vendor_dashboard" && (vendorRoleStatus === "pending" || vendorApplicationData?.status === "pending" || vendorData?.status === "pending" || (vendorData && vendorData?.status !== "approved")))) && (
+        (viewMode === "vendor_dashboard" && (vendorRoleStatus === "pending" || vendorApplicationData?.status === "pending" || vendorData?.status === "pending"))) && (
         <VendorAwaitingApprovalView
           onBack={handleBack}
           applicationData={vendorApplicationData || vendorData}
