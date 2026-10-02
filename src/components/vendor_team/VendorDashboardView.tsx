@@ -55,6 +55,8 @@ export default function VendorDashboardView({
   onRefresh,
 }: VendorDashboardViewProps) {
   const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedSubVendorCode, setCopiedSubVendorCode] = useState(false);
+  const [copiedFreelancerCode, setCopiedFreelancerCode] = useState(false);
   const [copiedFreelancerLink, setCopiedFreelancerLink] = useState(false);
   const [copiedSubVendorLink, setCopiedSubVendorLink] = useState(false);
   const [activeMainTab, setActiveMainTab] = useState<"overview" | "sub_vendors" | "freelancers" | "ledger" | "report">("overview");
@@ -81,14 +83,18 @@ export default function VendorDashboardView({
   const [reportData, setReportData] = useState<any | null>(null);
 
   const vendorCode = vendorData?.vendor_code || "VR------";
+  const numPart = vendorCode.replace(/^[A-Za-z]+/, "");
+  const subVendorCode = vendorData?.sub_vendor_code || (numPart ? `SV${numPart}` : `SV------`);
+  const freelancerCode = vendorData?.freelancer_code || (numPart ? `FR${numPart}` : `FR------`);
+
   const isHeadVendor = vendorData?.is_head_vendor ?? !vendorData?.parent_vendor;
   const isRateVisible = vendorData?.is_rate_visible ?? true;
   const designation = vendorData?.designation || (isHeadVendor ? "Head Vendor" : "Sub-Vendor");
   const parentVendor = vendorData?.parent_vendor;
 
   const baseOrigin = typeof window !== "undefined" ? window.location.origin : "https://api.fiinway.com";
-  const freelancerShareUrl = `${baseOrigin}/onboarding/referral?role=freelancer&code=${vendorCode}`;
-  const subVendorShareUrl = `${baseOrigin}/onboarding/referral?role=sub_vendor&code=${vendorCode}`;
+  const freelancerShareUrl = `${baseOrigin}/onboarding/referral?code=${freelancerCode}`;
+  const subVendorShareUrl = `${baseOrigin}/onboarding/referral?code=${subVendorCode}`;
 
   const rateCustomer = Number(vendorData?.rate_per_customer ?? 0);
   const rateBusiness = Number(vendorData?.rate_per_business ?? 0);
@@ -172,6 +178,26 @@ export default function VendorDashboardView({
     setCopiedCode(true);
     showToast("Vendor code copied to clipboard!");
     setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const handleCopySubVendorCode = () => {
+    if (!subVendorCode) return;
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(subVendorCode);
+    }
+    setCopiedSubVendorCode(true);
+    showToast("Sub-Vendor joining code copied!");
+    setTimeout(() => setCopiedSubVendorCode(false), 2000);
+  };
+
+  const handleCopyFreelancerCode = () => {
+    if (!freelancerCode) return;
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(freelancerCode);
+    }
+    setCopiedFreelancerCode(true);
+    showToast("Freelancer joining code copied!");
+    setTimeout(() => setCopiedFreelancerCode(false), 2000);
   };
 
   const handleCopyFreelancerLink = () => {
@@ -487,49 +513,118 @@ export default function VendorDashboardView({
           </div>
         )}
 
-        {/* Vendor Hero Code Card */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
-          <div className="text-center space-y-1">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-              Your Joining Vendor Code
-            </span>
-            <div className="flex items-center justify-center gap-2.5 pt-1">
-              <span className="text-2xl font-black text-slate-900 tracking-widest font-mono bg-slate-100 border border-slate-200 px-4 py-2 rounded-xl">
-                {vendorCode}
+        {/* Vendor Master & Separate Joining Codes Card */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3.5">
+          {/* Top Vendor Master Identity */}
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Master Vendor Profile
               </span>
-              <button
-                onClick={handleCopyCode}
-                className="px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 hover:bg-slate-200 transition-colors flex items-center gap-1.5 text-xs font-bold shadow-2xs"
-                title="Copy Code"
-              >
-                {copiedCode ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                <span>{copiedCode ? "Copied" : "Copy"}</span>
-              </button>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-sm font-black text-slate-900 font-mono tracking-wide">
+                  {vendorCode}
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                  {designation}
+                </span>
+              </div>
             </div>
-            {parentVendor && (
-              <p className="text-[10.5px] text-slate-500 pt-1 font-medium">
-                Under Parent: <strong className="text-slate-800">{parentVendor.vendor_code}</strong> ({parentVendor.designation})
-              </p>
+            {parentVendor ? (
+              <div className="text-right">
+                <span className="text-[10px] font-medium text-slate-400 block">Parent</span>
+                <span className="text-xs font-bold text-slate-700">{parentVendor.vendor_code}</span>
+              </div>
+            ) : (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                👑 Top Level
+              </span>
             )}
           </div>
 
-          {/* Two Sharing Options */}
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <button
-              onClick={handleCopySubVendorLink}
-              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 font-bold text-xs py-2.5 rounded-xl shadow-2xs flex items-center justify-center gap-1.5 transition-all"
-            >
-              <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-              <span>{copiedSubVendorLink ? "Link Copied" : "Invite Sub-Vendor"}</span>
-            </button>
+          {/* TWO SEPARATE JOINING CODE BOXES */}
+          <div className="space-y-2.5">
+            {/* 1. Sub-Vendor Joining Code Box */}
+            <div className="bg-gradient-to-r from-indigo-50/70 to-blue-50/40 rounded-xl p-3 border border-indigo-100/80 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-md bg-indigo-600 text-white flex items-center justify-center font-bold text-[10px]">
+                    SV
+                  </div>
+                  <span className="text-xs font-bold text-indigo-950">Sub-Vendor Joining Code</span>
+                </div>
+                <span className="text-[9.5px] font-bold text-indigo-700 bg-indigo-100/70 px-1.5 py-0.5 rounded">
+                  Auto-Detects Sub-Vendor
+                </span>
+              </div>
 
-            <button
-              onClick={handleCopyFreelancerLink}
-              className="bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs py-2.5 rounded-xl shadow-2xs flex items-center justify-center gap-1.5 transition-all"
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>{copiedFreelancerLink ? "Link Copied" : "Invite Freelancer"}</span>
-            </button>
+              <div className="flex items-center justify-between gap-2 bg-white rounded-lg p-2 border border-indigo-100">
+                <span className="text-base font-black font-mono tracking-widest text-indigo-900">
+                  {subVendorCode}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={handleCopySubVendorCode}
+                    className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-1 text-[11px] font-bold"
+                    title="Copy Sub-Vendor Code"
+                  >
+                    {copiedSubVendorCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedSubVendorCode ? "Copied" : "Copy"}</span>
+                  </button>
+                  <button
+                    onClick={handleCopySubVendorLink}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-md shadow-2xs flex items-center gap-1 transition-all"
+                  >
+                    <Building2 className="w-3 h-3" />
+                    <span>{copiedSubVendorLink ? "Link Copied" : "Share Invite"}</span>
+                  </button>
+                </div>
+              </div>
+              <p className="text-[10px] text-indigo-700/80 leading-tight">
+                Share this code with partners who want to become Sub-Vendors. Applicants automatically land in your review list.
+              </p>
+            </div>
+
+            {/* 2. Freelancer Joining Code Box */}
+            <div className="bg-gradient-to-r from-emerald-50/70 to-teal-50/40 rounded-xl p-3 border border-emerald-100/80 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-md bg-[#047857] text-white flex items-center justify-center font-bold text-[10px]">
+                    FR
+                  </div>
+                  <span className="text-xs font-bold text-emerald-950">Freelancer Joining Code</span>
+                </div>
+                <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-100/70 px-1.5 py-0.5 rounded">
+                  Auto-Detects Freelancer
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 bg-white rounded-lg p-2 border border-emerald-100">
+                <span className="text-base font-black font-mono tracking-widest text-emerald-950">
+                  {freelancerCode}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={handleCopyFreelancerCode}
+                    className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-1 text-[11px] font-bold"
+                    title="Copy Freelancer Code"
+                  >
+                    {copiedFreelancerCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedFreelancerCode ? "Copied" : "Copy"}</span>
+                  </button>
+                  <button
+                    onClick={handleCopyFreelancerLink}
+                    className="bg-[#047857] hover:bg-[#065f46] text-white text-[11px] font-bold px-2.5 py-1.5 rounded-md shadow-2xs flex items-center gap-1 transition-all"
+                  >
+                    <Users className="w-3 h-3" />
+                    <span>{copiedFreelancerLink ? "Link Copied" : "Share Invite"}</span>
+                  </button>
+                </div>
+              </div>
+              <p className="text-[10px] text-emerald-800/80 leading-tight">
+                Share this code with field agents/freelancers. They will be registered directly under your team.
+              </p>
+            </div>
           </div>
         </div>
 

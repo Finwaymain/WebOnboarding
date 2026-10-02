@@ -51,6 +51,7 @@ function readUrlParams() {
   
   const token = params.get("accesstoken") || params.get("token") || params.get("access_token");
   const phone = params.get("phone") || params.get("mobile");
+  const code = params.get("code") || params.get("vendor_code") || params.get("referral_code");
   const viewParam = params.get("view");
   let view: "home" | "dashboard" | "vendor_dashboard" | "member_dashboard" = "home";
   if (viewParam === "dashboard") view = "dashboard";
@@ -72,7 +73,7 @@ function readUrlParams() {
     userCat = "driver";
   }
 
-  return { token, userId, driverId, userCat, phone, view };
+  return { token, userId, driverId, userCat, phone, view, code };
 }
 
 
@@ -100,6 +101,7 @@ function ReferralDashboardContent() {
   const [memberData, setMemberData] = useState<any>(null);
   const [vendorApplicationData, setVendorApplicationData] = useState<any>(null);
   const [showApplyModal, setShowApplyModal] = useState<boolean>(false);
+  const [initialVendorCode, setInitialVendorCode] = useState<string>("");
 
   useEffect(() => {
     const parsed = readUrlParams();
@@ -108,6 +110,12 @@ function ReferralDashboardContent() {
     setDriverId(parsed.driverId);
     setUserCat(parsed.userCat);
     setPhone(parsed.phone);
+    if (parsed.code) {
+      setInitialVendorCode(parsed.code);
+      if (parsed.code.toUpperCase().startsWith("SV") || parsed.code.toUpperCase().startsWith("VR")) {
+        setShowApplyModal(true);
+      }
+    }
     if (parsed.view) {
       setViewMode(parsed.view);
     }
@@ -1133,6 +1141,7 @@ function ReferralDashboardContent() {
       <VendorApplicationModal
         isOpen={showApplyModal}
         onClose={() => setShowApplyModal(false)}
+        initialCode={initialVendorCode}
         onSuccess={(data) => {
           setVendorRoleStatus("pending");
           setVendorApplicationData(data);

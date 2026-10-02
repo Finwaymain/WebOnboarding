@@ -12,6 +12,7 @@ interface VendorApplicationModalProps {
   userCat: string;
   token: string;
   apiKey: string;
+  initialCode?: string;
 }
 
 export default function VendorApplicationModal({
@@ -23,14 +24,21 @@ export default function VendorApplicationModal({
   userCat,
   token,
   apiKey,
+  initialCode = "",
 }: VendorApplicationModalProps) {
-  const [parentCode, setParentCode] = useState("");
+  const [parentCode, setParentCode] = useState(initialCode);
   const [designation, setDesignation] = useState("Marketing Head");
   const [teamLocation, setTeamLocation] = useState("");
   const [teamType, setTeamType] = useState("Field Marketing Team");
   const [remarks, setRemarks] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (initialCode) {
+      setParentCode(initialCode.toUpperCase());
+    }
+  }, [initialCode]);
 
   if (!isOpen) return null;
 
@@ -57,7 +65,15 @@ export default function VendorApplicationModal({
         "user_cat": userCat,
       };
 
-      const hasParent = Boolean(parentCode.trim());
+      const codeUpper = parentCode.trim().toUpperCase();
+      let roleType = "sub_vendor";
+      if (codeUpper.startsWith("FR")) {
+        roleType = "freelancer";
+      } else if (codeUpper.startsWith("SV")) {
+        roleType = "sub_vendor";
+      }
+
+      const hasParent = Boolean(codeUpper);
 
       const url = hasParent
         ? `${apiBase}/vendor-team/join`
@@ -67,8 +83,8 @@ export default function VendorApplicationModal({
         ? {
             id_user: userId,
             user_cat: userCat,
-            vendor_code: parentCode.trim().toUpperCase(),
-            role_type: "sub_vendor",
+            vendor_code: codeUpper,
+            role_type: roleType,
             designation: designation.trim(),
             team_location: teamLocation.trim(),
             team_type: teamType.trim(),
@@ -153,16 +169,33 @@ export default function VendorApplicationModal({
           {/* Parent Vendor Code (Optional) */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-              <span>Parent Vendor Code (Optional)</span>
+              <span>Joining Code (Optional)</span>
               <span className="text-[10px] text-slate-400 font-normal">Leave blank if Top-Level Vendor</span>
             </label>
             <input
               type="text"
-              placeholder="e.g. VR10001 (if joining under a parent vendor)"
+              placeholder="e.g. SV10001 (Sub-Vendor) or FR10001 (Freelancer) or VR10001"
               value={parentCode}
               onChange={(e) => setParentCode(e.target.value.toUpperCase())}
               className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono focus:outline-hidden focus:border-indigo-600 bg-slate-50/50"
             />
+            {parentCode.startsWith("SV") && (
+              <div className="mt-1.5 p-2 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-800 text-[11px] font-bold flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span>Auto-detected: <strong>Sub-Vendor Joining Code</strong>. You will be mapped under this Parent Vendor for approval.</span>
+              </div>
+            )}
+            {parentCode.startsWith("FR") && (
+              <div className="mt-1.5 p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Auto-detected: <strong>Freelancer Joining Code</strong>. You will directly join this Vendor's field team.</span>
+              </div>
+            )}
+            {parentCode.startsWith("VR") && (
+              <div className="mt-1.5 p-2 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-medium flex items-center gap-1.5">
+                <span>Vendor Master Code: Linked to parent vendor.</span>
+              </div>
+            )}
           </div>
 
           {/* Designation */}
