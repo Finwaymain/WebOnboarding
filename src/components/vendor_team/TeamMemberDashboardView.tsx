@@ -29,11 +29,14 @@ export default function TeamMemberDashboardView({
   showToast,
 }: TeamMemberDashboardViewProps) {
   const [copiedCode, setCopiedCode] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedCustLink, setCopiedCustLink] = useState(false);
+  const [copiedBizLink, setCopiedBizLink] = useState(false);
   const [filterType, setFilterType] = useState<"all" | "customer" | "business">("all");
 
   const memberCode = memberData?.member_code || "FR------";
-  const shareUrl = memberData?.share_url || `https://api.fiinway.com/ref/${memberCode}`;
+  const baseOrigin = typeof window !== "undefined" ? window.location.origin : "https://api.fiinway.com";
+  const customerShareUrl = `${baseOrigin}/onboarding/referral?role=customer&code=${memberCode}`;
+  const businessShareUrl = `${baseOrigin}/onboarding/referral?role=driver&code=${memberCode}`;
 
   const handleCopyCode = () => {
     if (!memberCode) return;
@@ -45,28 +48,31 @@ export default function TeamMemberDashboardView({
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
-  const handleCopyLink = () => {
-    if (!shareUrl) return;
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(shareUrl);
-    }
-    setCopiedLink(true);
-    showToast("Shareable link copied to clipboard!");
-    setTimeout(() => setCopiedLink(false), 2000);
-  };
-
-  const handleNativeShare = async () => {
-    const text = `Join Fiinway using my Freelancer Code: ${memberCode}\nDownload & Register here: ${shareUrl}`;
+  const handleShareCustomer = async () => {
+    const text = `Join Fiinway App as a Customer using my Freelance Code: ${memberCode}\nRegister here: ${customerShareUrl}`;
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
-        await navigator.share({
-          title: "Join Fiinway with Freelancer Code",
-          text,
-          url: shareUrl,
-        });
+        await navigator.share({ title: "Join Fiinway as Customer", text, url: customerShareUrl });
       } catch (_) {}
-    } else {
-      handleCopyLink();
+    } else if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(customerShareUrl);
+      setCopiedCustLink(true);
+      showToast("Customer invite link copied!");
+      setTimeout(() => setCopiedCustLink(false), 2000);
+    }
+  };
+
+  const handleShareBusiness = async () => {
+    const text = `Join Fiinway as a Driver / Business Partner using my Freelance Code: ${memberCode}\nRegister here: ${businessShareUrl}`;
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({ title: "Join Fiinway as Driver / Business", text, url: businessShareUrl });
+      } catch (_) {}
+    } else if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(businessShareUrl);
+      setCopiedBizLink(true);
+      showToast("Business invite link copied!");
+      setTimeout(() => setCopiedBizLink(false), 2000);
     }
   };
 
@@ -127,10 +133,10 @@ export default function TeamMemberDashboardView({
       <div className="max-w-md mx-auto px-4 pt-4 space-y-4">
         
         {/* Freelancer Code Card */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs space-y-4">
+        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3.5">
           <div className="text-center space-y-1">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-              Your  Code
+              Your Freelance Referral Code
             </span>
             <div className="flex items-center justify-center gap-2.5 pt-1">
               <span className="text-2xl font-black text-slate-900 tracking-widest font-mono bg-slate-100 border border-slate-200 px-4 py-2 rounded-xl">
@@ -138,35 +144,36 @@ export default function TeamMemberDashboardView({
               </span>
               <button
                 onClick={handleCopyCode}
-                className="px-3.5 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 hover:bg-slate-200 transition-colors flex items-center gap-1.5 text-xs font-extrabold shadow-2xs active:scale-95"
+                className="px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 hover:bg-slate-200 transition-colors flex items-center gap-1.5 text-xs font-extrabold shadow-2xs active:scale-95"
                 title="Copy Code"
               >
                 {copiedCode ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
                 <span>{copiedCode ? "Copied" : "Copy"}</span>
               </button>
             </div>
+            <p className="text-[10.5px] text-slate-500 pt-1 font-medium">
+              Share this code with Customers and Drivers/Businesses to earn commission.
+            </p>
           </div>
 
-         
-
-          <div className="grid grid-cols-2 gap-2">
+          {/* Two Dedicated Sharing Buttons */}
+          <div className="grid grid-cols-2 gap-2 pt-1">
             <button
-              onClick={handleCopyLink}
-              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs py-3 rounded-xl shadow-2xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
+              onClick={handleShareCustomer}
+              className="bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 font-bold text-xs py-2.5 rounded-xl shadow-2xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
             >
-              {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copiedLink ? "Link Copied" : "Copy Link"}</span>
+              <Users className="w-3.5 h-3.5 text-emerald-700" />
+              <span>{copiedCustLink ? "Link Copied" : "Invite Customer"}</span>
             </button>
 
             <button
-              onClick={handleNativeShare}
-              className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs py-3 rounded-xl shadow-2xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
+              onClick={handleShareBusiness}
+              className="bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 font-bold text-xs py-2.5 rounded-xl shadow-2xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
             >
-              <Share2 className="w-3.5 h-3.5" />
-              <span>Share Code</span>
+              <Briefcase className="w-3.5 h-3.5 text-blue-700" />
+              <span>{copiedBizLink ? "Link Copied" : "Invite Business"}</span>
             </button>
           </div>
-
         </div>
 
         {/* Performance Counters */}
