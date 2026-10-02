@@ -539,11 +539,9 @@ export default function VendorDashboardView({
                 Master Vendor Profile
               </span>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-sm font-black text-slate-900 font-mono tracking-wide">
-                  {vendorCode}
-                </span>
+               
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                  {designation}
+                  {designation}e
                 </span>
               </div>
             </div>
@@ -645,24 +643,18 @@ export default function VendorDashboardView({
           </div>
         </div>
 
-        {/* Assigned Payout Rates Card */}
-        <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-sm space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              {isHeadVendor ? "Admin Master Commission Rates" : "Your Assigned Rates"}
-            </span>
-            <span className="text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-md">
-              {isHeadVendor ? "Master Tier" : isRateVisible ? "Applicable" : "Protected"}
-            </span>
-          </div>
-
-          {!isHeadVendor && !isRateVisible ? (
-            <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-3 text-center space-y-1">
-              <EyeOff className="w-4 h-4 text-slate-400 mx-auto" />
-              <p className="text-xs font-bold text-slate-300">Rate Hidden by Parent Vendor</p>
-              <p className="text-[10px] text-slate-400">Your earnings will be credited automatically upon verification.</p>
+        {/* Assigned Payout Rates Card (Only shown if Head Vendor or if rates are NOT hidden by parent) */}
+        {(isHeadVendor || isRateVisible) && (
+          <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-sm space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                {isHeadVendor ? "Admin Master Commission Rates" : "Your Assigned Rates"}
+              </span>
+              <span className="text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-md">
+                {isHeadVendor ? "Master Tier" : "Applicable"}
+              </span>
             </div>
-          ) : (
+
             <div className="grid grid-cols-2 gap-3 pt-1">
               <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-3">
                 <span className="text-[10.5px] font-medium text-slate-400 block">Per Verified Customer</span>
@@ -677,8 +669,8 @@ export default function VendorDashboardView({
                 </span>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Multi-Tab Navigation Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
@@ -861,7 +853,7 @@ export default function VendorDashboardView({
                       <div>
                         <div className="flex items-center gap-1.5">
                           <h4 className="text-xs font-bold text-slate-900">{sv.name}</h4>
-                          <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          <span className="text-[6px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
                             {sv.designation}
                           </span>
                         </div>
@@ -873,7 +865,7 @@ export default function VendorDashboardView({
                       {/* Rate Visibility Toggle */}
                       <button
                         onClick={() => handleToggleRateVisibility(sv.id, sv.is_rate_visible)}
-                        className={`text-[10px] font-bold px-2 py-1 rounded-lg border flex items-center gap-1 transition-colors ${
+                        className={`text-[6px] font-bold px-2 py-1 rounded-lg border flex items-center gap-1 transition-colors ${
                           sv.is_rate_visible
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
                             : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200"
