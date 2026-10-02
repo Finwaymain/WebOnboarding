@@ -342,9 +342,11 @@ export default function VendorDashboardView({
                 <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
               </button>
               <div>
-                <h2 className="text-sm font-bold text-slate-900 leading-tight">Freelancer Details</h2>
+                <h2 className="text-sm font-bold text-slate-900 leading-tight">
+                  {selectedMember.designation ? `${selectedMember.designation} Details` : "Freelancer Details"}
+                </h2>
                 <p className="text-[11px] text-slate-500 font-medium">
-                  {selectedMember.name} &bull; {selectedMember.member_code}
+                  {selectedMember.name} &bull; {selectedMember.member_code || selectedMember.vendor_code}
                 </p>
               </div>
             </div>
@@ -848,12 +850,23 @@ export default function VendorDashboardView({
                 </div>
               ) : (
                 directSubVendors.map((sv: any, idx: number) => (
-                  <div key={idx} className="p-3.5 space-y-2 hover:bg-slate-50/80 transition-all">
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      setSelectedMember({
+                        ...sv,
+                        member_code: sv.vendor_code,
+                      });
+                      setSubTab("all");
+                      setSearchQuery("");
+                    }}
+                    className="p-3.5 space-y-2 hover:bg-slate-50/80 cursor-pointer transition-all active:scale-[0.99]"
+                  >
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="flex items-center gap-1.5">
                           <h4 className="text-xs font-bold text-slate-900">{sv.name}</h4>
-                          <span className="text-[6px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
                             {sv.designation}
                           </span>
                         </div>
@@ -862,19 +875,29 @@ export default function VendorDashboardView({
                         </p>
                       </div>
 
-                      {/* Rate Visibility Toggle */}
-                      <button
-                        onClick={() => handleToggleRateVisibility(sv.id, sv.is_rate_visible)}
-                        className={`text-[6px] font-bold px-2 py-1 rounded-lg border flex items-center gap-1 transition-colors ${
-                          sv.is_rate_visible
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                            : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200"
-                        }`}
-                        title="Toggle whether Sub-Vendor can see their assigned rate"
-                      >
-                        {sv.is_rate_visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                        <span>Rate: {sv.is_rate_visible ? "ON" : "OFF"}</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {/* Rate Visibility Toggle */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleRateVisibility(sv.id, sv.is_rate_visible);
+                          }}
+                          className={`text-[9.5px] font-bold px-2 py-1 rounded-lg border flex items-center gap-1 transition-colors ${
+                            sv.is_rate_visible
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                              : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200"
+                          }`}
+                          title="Toggle whether Sub-Vendor can see their assigned rate"
+                        >
+                          {sv.is_rate_visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                          <span>Rate: {sv.is_rate_visible ? "ON" : "OFF"}</span>
+                        </button>
+
+                        <div className="flex items-center gap-0.5 text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">
+                          <span>View</span>
+                          <ChevronRight className="w-3 h-3 stroke-[2.5]" />
+                        </div>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-4 items-center bg-slate-50 border border-slate-100 rounded-xl px-2 py-1.5 text-center text-xs">
@@ -892,7 +915,7 @@ export default function VendorDashboardView({
                       </div>
                       <div className="border-l border-slate-200 pl-1">
                         <span className="text-[9px] text-emerald-700 font-bold block">Acquired</span>
-                        <span className="text-[11px] font-black text-emerald-700">{sv.acquisitions_count}</span>
+                        <span className="text-[11px] font-black text-emerald-700">{sv.acquisitions_count ?? sv.total_users ?? 0}</span>
                       </div>
                     </div>
                   </div>
