@@ -29,6 +29,7 @@ import AadhaarRegistrationModal from "../../components/AadhaarRegistrationModal"
 import VendorApplicationModal from "../../components/vendor_team/VendorApplicationModal";
 import TeamMemberDashboardView from "../../components/vendor_team/TeamMemberDashboardView";
 import VendorDashboardView from "../../components/vendor_team/VendorDashboardView";
+import VendorAwaitingApprovalView from "../../components/vendor_team/VendorAwaitingApprovalView";
 
 const API_KEY = "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=";
 const getApiBase = () => (typeof window !== "undefined" ? `${window.location.origin}/api/v1` : "https://api.fiinway.com/api/v1");
@@ -41,7 +42,7 @@ function readUrlParams() {
       driverId: null,
       userCat: null,
       phone: null,
-      view: "home" as "home" | "dashboard" | "vendor_dashboard" | "member_dashboard",
+      view: "home" as "home" | "dashboard" | "vendor_dashboard" | "member_dashboard" | "awaiting_approval",
     };
   }
   const params = new URLSearchParams(window.location.search);
@@ -53,10 +54,11 @@ function readUrlParams() {
   const phone = params.get("phone") || params.get("mobile");
   const code = params.get("code") || params.get("vendor_code") || params.get("referral_code");
   const viewParam = params.get("view");
-  let view: "home" | "dashboard" | "vendor_dashboard" | "member_dashboard" = "home";
+  let view: "home" | "dashboard" | "vendor_dashboard" | "member_dashboard" | "awaiting_approval" = "home";
   if (viewParam === "dashboard") view = "dashboard";
   else if (viewParam === "vendor_dashboard" || viewParam === "vendor") view = "vendor_dashboard";
   else if (viewParam === "member_dashboard" || viewParam === "team_member" || viewParam === "member") view = "member_dashboard";
+  else if (viewParam === "awaiting" || viewParam === "pending" || viewParam === "awaiting_approval") view = "awaiting_approval";
 
   let driverId: string | null = null;
   let userId: string | null = null;
@@ -86,7 +88,7 @@ function ReferralDashboardContent() {
   const [phone, setPhone] = useState<string | null>(null);
 
   // Navigation mode: "home" (Main Partner & Earn Screen) or "dashboard" (2-tab Partner Dashboard)
-  const [viewMode, setViewMode] = useState<"home" | "dashboard" | "vendor_dashboard" | "member_dashboard">("home");
+  const [viewMode, setViewMode] = useState<"home" | "dashboard" | "vendor_dashboard" | "member_dashboard" | "awaiting_approval">("home");
   const [activeTab, setActiveTab] = useState<"consumer" | "business">("consumer");
   const [loading, setLoading] = useState<boolean>(true);
   const [stats, setStats] = useState<any>(null);
@@ -148,9 +150,15 @@ function ReferralDashboardContent() {
         const json = await res.json();
         if (json.success && json.data) {
           const role = json.data.role || "none";
-          const appStat = json.data.application_status || "none";
+          const status = json.data.status || "none";
+          const appStat = json.data.application_status || status;
 
-          if (role === "vendor") {
+          if (status === "pending" || appStat === "pending" || role === "pending") {
+            setVendorRoleStatus("pending");
+            const appData = json.data.application_data || json.data;
+            setVendorApplicationData(appData);
+            setVendorData(appData);
+          } else if (role === "vendor" && (status === "approved" || json.data.is_approved)) {
             setVendorRoleStatus("vendor");
             const vRes = await fetch(`${apiBase}/vendor-team/vendor-dashboard?${queryStr}`, { headers });
             if (vRes.ok) {
@@ -168,9 +176,6 @@ function ReferralDashboardContent() {
                 setMemberData(mJson.data);
               }
             }
-          } else if (appStat === "pending") {
-            setVendorRoleStatus("pending");
-            setVendorApplicationData(json.data.application_data);
           } else {
             setVendorRoleStatus("none");
           }
@@ -335,7 +340,7 @@ function ReferralDashboardContent() {
   };
 
   const handleBack = () => {
-    if (viewMode === "dashboard" || viewMode === "vendor_dashboard" || viewMode === "member_dashboard") {
+    if (viewMode === "dashboard" || viewMode === "vendor_dashboard" || viewMode === "member_dashboard" || viewMode === "awaiting_approval") {
       setViewMode("home");
     } else {
       if (typeof window !== "undefined" && (window as any).AppBridge) {
@@ -609,19 +614,27 @@ function ReferralDashboardContent() {
 
             {/* Case C: Pending Vendor Application */}
             {vendorRoleStatus === "pending" && (
-              <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 shadow-2xs space-y-2.5">
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50/40 border border-amber-300/80 rounded-2xl p-4 shadow-2xs space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-amber-700 shrink-0" />
-                    <h4 className="text-xs font-bold text-amber-950">Vendor Application Under Review</h4>
+                    <h4 className="text-xs font-bold text-amber-950">Sub-Vendor Application Awaiting Review</h4>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">
-                    In Review
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 border border-amber-300">
+                    Awaiting Rates
                   </span>
                 </div>
                 <p className="text-[11px] text-amber-800 leading-relaxed">
-                  Your application for territory <strong>{vendorApplicationData?.team_location}</strong> ({vendorApplicationData?.team_type}) is under review by admin. Payout rates are being configured.
+                  Your application for territory <strong>{vendorApplicationData?.team_location || "Territory"}</strong> is currently under review by your parent vendor. Payout rates and joining codes are locked until approval.
                 </p>
+                <button
+                  onClick={() => setViewMode("awaiting_approval")}
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-2.5 rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.99]"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>View Review Status</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
               </div>
             )}
 
@@ -1115,9 +1128,9 @@ function ReferralDashboardContent() {
       )}
 
       {/* ──────────────────────────────────────────────────────────────────────────
-          SCREEN 4: VENDOR / TEAM MANAGER DASHBOARD
+          SCREEN 4: VENDOR / TEAM MANAGER DASHBOARD (Approved Vendors Only)
          ────────────────────────────────────────────────────────────────────────── */}
-      {viewMode === "vendor_dashboard" && (
+      {viewMode === "vendor_dashboard" && vendorRoleStatus === "vendor" && vendorData?.status === "approved" && (
         <VendorDashboardView
           onBack={handleBack}
           vendorData={vendorData}
@@ -1127,6 +1140,18 @@ function ReferralDashboardContent() {
           userCat={userCat || (driverId ? "driver" : "customer")}
           token={token}
           onRefresh={fetchVendorTeamData}
+        />
+      )}
+
+      {/* ──────────────────────────────────────────────────────────────────────────
+          SCREEN 5: AWAITING APPROVAL / REVIEW STATE (BLOCKED DASHBOARD)
+         ────────────────────────────────────────────────────────────────────────── */}
+      {(viewMode === "awaiting_approval" || (viewMode === "vendor_dashboard" && (vendorRoleStatus === "pending" || !vendorData || vendorData?.status === "pending"))) && (
+        <VendorAwaitingApprovalView
+          onBack={handleBack}
+          applicationData={vendorApplicationData || vendorData}
+          onRefresh={fetchVendorTeamData}
+          showToast={showToast}
         />
       )}
 
