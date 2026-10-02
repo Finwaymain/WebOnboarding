@@ -30,6 +30,7 @@ import VendorApplicationModal from "../../components/vendor_team/VendorApplicati
 import TeamMemberDashboardView from "../../components/vendor_team/TeamMemberDashboardView";
 import VendorDashboardView from "../../components/vendor_team/VendorDashboardView";
 import VendorAwaitingApprovalView from "../../components/vendor_team/VendorAwaitingApprovalView";
+import { OnboardingErrorBoundary } from "../../components/OnboardingErrorBoundary";
 
 const API_KEY = "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=";
 const getApiBase = () => (typeof window !== "undefined" ? `${window.location.origin}/api/v1` : "https://api.fiinway.com/api/v1");
@@ -316,6 +317,7 @@ function ReferralDashboardContent() {
   };
 
   const shareUrl = stats?.share_url || `https://api.fiinway.com/ref/${referralCode}`;
+  const shareText = `Join Fiinway using my Partner Code: ${referralCode}\n${shareUrl}`;
 
   const handleCopyShareLink = () => {
     if (!shareUrl) return;
@@ -335,7 +337,16 @@ function ReferralDashboardContent() {
   };
 
   const handleCopyShareMessage = () => {
-    navigator.clipboard.writeText(shareText);
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(shareText);
+    } else if (typeof document !== "undefined") {
+      const el = document.createElement("textarea");
+      el.value = shareText;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
     showToast("Invite message copied to clipboard!");
   };
 
@@ -418,6 +429,17 @@ function ReferralDashboardContent() {
     },
     commission_rate: "2.5%",
   };
+
+  const toArray = (v: any): any[] => {
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === "object") return Object.values(v);
+    return [];
+  };
+
+  const consumerRecentEarnings = toArray(consumer.recent_earnings);
+  const consumerHistory = toArray(consumer.history);
+  const businessRecentEarnings = toArray(business.recent_earnings);
+  const businessHistory = toArray(business.history);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans pb-10">
@@ -827,9 +849,9 @@ function ReferralDashboardContent() {
                     Recent Consumer Earnings
                   </h3>
 
-                  {consumer.recent_earnings && consumer.recent_earnings.length > 0 ? (
+                  {consumerRecentEarnings.length > 0 ? (
                     <div className="divide-y divide-slate-100">
-                      {consumer.recent_earnings.map((item: any, idx: number) => (
+                      {consumerRecentEarnings.map((item: any, idx: number) => (
                         <div key={idx} className="py-2.5 flex items-center justify-between first:pt-0 last:pb-0">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-sm">
@@ -861,13 +883,13 @@ function ReferralDashboardContent() {
                 <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      Referred Consumers ({consumer.history ? consumer.history.length : 0})
+                      Referred Consumers ({consumerHistory.length})
                     </h3>
                   </div>
 
-                  {consumer.history && consumer.history.length > 0 ? (
+                  {consumerHistory.length > 0 ? (
                     <div className="space-y-2">
-                      {consumer.history.map((user: any, idx: number) => (
+                      {consumerHistory.map((user: any, idx: number) => (
                         <div key={idx} className="bg-slate-50 rounded-xl p-3 border border-slate-200/70 flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center text-sm font-semibold">
@@ -893,7 +915,7 @@ function ReferralDashboardContent() {
                                 : 'text-amber-700'
                             }`}>
                               {user.condition_fulfilled || user.status === 'Credited' || user.status === 'Unlocked'
-                                ? `+₹${user.referral_earned || user.unlocked_cashback || user.reward_amount} earned`
+                                ? `+₹${user.referral_earned || user.unlocked_cashback || user.reward_amount || 0} earned`
                                 : `+₹${user.potential_reward || user.reward_amount || user.pending_cashback || user.frozen_cashback || 0} pending`}
                             </p>
                           </div>
@@ -1029,9 +1051,9 @@ function ReferralDashboardContent() {
                     Recent Business Partner Earnings
                   </h3>
 
-                  {business.recent_earnings && business.recent_earnings.length > 0 ? (
+                  {businessRecentEarnings.length > 0 ? (
                     <div className="divide-y divide-slate-100">
-                      {business.recent_earnings.map((item: any, idx: number) => (
+                      {businessRecentEarnings.map((item: any, idx: number) => (
                         <div key={idx} className="py-2.5 flex items-center justify-between first:pt-0 last:pb-0">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-sm">
@@ -1063,13 +1085,13 @@ function ReferralDashboardContent() {
                 <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      Referred Business Partners ({business.history ? business.history.length : 0})
+                      Referred Business Partners ({businessHistory.length})
                     </h3>
                   </div>
 
-                  {business.history && business.history.length > 0 ? (
+                  {businessHistory.length > 0 ? (
                     <div className="space-y-2">
-                      {business.history.map((user: any, idx: number) => (
+                      {businessHistory.map((user: any, idx: number) => (
                         <div key={idx} className="bg-slate-50 rounded-xl p-3 border border-slate-200/70 flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center text-sm font-semibold">
@@ -1095,7 +1117,7 @@ function ReferralDashboardContent() {
                                 : 'text-amber-700'
                             }`}>
                               {user.condition_fulfilled || user.status === 'Credited' || user.status === 'Unlocked'
-                                ? `+₹${user.referral_earned || user.unlocked_cashback || user.reward_amount} earned`
+                                ? `+₹${user.referral_earned || user.unlocked_cashback || user.reward_amount || 0} earned`
                                 : `+₹${user.potential_reward || user.reward_amount || user.pending_cashback || user.frozen_cashback || 0} pending`}
                             </p>
                           </div>
@@ -1130,7 +1152,7 @@ function ReferralDashboardContent() {
       {/* ──────────────────────────────────────────────────────────────────────────
           SCREEN 4: VENDOR / TEAM MANAGER DASHBOARD (Approved Vendors Only)
          ────────────────────────────────────────────────────────────────────────── */}
-      {viewMode === "vendor_dashboard" && vendorRoleStatus === "vendor" && vendorData?.status === "approved" && (
+      {viewMode === "vendor_dashboard" && (vendorRoleStatus === "vendor" || vendorData?.status === "approved" || vendorData?.is_approved) && (
         <VendorDashboardView
           onBack={handleBack}
           vendorData={vendorData}
@@ -1146,13 +1168,24 @@ function ReferralDashboardContent() {
       {/* ──────────────────────────────────────────────────────────────────────────
           SCREEN 5: AWAITING APPROVAL / REVIEW STATE (BLOCKED DASHBOARD)
          ────────────────────────────────────────────────────────────────────────── */}
-      {(viewMode === "awaiting_approval" || (viewMode === "vendor_dashboard" && (vendorRoleStatus === "pending" || !vendorData || vendorData?.status === "pending"))) && (
+      {(viewMode === "awaiting_approval" || 
+        (viewMode === "vendor_dashboard" && (vendorRoleStatus === "pending" || vendorApplicationData?.status === "pending" || vendorData?.status === "pending" || (vendorData && vendorData?.status !== "approved")))) && (
         <VendorAwaitingApprovalView
           onBack={handleBack}
           applicationData={vendorApplicationData || vendorData}
           onRefresh={fetchVendorTeamData}
           showToast={showToast}
         />
+      )}
+
+      {/* Loading state if vendor dashboard requested but data still resolving */}
+      {viewMode === "vendor_dashboard" && !vendorData && vendorRoleStatus === "none" && (
+        <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center">
+          <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center mb-4 animate-spin">
+            <Layers className="w-6 h-6" />
+          </div>
+          <h3 className="text-sm font-bold text-slate-800">Verifying Vendor Access...</h3>
+        </div>
       )}
 
       {/* Toast Notification */}
@@ -1199,14 +1232,16 @@ function ReferralDashboardContent() {
 
 export default function ReferralDashboardPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center text-slate-500 text-xs font-semibold">
-          Loading partner dashboard...
-        </div>
-      }
-    >
-      <ReferralDashboardContent />
-    </Suspense>
+    <OnboardingErrorBoundary>
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center text-slate-500 text-xs font-semibold">
+            Loading partner dashboard...
+          </div>
+        }
+      >
+        <ReferralDashboardContent />
+      </Suspense>
+    </OnboardingErrorBoundary>
   );
 }

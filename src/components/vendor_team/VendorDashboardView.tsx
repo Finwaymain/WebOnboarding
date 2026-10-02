@@ -83,7 +83,13 @@ export default function VendorDashboardView({
   const [reportPeriod, setReportPeriod] = useState<string>("all");
   const [reportData, setReportData] = useState<any | null>(null);
 
-  const vendorCode = vendorData?.vendor_code || "VR------";
+  const toArray = (v: any): any[] => {
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === "object") return Object.values(v);
+    return [];
+  };
+
+  const vendorCode = String(vendorData?.vendor_code || "VR------");
   const numPart = vendorCode.replace(/^[A-Za-z]+/, "");
   const subVendorCode = vendorData?.sub_vendor_code || (numPart ? `SV${numPart}` : `SV------`);
   const freelancerCode = vendorData?.freelancer_code || (numPart ? `FR${numPart}` : `FR------`);
@@ -100,9 +106,9 @@ export default function VendorDashboardView({
   const rateCustomer = Number(vendorData?.rate_per_customer ?? 0);
   const rateBusiness = Number(vendorData?.rate_per_business ?? 0);
 
-  const directSubVendors: any[] = vendorData?.direct_sub_vendors || [];
-  const pendingSubVendors: any[] = vendorData?.pending_sub_vendors || [];
-  const teamMembers: any[] = vendorData?.team_members || [];
+  const directSubVendors: any[] = toArray(vendorData?.direct_sub_vendors);
+  const pendingSubVendors: any[] = toArray(vendorData?.pending_sub_vendors);
+  const teamMembers: any[] = toArray(vendorData?.team_members);
 
   const totalCustomers = Number(vendorData?.total_customers ?? vendorData?.customer_joined ?? 0);
   const totalBusinesses = Number(vendorData?.total_businesses ?? vendorData?.business_joined ?? 0);
@@ -995,12 +1001,12 @@ export default function VendorDashboardView({
               <div className="divide-y divide-slate-100">
                 {ledgerLoading ? (
                   <div className="p-6 text-center text-xs text-slate-400">Loading ledger records...</div>
-                ) : ledgerItems.length === 0 ? (
+                ) : toArray(ledgerItems).length === 0 ? (
                   <div className="p-6 text-center text-xs text-slate-500">
                     No ledger transactions recorded yet. Verified acquisitions will appear here.
                   </div>
                 ) : (
-                  ledgerItems.map((item: any, idx: number) => (
+                  toArray(ledgerItems).map((item: any, idx: number) => (
                     <div key={idx} className="grid grid-cols-12 items-center px-3 py-2.5 hover:bg-slate-50/50 text-xs">
                       <div className="col-span-3">
                         <span className="font-mono font-bold text-[10.5px] text-slate-900 block truncate">{item.transaction_id}</span>

@@ -94,7 +94,9 @@ export default function TeamMemberDashboardView({
 
   const location = memberData?.team_location || "Regional Territory";
   const teamType = memberData?.team_type || "Field Marketing";
-  const recentAcquisitions = memberData?.recent_acquisitions || [];
+  const recentAcquisitions = Array.isArray(memberData?.recent_acquisitions)
+    ? memberData.recent_acquisitions
+    : (memberData?.recent_acquisitions && typeof memberData.recent_acquisitions === "object" ? Object.values(memberData.recent_acquisitions) : []);
 
   const filteredAcquisitions = recentAcquisitions.filter((acq: any) => {
     if (filterType === "all") return true;

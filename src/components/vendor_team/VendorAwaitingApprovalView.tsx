@@ -43,15 +43,27 @@ export default function VendorAwaitingApprovalView({
     }, 1200);
   };
 
+  const formatSafeDate = (raw?: any) => {
+    if (!raw) return "Recent";
+    try {
+      const str = String(raw).trim().replace(" ", "T");
+      const d = new Date(str);
+      if (isNaN(d.getTime())) return "Recent";
+      return d.toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return "Recent";
+    }
+  };
+
   const designation = applicationData?.designation || "Sub-Vendor";
   const location = applicationData?.team_location || "Regional Territory";
   const teamType = applicationData?.team_type || "Field Marketing";
   const parentVendorCode = applicationData?.parent_vendor?.vendor_code || applicationData?.parent_code || "Parent Vendor";
-  const submissionDate = applicationData?.created_at ? new Date(applicationData.created_at).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }) : "Recent";
+  const submissionDate = formatSafeDate(applicationData?.created_at);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-12 text-slate-900 font-sans">
@@ -87,7 +99,7 @@ export default function VendorAwaitingApprovalView({
         {/* Main Status Hero Banner */}
         <div className="bg-gradient-to-br from-amber-50 via-white to-orange-50/60 rounded-3xl p-6 border border-amber-200/80 shadow-xs text-center space-y-3 relative overflow-hidden">
           <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-700 border border-amber-300/80 mx-auto flex items-center justify-center shadow-inner relative">
-            <Clock className="w-8 h-8 animate-spin-slow" />
+            <Clock className="w-8 h-8 text-amber-700" />
             <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center border-2 border-white shadow-xs">
               <Lock className="w-3 h-3" />
             </div>
