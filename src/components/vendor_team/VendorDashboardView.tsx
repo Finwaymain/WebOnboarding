@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ChevronLeft,
   Users,
@@ -25,91 +25,82 @@ import {
   TrendingUp,
   Smartphone,
   Info,
+  Eye,
+  EyeOff,
+  FileText,
+  ShieldCheck,
+  Building2,
+  Filter,
 } from "lucide-react";
 
 interface VendorDashboardViewProps {
   onBack: () => void;
   vendorData: any;
   showToast: (msg: string) => void;
+  apiBase?: string;
+  userId?: string | null;
+  userCat?: string | null;
+  token?: string | null;
+  onRefresh?: () => void;
 }
 
 export default function VendorDashboardView({
   onBack,
   vendorData,
   showToast,
+  apiBase,
+  userId,
+  userCat,
+  token,
+  onRefresh,
 }: VendorDashboardViewProps) {
   const [copiedCode, setCopiedCode] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
-  const [copiedFreelancerCode, setCopiedFreelancerCode] = useState(false);
+  const [copiedFreelancerLink, setCopiedFreelancerLink] = useState(false);
+  const [copiedSubVendorLink, setCopiedSubVendorLink] = useState(false);
+  const [activeMainTab, setActiveMainTab] = useState<"overview" | "sub_vendors" | "freelancers" | "ledger" | "report">("overview");
+
+  // Sub-Vendor approval modal
+  const [selectedPendingSubVendor, setSelectedPendingSubVendor] = useState<any | null>(null);
+  const [approvalCustRate, setApprovalCustRate] = useState<string>("");
+  const [approvalBizRate, setApprovalBizRate] = useState<string>("");
+  const [approvalDesignation, setApprovalDesignation] = useState<string>("Marketing Head");
+  const [approvalRateVisible, setApprovalRateVisible] = useState<boolean>(true);
+  const [approvingLoading, setApprovingLoading] = useState<boolean>(false);
+
+  // Freelancer detail drilldown
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
   const [subTab, setSubTab] = useState<"all" | "verified" | "pending" | "rejected">("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [rejectionRemarkModal, setRejectionRemarkModal] = useState<{
-    open: boolean;
-    name: string;
-    remark: string;
-    phone?: string;
-    date?: string;
-  } | null>(null);
 
-  const vendorCode = vendorData?.vendor_code || "TM------";
-  const shareUrl = vendorData?.share_url || `https://api.fiinway.com/join/${vendorCode}`;
+  // Ledger state
+  const [ledgerItems, setLedgerItems] = useState<any[]>([]);
+  const [ledgerLoading, setLedgerLoading] = useState<boolean>(false);
 
-  const handleCopyCode = () => {
-    if (!vendorCode) return;
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(vendorCode);
-    }
-    setCopiedCode(true);
-    showToast("Vendor code copied to clipboard!");
-    setTimeout(() => setCopiedCode(false), 2000);
-  };
+  // Report state
+  const [reportPeriod, setReportPeriod] = useState<string>("all");
+  const [reportData, setReportData] = useState<any | null>(null);
 
-  const handleCopyLink = () => {
-    if (!shareUrl) return;
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(shareUrl);
-    }
-    setCopiedLink(true);
-    showToast("Freelancer invite link copied!");
-    setTimeout(() => setCopiedLink(false), 2000);
-  };
+  const vendorCode = vendorData?.vendor_code || "VR------";
+  const isHeadVendor = vendorData?.is_head_vendor ?? !vendorData?.parent_vendor;
+  const isRateVisible = vendorData?.is_rate_visible ?? true;
+  const designation = vendorData?.designation || (isHeadVendor ? "Head Vendor" : "Sub-Vendor");
+  const parentVendor = vendorData?.parent_vendor;
 
-  const handleCopyFreelancerCode = (code: string) => {
-    if (!code) return;
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(code);
-    }
-    setCopiedFreelancerCode(true);
-    showToast(`Freelancer code ${code} copied!`);
-    setTimeout(() => setCopiedFreelancerCode(false), 2000);
-  };
-
-  const handleNativeShare = async () => {
-    const text = `Join my field marketing team on Fiinway! Use Vendor Code: ${vendorCode}\nRegister here: ${shareUrl}`;
-    if (typeof navigator !== "undefined" && navigator.share) {
-      try {
-        await navigator.share({
-          title: "Join as Freelancer under Team Manager",
-          text,
-          url: shareUrl,
-        });
-      } catch (_) {}
-    } else {
-      handleCopyLink();
-    }
-  };
+  const baseOrigin = typeof window !== "undefined" ? window.location.origin : "https://api.fiinway.com";
+  const freelancerShareUrl = `${baseOrigin}/onboarding/referral?role=freelancer&code=${vendorCode}`;
+  const subVendorShareUrl = `${baseOrigin}/onboarding/referral?role=sub_vendor&code=${vendorCode}`;
 
   const rateCustomer = Number(vendorData?.rate_per_customer ?? 0);
   const rateBusiness = Number(vendorData?.rate_per_business ?? 0);
-  const freelancersCount = vendorData?.freelancers_count ?? (vendorData?.team_members?.length ?? 0);
 
-  // App Install / Total registrations
+  const directSubVendors: any[] = vendorData?.direct_sub_vendors || [];
+  const pendingSubVendors: any[] = vendorData?.pending_sub_vendors || [];
+  const teamMembers: any[] = vendorData?.team_members || [];
+
   const totalCustomers = Number(vendorData?.total_customers ?? vendorData?.customer_joined ?? 0);
   const totalBusinesses = Number(vendorData?.total_businesses ?? vendorData?.business_joined ?? 0);
   const totalInstall = Number(vendorData?.total_install ?? (totalCustomers + totalBusinesses));
 
-  // Verified / Pending / Rejected
   const verifiedCustomers = Number(vendorData?.verified_customers ?? vendorData?.customer_verified ?? 0);
   const verifiedBusinesses = Number(vendorData?.verified_businesses ?? vendorData?.business_verified ?? 0);
   const totalVerified = Number(vendorData?.total_verified ?? (verifiedCustomers + verifiedBusinesses));
@@ -122,7 +113,10 @@ export default function VendorDashboardView({
   const rejectedBusinesses = Number(vendorData?.business_rejected ?? 0);
   const totalRejected = Number(vendorData?.total_rejected ?? (rejectedCustomers + rejectedBusinesses));
 
-  // Dues & Upcoming
+  const totalEarnings = vendorData?.total_earnings ?? vendorData?.total_verified_due ?? 0;
+  const paidEarnings = Number(vendorData?.paid_earnings ?? 0);
+  const pendingPayout = vendorData?.pending_payout ?? Math.max(0, Number(totalEarnings) - paidEarnings);
+
   const customerDue = Number(vendorData?.customer_due ?? (verifiedCustomers * rateCustomer));
   const businessDue = Number(vendorData?.business_due ?? (verifiedBusinesses * rateBusiness));
   const totalVerifiedDue = Number(vendorData?.total_verified_due ?? (customerDue + businessDue));
@@ -131,268 +125,231 @@ export default function VendorDashboardView({
   const businessUpcoming = Number(vendorData?.business_upcoming ?? (pendingBusinesses * rateBusiness));
   const totalUpcomingIncome = Number(vendorData?.total_upcoming_income ?? (customerUpcoming + businessUpcoming));
 
-  const totalEarnings = vendorData?.total_earnings ?? totalVerifiedDue;
-  const paidEarnings = Number(vendorData?.paid_earnings ?? 0);
-  const pendingPayout = vendorData?.pending_payout ?? Math.max(0, totalEarnings - paidEarnings);
-  const teamMembers = vendorData?.team_members || [];
   const location = vendorData?.team_location || "Territory";
   const teamType = vendorData?.team_type || "Field Marketing";
 
+  // Fetch Ledger data when ledger tab is selected
+  useEffect(() => {
+    if (activeMainTab === "ledger" && apiBase && userId) {
+      setLedgerLoading(true);
+      const query = `id_user=${encodeURIComponent(userId)}&user_cat=${encodeURIComponent(userCat || "driver")}&accesstoken=${encodeURIComponent(token || "")}`;
+      fetch(`${apiBase}/vendor-team/payment-ledger?${query}`, {
+        headers: { "Content-Type": "application/json", "id_user": userId },
+      })
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success && json.data) {
+            setLedgerItems(json.data);
+          }
+        })
+        .catch(() => {})
+        .finally(() => setLedgerLoading(false));
+    }
+  }, [activeMainTab, apiBase, userId, userCat, token]);
+
+  // Fetch Report data when report tab is selected
+  useEffect(() => {
+    if (activeMainTab === "report" && apiBase && userId) {
+      const query = `id_user=${encodeURIComponent(userId)}&user_cat=${encodeURIComponent(userCat || "driver")}&period=${reportPeriod}&accesstoken=${encodeURIComponent(token || "")}`;
+      fetch(`${apiBase}/vendor-team/consolidated-report?${query}`, {
+        headers: { "Content-Type": "application/json", "id_user": userId },
+      })
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success && json.data) {
+            setReportData(json.data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [activeMainTab, reportPeriod, apiBase, userId, userCat, token]);
+
+  const handleCopyCode = () => {
+    if (!vendorCode) return;
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(vendorCode);
+    }
+    setCopiedCode(true);
+    showToast("Vendor code copied to clipboard!");
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const handleCopyFreelancerLink = () => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(freelancerShareUrl);
+    }
+    setCopiedFreelancerLink(true);
+    showToast("Freelancer invite link copied!");
+    setTimeout(() => setCopiedFreelancerLink(false), 2000);
+  };
+
+  const handleCopySubVendorLink = () => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(subVendorShareUrl);
+    }
+    setCopiedSubVendorLink(true);
+    showToast("Sub-Vendor invite link copied!");
+    setTimeout(() => setCopiedSubVendorLink(false), 2000);
+  };
+
+  const handleOpenApproveModal = (pending: any) => {
+    setSelectedPendingSubVendor(pending);
+    setApprovalCustRate(rateCustomer > 0 ? (rateCustomer * 0.6).toFixed(2) : "0.00");
+    setApprovalBizRate(rateBusiness > 0 ? (rateBusiness * 0.6).toFixed(2) : "0.00");
+    setApprovalDesignation(pending.designation || "Marketing Head");
+    setApprovalRateVisible(true);
+  };
+
+  const handleApproveSubVendorSubmit = async () => {
+    if (!selectedPendingSubVendor || !apiBase || !userId) return;
+
+    const cust = parseFloat(approvalCustRate) || 0;
+    const biz = parseFloat(approvalBizRate) || 0;
+
+    if (cust > rateCustomer) {
+      showToast(`Customer rate cannot exceed your rate of ₹${rateCustomer.toFixed(2)}`);
+      return;
+    }
+    if (biz > rateBusiness) {
+      showToast(`Business rate cannot exceed your rate of ₹${rateBusiness.toFixed(2)}`);
+      return;
+    }
+
+    try {
+      setApprovingLoading(true);
+      const res = await fetch(`${apiBase}/vendor-team/approve-sub-vendor`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "id_user": userId },
+        body: JSON.stringify({
+          id_user: userId,
+          user_cat: userCat || "driver",
+          sub_vendor_id: selectedPendingSubVendor.id,
+          rate_per_customer: cust,
+          rate_per_business: biz,
+          designation: approvalDesignation,
+          is_rate_visible: approvalRateVisible,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        showToast(json.message || "Sub-Vendor approved successfully!");
+        setSelectedPendingSubVendor(null);
+        if (onRefresh) onRefresh();
+      } else {
+        showToast(json.message || "Failed to approve Sub-Vendor.");
+      }
+    } catch (e: any) {
+      showToast(e.message || "Approval request failed.");
+    } finally {
+      setApprovingLoading(false);
+    }
+  };
+
+  const handleToggleRateVisibility = async (subVendorId: number, currentVisible: boolean) => {
+    if (!apiBase || !userId) return;
+    try {
+      const res = await fetch(`${apiBase}/vendor-team/toggle-rate-visibility`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "id_user": userId },
+        body: JSON.stringify({
+          id_user: userId,
+          user_cat: userCat || "driver",
+          sub_vendor_id: subVendorId,
+          is_rate_visible: !currentVisible,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        showToast(`Rate visibility turned ${!currentVisible ? "ON" : "OFF"}`);
+        if (onRefresh) onRefresh();
+      }
+    } catch (_) {}
+  };
+
   // ──────────────────────────────────────────────────────────────────────────
-  // VIEW 2: FREELANCER ACQUISITIONS DRILL-DOWN (Reference Screen)
+  // VIEW: FREELANCER DRILL-DOWN ACQUISITIONS LIST
   // ──────────────────────────────────────────────────────────────────────────
   if (selectedMember) {
     const memberAcquisitions: any[] = selectedMember.acquisitions || [];
-
     const filteredAcquisitions = memberAcquisitions.filter((item: any) => {
-      // Tab filter
       if (subTab === "verified" && item.verification_status !== "verified") return false;
       if (subTab === "pending" && item.verification_status !== "pending") return false;
       if (subTab === "rejected" && item.verification_status !== "rejected") return false;
 
-      // Search filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim();
-        const nameMatch = (item.name || "").toLowerCase().includes(query);
-        const phoneMatch = (item.phone || "").toLowerCase().includes(query);
-        const zoneMatch = (item.zone || "").toLowerCase().includes(query);
-        return nameMatch || phoneMatch || zoneMatch;
+        return (
+          (item.name || "").toLowerCase().includes(query) ||
+          (item.phone || "").toLowerCase().includes(query)
+        );
       }
       return true;
     });
 
-    const totalVerified = selectedMember.verified_count ?? 0;
-    const totalPending = selectedMember.pending_count ?? 0;
-    const totalRejected = selectedMember.rejected_count ?? 0;
-    const totalUsers = selectedMember.total_users ?? (totalVerified + totalPending + totalRejected);
-
     return (
       <div className="min-h-screen bg-[#F8FAFC] pb-12">
-        {/* Sticky Header */}
         <div className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-2xs">
           <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <button
                 onClick={() => setSelectedMember(null)}
                 className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors shrink-0"
-                title="Back to Team Manager"
               >
                 <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
               </button>
               <div>
-                <h2 className="text-sm font-bold text-slate-900 leading-tight">
-                  Freelancer Details
-                </h2>
+                <h2 className="text-sm font-bold text-slate-900 leading-tight">Freelancer Details</h2>
                 <p className="text-[11px] text-slate-500 font-medium">
                   {selectedMember.name} &bull; {selectedMember.member_code}
                 </p>
               </div>
             </div>
-
             <button
               onClick={() => setSelectedMember(null)}
-              className="text-[11px] font-bold text-slate-600 hover:text-slate-900 bg-slate-100 px-2.5 py-1 rounded-lg transition-colors"
+              className="text-[11px] font-bold text-slate-600 hover:text-slate-900 bg-slate-100 px-2.5 py-1 rounded-lg"
             >
               Close
             </button>
           </div>
         </div>
 
-        <div className="max-w-md mx-auto px-4 pt-4 space-y-4">
-          
-          {/* Freelancer Profile Card (matches screenshot top card) */}
-          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs">
-            <div className="flex items-start gap-3">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-100 to-emerald-200 text-emerald-800 flex items-center justify-center font-bold text-xl shrink-0 overflow-hidden shadow-2xs border border-emerald-300">
-                {selectedMember.photo ? (
-                  <img
-                    src={selectedMember.photo}
-                    alt={selectedMember.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <User className="w-7 h-7 text-emerald-700" />
-                )}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-1.5">
-                  <h3 className="text-base font-bold text-slate-900 truncate">
-                    {selectedMember.name}
-                  </h3>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                    Active
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="text-xs text-slate-500">Freelancer Code:</span>
-                  <span className="text-xs font-bold text-slate-800 font-mono">
-                    {selectedMember.member_code}
-                  </span>
-                  <button
-                    onClick={() => handleCopyFreelancerCode(selectedMember.member_code)}
-                    className="p-1 text-slate-400 hover:text-slate-700"
-                    title="Copy code"
-                  >
-                    {copiedFreelancerCode ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-600" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5" />
-                    )}
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-3 text-[11px] text-slate-500 mt-1">
-                  <span>Zone: <strong className="text-slate-700 font-semibold">{selectedMember.zone || location}</strong></span>
-                  <span>Joined: <strong className="text-slate-700 font-semibold">{selectedMember.joined_at || "Recent"}</strong></span>
-                </div>
-              </div>
-            </div>
-
-            {/* Metrics 4-Box Row (matches screenshot Row 1) */}
-            <div className="grid grid-cols-4 gap-2 mt-4 pt-3 border-t border-slate-100 text-center">
-              <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-2">
-                <div className="w-5 h-5 rounded-md bg-blue-100 text-blue-700 flex items-center justify-center mx-auto mb-1">
-                  <Users className="w-3 h-3" />
-                </div>
-                <span className="text-base font-black text-slate-900 block leading-none">
-                  {totalUsers}
-                </span>
-                <span className="text-[9px] text-slate-500 font-medium leading-tight block mt-1">
-                  Total Users
-                </span>
-              </div>
-
-              <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-2">
-                <div className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto mb-1">
-                  <CheckCircle2 className="w-3 h-3" />
-                </div>
-                <span className="text-base font-black text-emerald-700 block leading-none">
-                  {totalVerified}
-                </span>
-                <span className="text-[9px] text-slate-500 font-medium leading-tight block mt-1">
-                  Verified
-                </span>
-              </div>
-
-              <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-2">
-                <div className="w-5 h-5 rounded-md bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-1">
-                  <Clock className="w-3 h-3" />
-                </div>
-                <span className="text-base font-black text-amber-700 block leading-none">
-                  {totalPending}
-                </span>
-                <span className="text-[9px] text-slate-500 font-medium leading-tight block mt-1">
-                  Pending
-                </span>
-              </div>
-
-              <div className="bg-rose-50/60 border border-rose-100 rounded-xl p-2">
-                <div className="w-5 h-5 rounded-md bg-rose-100 text-rose-700 flex items-center justify-center mx-auto mb-1">
-                  <XCircle className="w-3 h-3" />
-                </div>
-                <span className="text-base font-black text-rose-700 block leading-none">
-                  {totalRejected}
-                </span>
-                <span className="text-[9px] text-slate-500 font-medium leading-tight block mt-1">
-                  Rejected
-                </span>
-              </div>
-            </div>
-
-            {/* Metrics 3-Box Row (matches screenshot Row 2) */}
-            <div className="grid grid-cols-3 gap-2 mt-2">
-              <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
-                  <User className="w-3.5 h-3.5" />
-                </div>
-                <div className="min-w-0">
-                  <span className="text-sm font-black text-slate-900 block leading-none">
-                    {selectedMember.customers_total ?? 0}
-                  </span>
-                  <span className="text-[9.5px] text-slate-500 font-medium truncate block mt-0.5">
-                    User Downloads
-                  </span>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                  <Store className="w-3.5 h-3.5" />
-                </div>
-                <div className="min-w-0">
-                  <span className="text-sm font-black text-slate-900 block leading-none">
-                    {selectedMember.businesses_total ?? 0}
-                  </span>
-                  <span className="text-[9.5px] text-slate-500 font-medium truncate block mt-0.5">
-                    Business Added
-                  </span>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
-                  <Wallet className="w-3.5 h-3.5" />
-                </div>
-                <div className="min-w-0">
-                  <span className="text-sm font-black text-purple-700 block leading-none truncate">
-                    ₹{Number(selectedMember.total_earnings ?? 0).toLocaleString()}
-                  </span>
-                  <span className="text-[9.5px] text-slate-500 font-medium truncate block mt-0.5">
-                    Total Earning
-                  </span>
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Filter Tabs (matches screenshot tabs) */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+        <div className="max-w-md mx-auto px-3.5 pt-3 space-y-3">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
             <button
               onClick={() => setSubTab("all")}
-              className={`text-xs font-bold px-3.5 py-2 rounded-xl transition-all shrink-0 ${
-                subTab === "all"
-                  ? "bg-blue-600 text-white shadow-xs"
-                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+              className={`text-xs font-bold px-3.5 py-2 rounded-xl shrink-0 ${
+                subTab === "all" ? "bg-slate-900 text-white" : "bg-white text-slate-600 border border-slate-200"
               }`}
             >
-              User List ({totalUsers})
+              All ({memberAcquisitions.length})
             </button>
             <button
               onClick={() => setSubTab("verified")}
-              className={`text-xs font-bold px-3.5 py-2 rounded-xl transition-all shrink-0 ${
-                subTab === "verified"
-                  ? "bg-emerald-600 text-white shadow-xs"
-                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+              className={`text-xs font-bold px-3.5 py-2 rounded-xl shrink-0 ${
+                subTab === "verified" ? "bg-emerald-600 text-white" : "bg-white text-slate-600 border border-slate-200"
               }`}
             >
-              Verified ({totalVerified})
+              Verified ({selectedMember.verified_count ?? 0})
             </button>
             <button
               onClick={() => setSubTab("pending")}
-              className={`text-xs font-bold px-3.5 py-2 rounded-xl transition-all shrink-0 ${
-                subTab === "pending"
-                  ? "bg-amber-600 text-white shadow-xs"
-                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+              className={`text-xs font-bold px-3.5 py-2 rounded-xl shrink-0 ${
+                subTab === "pending" ? "bg-amber-600 text-white" : "bg-white text-slate-600 border border-slate-200"
               }`}
             >
-              Pending ({totalPending})
+              Pending ({selectedMember.pending_count ?? 0})
             </button>
             <button
               onClick={() => setSubTab("rejected")}
-              className={`text-xs font-bold px-3.5 py-2 rounded-xl transition-all shrink-0 ${
-                subTab === "rejected"
-                  ? "bg-rose-600 text-white shadow-xs"
-                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+              className={`text-xs font-bold px-3.5 py-2 rounded-xl shrink-0 ${
+                subTab === "rejected" ? "bg-rose-600 text-white" : "bg-white text-slate-600 border border-slate-200"
               }`}
             >
-              Rejected ({totalRejected})
+              Rejected ({selectedMember.rejected_count ?? 0})
             </button>
           </div>
 
-          {/* Search Bar (matches screenshot search bar) */}
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
@@ -400,185 +357,56 @@ export default function VendorDashboardView({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by name or number..."
-              className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-2xs"
+              className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
-              >
-                Clear
-              </button>
-            )}
           </div>
 
-          {/* Table / List Container (matches screenshot table layout) */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-            
-            {/* Table Header */}
-            <div className="grid grid-cols-12 bg-slate-50/80 border-b border-slate-200 px-3 py-2.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            <div className="grid grid-cols-12 bg-slate-50 border-b border-slate-200 px-3 py-2.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
               <div className="col-span-3">DATE</div>
-              <div className="col-span-4">NAME / NUMBER</div>
-              <div className="col-span-2 text-center">ZONE</div>
-              <div className="col-span-3 text-right">STATUS</div>
+              <div className="col-span-5">NAME / NUMBER</div>
+              <div className="col-span-4 text-right">STATUS</div>
             </div>
 
-            {/* Table Body */}
-            {filteredAcquisitions.length === 0 ? (
-              <div className="p-8 text-center space-y-2">
-                <UserCheck className="w-8 h-8 text-slate-300 mx-auto" />
-                <p className="text-xs font-bold text-slate-700">No User Records Found</p>
-                <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
-                  {searchQuery
-                    ? `No registered users matched "${searchQuery}".`
-                    : `No records in the "${subTab}" category for this freelancer.`}
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {filteredAcquisitions.map((acq: any, idx: number) => {
-                  const isVerified = acq.verification_status === "verified";
-                  const isRejected = acq.verification_status === "rejected";
-                  const isPending = !isVerified && !isRejected;
-
-                  return (
-                    <div
-                      key={idx}
-                      className="grid grid-cols-12 items-center px-3 py-3 hover:bg-slate-50/50 transition-colors gap-1"
-                    >
-                      {/* DATE */}
-                      <div className="col-span-3 text-[11px] text-slate-600 font-medium">
-                        {acq.date || "Recent"}
-                      </div>
-
-                      {/* NAME / NUMBER */}
-                      <div className="col-span-4 min-w-0 pr-1">
-                        <p className="text-xs font-bold text-slate-900 truncate">
-                          {acq.name || "Customer User"}
-                        </p>
-                        <p className="text-[10.5px] font-mono text-slate-500 tracking-tight truncate">
-                          {acq.phone || "---"}
-                        </p>
-                      </div>
-
-                      {/* ZONE */}
-                      <div className="col-span-2 text-center text-[10.5px] font-bold text-slate-700 uppercase truncate">
-                        {acq.zone || selectedMember.zone || "DELHI"}
-                      </div>
-
-                      {/* STATUS + COUNTDOWN */}
-                      <div className="col-span-3 text-right">
-                        {isVerified && (
-                          <span className="text-[9.5px] font-black px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 inline-block uppercase tracking-wider">
-                            VERIFIED
-                          </span>
-                        )}
-
-                        {isPending && (
-                          <div>
-                            <span className="text-[9.5px] font-black px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 inline-block uppercase tracking-wider">
-                              PENDING
-                            </span>
-                            <span className="text-[9.5px] text-amber-600 font-bold block mt-0.5 leading-none">
-                              {acq.hours_left !== null && acq.hours_left !== undefined
-                                ? `${acq.hours_left} hour left`
-                                : "72 hour left"}
-                            </span>
-                          </div>
-                        )}
-
-                        {isRejected && (
-                          <div className="inline-flex items-center gap-1 justify-end">
-                            <span className="text-[9.5px] font-black px-1.5 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 uppercase tracking-wider">
-                              REJECT
-                            </span>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setRejectionRemarkModal({
-                                  open: true,
-                                  name: acq.name || "Customer User",
-                                  remark: acq.rejection_reason || acq.remarks || "No specific rejection reason provided by Admin.",
-                                  phone: acq.phone,
-                                  date: acq.date,
-                                });
-                              }}
-                              className="w-4 h-4 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-700 flex items-center justify-center transition-colors shadow-2xs cursor-pointer shrink-0"
-                              title="View rejection remark from Admin"
-                            >
-                              <Info className="w-2.5 h-2.5 stroke-[2.5]" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
+            <div className="divide-y divide-slate-100">
+              {filteredAcquisitions.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-500">No User Records Found</div>
+              ) : (
+                filteredAcquisitions.map((acq: any, idx: number) => (
+                  <div key={idx} className="grid grid-cols-12 items-center px-3 py-3 hover:bg-slate-50/50">
+                    <div className="col-span-3 text-[11px] text-slate-600 font-medium">{acq.date}</div>
+                    <div className="col-span-5">
+                      <div className="text-xs font-bold text-slate-900 truncate">{acq.name}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">{acq.phone}</div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-
-          </div>
-
-        </div>
-
-        {/* Admin Rejection Remark Modal (User Request 1) */}
-        {rejectionRemarkModal?.open && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-            <div className="bg-white rounded-2xl max-w-sm w-full p-4 border border-slate-200 shadow-xl space-y-3 animate-scale-in">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
-                    <AlertCircle className="w-4 h-4" />
+                    <div className="col-span-4 text-right">
+                      <span
+                        className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full inline-block ${
+                          acq.verification_status === "verified"
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            : acq.verification_status === "rejected"
+                            ? "bg-rose-50 text-rose-700 border border-rose-200"
+                            : "bg-amber-50 text-amber-700 border border-amber-200"
+                        }`}
+                      >
+                        {acq.verification_status === "verified" ? "Verified" : acq.verification_status === "rejected" ? "Rejected" : "Pending"}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-900">Rejection Remark</h4>
-                    <p className="text-[10px] text-slate-500">
-                      {rejectionRemarkModal.name} {rejectionRemarkModal.phone ? `• ${rejectionRemarkModal.phone}` : ""}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setRejectionRemarkModal(null)}
-                  className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center text-xs font-bold transition-colors"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="bg-rose-50/70 border border-rose-100 rounded-xl p-3 space-y-1">
-                <span className="text-[9.5px] font-bold uppercase tracking-wider text-rose-800 block">
-                  Admin Feedback / Reason:
-                </span>
-                <p className="text-xs text-slate-800 leading-relaxed font-medium">
-                  {rejectionRemarkModal.remark}
-                </p>
-              </div>
-
-              {rejectionRemarkModal.date && (
-                <p className="text-[10px] text-slate-400 text-right">
-                  Acquisition Date: {rejectionRemarkModal.date}
-                </p>
+                ))
               )}
-
-              <button
-                onClick={() => setRejectionRemarkModal(null)}
-                className="w-full py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors shadow-2xs"
-              >
-                Close
-              </button>
             </div>
           </div>
-        )}
+        </div>
       </div>
     );
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // VIEW 1: MAIN TEAM MANAGER DASHBOARD
+  // MAIN VENDOR DASHBOARD
   // ──────────────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-12">
+    <div className="min-h-screen bg-[#F8FAFC] pb-12 text-slate-900">
       {/* Sticky Header */}
       <div className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-2xs">
         <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
@@ -591,28 +419,79 @@ export default function VendorDashboardView({
               <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
             </button>
             <div>
-              <h2 className="text-sm font-bold text-slate-900 leading-tight">
-                Team Manager Dashboard
-              </h2>
-              <p className="text-[11px] text-slate-500 font-medium">
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-sm font-bold text-slate-900 leading-tight">
+                  {designation}
+                </h2>
+                {isHeadVendor ? (
+                  <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    👑 Head
+                  </span>
+                ) : (
+                  <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                    ↳ L{vendorData?.hierarchy_level ?? 1}
+                  </span>
+                )}
+              </div>
+              <p className="text-[10.5px] text-slate-500 font-medium">
                 {location} &bull; {teamType}
               </p>
             </div>
           </div>
 
-          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-            Approved 
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+            Active
           </span>
         </div>
       </div>
 
       <div className="max-w-md mx-auto px-3.5 pt-3 space-y-3">
-        
+        {/* Pending Sub-Vendor Approvals Alert Banner */}
+        {pendingSubVendors.length > 0 && (
+          <div className="bg-amber-500 text-white rounded-2xl p-3.5 shadow-sm space-y-2 animate-pulse-subtle">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-100 shrink-0" />
+                <div>
+                  <h4 className="text-xs font-black tracking-wide">
+                    {pendingSubVendors.length} Sub-Vendor Request{pendingSubVendors.length > 1 ? "s" : ""} Awaiting Review
+                  </h4>
+                  <p className="text-[10.5px] text-amber-100 font-medium">
+                    Review and set commission rates to activate their accounts.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5 pt-1">
+              {pendingSubVendors.map((pending: any, pIdx: number) => (
+                <div
+                  key={pIdx}
+                  className="bg-white/10 backdrop-blur-xs rounded-xl p-2.5 flex items-center justify-between border border-white/20"
+                >
+                  <div className="min-w-0 flex-1 mr-2">
+                    <p className="text-xs font-bold text-white truncate">{pending.name}</p>
+                    <p className="text-[10.5px] text-amber-100 truncate">
+                      {pending.phone} &bull; {pending.designation}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleOpenApproveModal(pending)}
+                    className="bg-white text-amber-900 hover:bg-amber-50 font-bold text-xs px-3 py-1.5 rounded-lg shadow-xs shrink-0 transition-transform active:scale-95"
+                  >
+                    Review & Set Rates
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Vendor Hero Code Card */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
           <div className="text-center space-y-1">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-              Your  Vendor Code
+              Your Joining Vendor Code
             </span>
             <div className="flex items-center justify-center gap-2.5 pt-1">
               <span className="text-2xl font-black text-slate-900 tracking-widest font-mono bg-slate-100 border border-slate-200 px-4 py-2 rounded-xl">
@@ -620,350 +499,601 @@ export default function VendorDashboardView({
               </span>
               <button
                 onClick={handleCopyCode}
-                className="px-3.5 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 hover:bg-slate-200 transition-colors flex items-center gap-1.5 text-xs font-extrabold shadow-2xs active:scale-95"
+                className="px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 hover:bg-slate-200 transition-colors flex items-center gap-1.5 text-xs font-bold shadow-2xs"
                 title="Copy Code"
               >
                 {copiedCode ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
                 <span>{copiedCode ? "Copied" : "Copy"}</span>
               </button>
             </div>
+            {parentVendor && (
+              <p className="text-[10.5px] text-slate-500 pt-1 font-medium">
+                Under Parent: <strong className="text-slate-800">{parentVendor.vendor_code}</strong> ({parentVendor.designation})
+              </p>
+            )}
           </div>
 
-      
-          <div className="grid grid-cols-2 gap-2">
+          {/* Two Sharing Options */}
+          <div className="grid grid-cols-2 gap-2 pt-1">
             <button
-              onClick={handleCopyLink}
-              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs py-3 rounded-xl shadow-2xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
+              onClick={handleCopySubVendorLink}
+              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 font-bold text-xs py-2.5 rounded-xl shadow-2xs flex items-center justify-center gap-1.5 transition-all"
             >
-              {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copiedLink ? "Link Copied" : "Copy Link"}</span>
+              <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+              <span>{copiedSubVendorLink ? "Link Copied" : "Invite Sub-Vendor"}</span>
             </button>
 
             <button
-              onClick={handleNativeShare}
-              className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs py-3 rounded-xl shadow-2xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
+              onClick={handleCopyFreelancerLink}
+              className="bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs py-2.5 rounded-xl shadow-2xs flex items-center justify-center gap-1.5 transition-all"
             >
-              <Share2 className="w-3.5 h-3.5" />
-              <span>Invite Freelancers</span>
+              <Users className="w-3.5 h-3.5" />
+              <span>{copiedFreelancerLink ? "Link Copied" : "Invite Freelancer"}</span>
             </button>
           </div>
-
         </div>
 
-        {/* Assigned Payout Rates */}
-        <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-sm space-y-3">
+        {/* Assigned Payout Rates Card */}
+        <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-sm space-y-2.5">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              Admin Configured Payout Rates
+              {isHeadVendor ? "Admin Master Commission Rates" : "Your Assigned Rates"}
             </span>
             <span className="text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-md">
-              Approved
+              {isHeadVendor ? "Master Tier" : isRateVisible ? "Applicable" : "Protected"}
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-3">
-              <span className="text-[10.5px] font-medium text-slate-400 block">Per Verified Customer</span>
-              <span className="text-xl font-extrabold text-emerald-400">
-                ₹{Number(rateCustomer).toFixed(2)}
-              </span>
+          {!isHeadVendor && !isRateVisible ? (
+            <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-3 text-center space-y-1">
+              <EyeOff className="w-4 h-4 text-slate-400 mx-auto" />
+              <p className="text-xs font-bold text-slate-300">Rate Hidden by Parent Vendor</p>
+              <p className="text-[10px] text-slate-400">Your earnings will be credited automatically upon verification.</p>
             </div>
-            <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-3">
-              <span className="text-[10.5px] font-medium text-slate-400 block">Per Verified Business</span>
-              <span className="text-xl font-extrabold text-blue-400">
-                ₹{Number(rateBusiness).toFixed(2)}
-              </span>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-3">
+                <span className="text-[10.5px] font-medium text-slate-400 block">Per Verified Customer</span>
+                <span className="text-xl font-extrabold text-emerald-400">
+                  ₹{Number(rateCustomer).toFixed(2)}
+                </span>
+              </div>
+              <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-3">
+                <span className="text-[10.5px] font-medium text-slate-400 block">Per Verified Business</span>
+                <span className="text-xl font-extrabold text-blue-400">
+                  ₹{Number(rateBusiness).toFixed(2)}
+                </span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Financial Earnings Card */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                <Wallet className="w-4 h-4" />
-              </div>
-              <span className="text-xs font-bold text-slate-800">Verified Team Earnings</span>
-            </div>
-            <span className="text-xs font-black text-emerald-700 text-base">
-              ₹{Number(totalEarnings).toLocaleString()}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-100 text-center">
-            <div className="bg-slate-50 rounded-xl p-2">
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block truncate">
-                Freelancer Count
-              </span>
-              <span className="text-sm font-black text-slate-900">
-                {teamMembers.length}
-              </span>
-            </div>
-            <div className="bg-slate-50 rounded-xl p-2">
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block truncate">
-                (Total) Unsettled Due
-              </span>
-              <span className="text-sm font-black text-amber-700">
-                ₹{Number(pendingPayout).toLocaleString()}
-              </span>
-            </div>
-            <div className="bg-slate-50 rounded-xl p-2">
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block truncate">
-                Paid by Admin
-              </span>
-              <span className="text-sm font-black text-emerald-700">
-                ₹{Number(paidEarnings).toLocaleString()}
-              </span>
-            </div>
-          </div>
+        {/* Multi-Tab Navigation Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          <button
+            onClick={() => setActiveMainTab("overview")}
+            className={`text-xs font-bold px-3 py-2 rounded-xl shrink-0 transition-all ${
+              activeMainTab === "overview" ? "bg-slate-900 text-white shadow-2xs" : "bg-white text-slate-600 border border-slate-200"
+            }`}
+          >
+            Overview
+          </button>
+          <button
+            onClick={() => setActiveMainTab("sub_vendors")}
+            className={`text-xs font-bold px-3 py-2 rounded-xl shrink-0 transition-all ${
+              activeMainTab === "sub_vendors" ? "bg-indigo-700 text-white shadow-2xs" : "bg-white text-slate-600 border border-slate-200"
+            }`}
+          >
+            Sub-Vendors ({directSubVendors.length})
+          </button>
+          <button
+            onClick={() => setActiveMainTab("freelancers")}
+            className={`text-xs font-bold px-3 py-2 rounded-xl shrink-0 transition-all ${
+              activeMainTab === "freelancers" ? "bg-emerald-700 text-white shadow-2xs" : "bg-white text-slate-600 border border-slate-200"
+            }`}
+          >
+            Freelancers ({teamMembers.length})
+          </button>
+          <button
+            onClick={() => setActiveMainTab("ledger")}
+            className={`text-xs font-bold px-3 py-2 rounded-xl shrink-0 transition-all ${
+              activeMainTab === "ledger" ? "bg-slate-900 text-white shadow-2xs" : "bg-white text-slate-600 border border-slate-200"
+            }`}
+          >
+            Payment Ledger
+          </button>
+          <button
+            onClick={() => setActiveMainTab("report")}
+            className={`text-xs font-bold px-3 py-2 rounded-xl shrink-0 transition-all ${
+              activeMainTab === "report" ? "bg-slate-900 text-white shadow-2xs" : "bg-white text-slate-600 border border-slate-200"
+            }`}
+          >
+            Reports
+          </button>
         </div>
 
-        {/* ── Box 1: Status Breakdown (Verified, Pending, Reject) ── */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
-          <div className="grid grid-cols-3 gap-2 text-center divide-x divide-slate-100">
-            {/* TOTAL VERIFIED */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-center gap-1 text-[10px] font-black text-emerald-700 uppercase tracking-wider">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>TOTAL VERIFIED</span>
-              </div>
-              <p className="text-2xl font-black text-emerald-700 leading-none">
-                {totalVerified}
-              </p>
-              <div className="pt-1 text-[11px] font-bold text-slate-700 flex items-center justify-center gap-1.5">
-                <span>{verifiedCustomers}</span>
-                <span className="text-slate-300">|</span>
-                <span>{verifiedBusinesses}</span>
-              </div>
-              <div className="text-[9px] font-semibold text-slate-400 flex items-center justify-center gap-2">
-                <span>User</span>
-                <span>|</span>
-                <span>Buss</span>
-              </div>
-            </div>
-
-            {/* TOTAL PENDING */}
-            <div className="space-y-1 pl-1">
-              <div className="flex items-center justify-center gap-1 text-[10px] font-black text-amber-700 uppercase tracking-wider">
-                <Clock className="w-3.5 h-3.5" />
-                <span>TOTAL PENDING</span>
-              </div>
-              <p className="text-2xl font-black text-amber-700 leading-none">
-                {totalPending}
-              </p>
-              <div className="pt-1 text-[11px] font-bold text-slate-700 flex items-center justify-center gap-1.5">
-                <span>{pendingCustomers}</span>
-                <span className="text-slate-300">|</span>
-                <span>{pendingBusinesses}</span>
-              </div>
-              <div className="text-[9px] font-semibold text-slate-400 flex items-center justify-center gap-2">
-                <span>User</span>
-                <span>|</span>
-                <span>Buss</span>
-              </div>
-            </div>
-
-            {/* TOTAL REJECT */}
-            <div className="space-y-1 pl-1">
-              <div className="flex items-center justify-center gap-1 text-[10px] font-black text-rose-700 uppercase tracking-wider">
-                <XCircle className="w-3.5 h-3.5" />
-                <span>TOTAL REJECT</span>
-              </div>
-              <p className="text-2xl font-black text-rose-700 leading-none">
-                {totalRejected}
-              </p>
-              <div className="pt-1 text-[11px] font-bold text-slate-700 flex items-center justify-center gap-1.5">
-                <span>{rejectedCustomers}</span>
-                <span className="text-slate-300">|</span>
-                <span>{rejectedBusinesses}</span>
-              </div>
-              <div className="text-[9px] font-semibold text-slate-400 flex items-center justify-center gap-2">
-                <span>User</span>
-                <span>|</span>
-                <span>Buss</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Box 2: APP INSTALL (Total Registration count) ── */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center">
-                <Download className="w-3.5 h-3.5" />
-              </div>
-              <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                APP INSTALL
-              </span>
-            </div>
-            <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              <Smartphone className="w-3 h-3" />
-              <span>Total Registration count</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 text-center divide-x divide-slate-100">
-            <div>
-              <span className="text-[11px] font-bold text-slate-600 block">User</span>
-              <p className="text-xl font-black text-slate-900 mt-0.5">{totalCustomers}</p>
-            </div>
-            <div className="pl-1">
-              <span className="text-[11px] font-bold text-slate-600 block">Business</span>
-              <p className="text-xl font-black text-slate-900 mt-0.5">{totalBusinesses}</p>
-            </div>
-            <div className="pl-1">
-              <span className="text-[11px] font-bold text-indigo-700 block">TOTAL INSTALL</span>
-              <p className="text-xl font-black text-indigo-700 mt-0.5">{totalInstall}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Box 3: Verified Due & Upcoming Income (Customer Due & Business Due) ── */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
-          <div className="grid grid-cols-2 gap-3 divide-x divide-slate-100">
-            {/* VERIFIED DUE */}
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5 text-[11px] font-black text-emerald-800 uppercase tracking-wider">
-                <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>VERIFIED DUE</span>
-              </div>
-              <div className="flex items-center gap-2 pt-0.5">
-                <div className="flex-1 bg-emerald-50/60 rounded-xl p-2 text-center border border-emerald-100">
-                  <span className="text-sm font-black text-emerald-700 block">₹{customerDue.toLocaleString()}</span>
-                  <span className="text-[9.5px] font-bold text-emerald-800 uppercase tracking-tight">Customer</span>
+        {/* ── TAB 1: OVERVIEW ── */}
+        {activeMainTab === "overview" && (
+          <div className="space-y-3">
+            {/* Financial Earnings Card */}
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                    <Wallet className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-800">Verified Earnings</span>
                 </div>
-                <div className="flex-1 bg-blue-50/60 rounded-xl p-2 text-center border border-blue-100">
-                  <span className="text-sm font-black text-blue-700 block">₹{businessDue.toLocaleString()}</span>
-                  <span className="text-[9.5px] font-bold text-blue-800 uppercase tracking-tight">Business</span>
+                <span className="text-base font-black text-emerald-700">
+                  ₹{Number(totalEarnings).toLocaleString()}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-100 text-center">
+                <div className="bg-slate-50 rounded-xl p-2">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block truncate">
+                    Sub-Vendors
+                  </span>
+                  <span className="text-sm font-black text-slate-900">
+                    {directSubVendors.length}
+                  </span>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-2">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block truncate">
+                    Unsettled Due
+                  </span>
+                  <span className="text-sm font-black text-amber-700">
+                    ₹{Number(pendingPayout).toLocaleString()}
+                  </span>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-2">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block truncate">
+                    Settled Paid
+                  </span>
+                  <span className="text-sm font-black text-emerald-700">
+                    ₹{Number(paidEarnings).toLocaleString()}
+                  </span>
                 </div>
               </div>
-              <div className="text-[10px] text-slate-500 font-medium text-center pt-0.5">
-                Total Due: <strong className="text-slate-900 font-bold">₹{totalVerifiedDue.toLocaleString()}</strong>
+            </div>
+
+            {/* Status Breakdown */}
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
+              <div className="grid grid-cols-3 gap-2 text-center divide-x divide-slate-100">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-center gap-1 text-[10px] font-black text-emerald-700 uppercase tracking-wider">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>VERIFIED</span>
+                  </div>
+                  <p className="text-2xl font-black text-emerald-700 leading-none">{totalVerified}</p>
+                  <div className="pt-1 text-[11px] font-bold text-slate-700 flex items-center justify-center gap-1.5">
+                    <span>{verifiedCustomers}</span>
+                    <span className="text-slate-300">|</span>
+                    <span>{verifiedBusinesses}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1 pl-1">
+                  <div className="flex items-center justify-center gap-1 text-[10px] font-black text-amber-700 uppercase tracking-wider">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>PENDING</span>
+                  </div>
+                  <p className="text-2xl font-black text-amber-700 leading-none">{totalPending}</p>
+                  <div className="pt-1 text-[11px] font-bold text-slate-700 flex items-center justify-center gap-1.5">
+                    <span>{pendingCustomers}</span>
+                    <span className="text-slate-300">|</span>
+                    <span>{pendingBusinesses}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1 pl-1">
+                  <div className="flex items-center justify-center gap-1 text-[10px] font-black text-rose-700 uppercase tracking-wider">
+                    <XCircle className="w-3.5 h-3.5" />
+                    <span>REJECTED</span>
+                  </div>
+                  <p className="text-2xl font-black text-rose-700 leading-none">{totalRejected}</p>
+                  <div className="pt-1 text-[11px] font-bold text-slate-700 flex items-center justify-center gap-1.5">
+                    <span>{rejectedCustomers}</span>
+                    <span className="text-slate-300">|</span>
+                    <span>{rejectedBusinesses}</span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* UPCOMING INCOME */}
-            <div className="space-y-1.5 pl-3">
-              <div className="flex items-center gap-1.5 text-[11px] font-black text-amber-800 uppercase tracking-wider">
-                <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
-                <span>INCOME</span>
-              </div>
-              <div className="flex items-center gap-2 pt-0.5">
-                <div className="flex-1 bg-amber-50/60 rounded-xl p-2 text-center border border-amber-100">
-                  <span className="text-sm font-black text-amber-700 block">₹{customerUpcoming.toLocaleString()}</span>
-                  <span className="text-[9.5px] font-bold text-amber-800 uppercase tracking-tight">Customer</span>
+            {/* Dues & Upcoming */}
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-2">
+              <div className="grid grid-cols-2 gap-3 divide-x divide-slate-100">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">VERIFIED DUE</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-black text-emerald-700">₹{customerDue.toLocaleString()} (Cust)</span>
+                    <span className="text-sm font-black text-blue-700">₹{businessDue.toLocaleString()} (Biz)</span>
+                  </div>
                 </div>
-                <div className="flex-1 bg-indigo-50/60 rounded-xl p-2 text-center border border-indigo-100">
-                  <span className="text-sm font-black text-indigo-700 block">₹{businessUpcoming.toLocaleString()}</span>
-                  <span className="text-[9.5px] font-bold text-indigo-800 uppercase tracking-tight">Business</span>
+                <div className="space-y-1 pl-3">
+                  <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">UPCOMING DUE</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-black text-amber-700">₹{customerUpcoming.toLocaleString()}</span>
+                    <span className="text-sm font-black text-indigo-700">₹{businessUpcoming.toLocaleString()}</span>
+                  </div>
                 </div>
-              </div>
-              <div className="text-[10px] text-slate-500 font-medium text-center pt-0.5">
-                Total Upcoming: <strong className="text-slate-900 font-bold">₹{totalUpcomingIncome.toLocaleString()}</strong>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Team Freelancers List (Clickable to view detailed acquisitions) */}
-        <div className="space-y-2">
-          <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
-            <span>Freelancers under You</span>
-            <span className="text-[11px] font-semibold text-slate-500">{teamMembers.length} members</span>
-          </h3>
+        {/* ── TAB 2: SUB-VENDORS CHAIN ── */}
+        {activeMainTab === "sub_vendors" && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Direct Sub-Vendors Under You
+              </h3>
+              <span className="text-[11px] font-semibold text-slate-500">{directSubVendors.length} vendors</span>
+            </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden divide-y divide-slate-100">
-            {teamMembers.length === 0 ? (
-              <div className="p-6 text-center space-y-1.5">
-                <Users className="w-8 h-8 text-slate-300 mx-auto" />
-                <p className="text-xs font-bold text-slate-700">No Freelancers Registered Yet</p>
-                <p className="text-[11px] text-slate-500">
-                  Share your Vendor Code <strong>{vendorCode}</strong> with team members to register them under you.
-                </p>
-              </div>
-            ) : (
-              teamMembers.map((m: any, idx: number) => {
-                const totalAcqs = m.total_users ?? ((m.customers_total ?? 0) + (m.businesses_total ?? 0));
-                const verAcqs = m.verified_count ?? ((m.customers_verified ?? 0) + (m.businesses_verified ?? 0));
-                const pendAcqs = m.pending_count ?? 0;
-                const rejAcqs = m.rejected_count ?? 0;
-                const custCount = m.customers_total ?? 0;
-                const bizCount = m.businesses_total ?? 0;
-
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => {
-                      setSelectedMember(m);
-                      setSubTab("all");
-                      setSearchQuery("");
-                    }}
-                    className="p-3.5 space-y-2 hover:bg-slate-50/80 cursor-pointer transition-all active:scale-[0.99]"
-                  >
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden divide-y divide-slate-100">
+              {directSubVendors.length === 0 ? (
+                <div className="p-6 text-center space-y-1.5">
+                  <Building2 className="w-8 h-8 text-slate-300 mx-auto" />
+                  <p className="text-xs font-bold text-slate-700">No Sub-Vendors Added Yet</p>
+                  <p className="text-[11px] text-slate-500">
+                    Share your code <strong>{vendorCode}</strong> with team leads to register them as Sub-Vendors under you.
+                  </p>
+                </div>
+              ) : (
+                directSubVendors.map((sv: any, idx: number) => (
+                  <div key={idx} className="p-3.5 space-y-2 hover:bg-slate-50/80 transition-all">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
-                       
-                        <div className="min-w-0 flex-1">
-                          <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 truncate">
-                            <span className="truncate">{m.name}</span>
-                            
-                          </h4>
-                          <p className="text-[10.5px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5 truncate">
-                            <span className="font-bold text-slate-700">{m.member_code}</span>
-                            {m.phone && <span className="truncate">&bull; {m.phone}</span>}
-                          </p>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="text-xs font-bold text-slate-900">{sv.name}</h4>
+                          <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            {sv.designation}
+                          </span>
                         </div>
+                        <p className="text-[10.5px] text-slate-400 font-mono mt-0.5">
+                          {sv.vendor_code} &bull; {sv.phone}
+                        </p>
                       </div>
 
-                      {/* Top Right: User & Business count badges + View Details */}
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <div className="text-center px-1.5 py-0.5 rounded-lg bg-blue-50 border border-blue-100 shrink-0 min-w-[32px]">
-                          <span className="text-[11px] font-black text-blue-700 block leading-tight">{custCount}</span>
-                          <span className="text-[7.5px] font-bold text-blue-600 block uppercase tracking-tight">User</span>
-                        </div>
-                        <div className="text-center px-1.5 py-0.5 rounded-lg bg-purple-50 border border-purple-100 shrink-0 min-w-[32px]">
-                          <span className="text-[11px] font-black text-purple-700 block leading-tight">{bizCount}</span>
-                          <span className="text-[7.5px] font-bold text-purple-600 block uppercase tracking-tight">Busin</span>
-                        </div>
-                        <div className="flex items-center gap-0.5 px-2 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors whitespace-nowrap shrink-0">
-                          <span className="text-[10px] font-bold">More</span>
-                          <ChevronRight className="w-3 h-3 stroke-[2.5]" />
-                        </div>
-                      </div>
+                      {/* Rate Visibility Toggle */}
+                      <button
+                        onClick={() => handleToggleRateVisibility(sv.id, sv.is_rate_visible)}
+                        className={`text-[10px] font-bold px-2 py-1 rounded-lg border flex items-center gap-1 transition-colors ${
+                          sv.is_rate_visible
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                            : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200"
+                        }`}
+                        title="Toggle whether Sub-Vendor can see their assigned rate"
+                      >
+                        {sv.is_rate_visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                        <span>Rate: {sv.is_rate_visible ? "ON" : "OFF"}</span>
+                      </button>
                     </div>
 
-                    {/* Stats row (matches Image 2 bottom row: Total | Ver | Pend | Rej | Joined) */}
-                    <div className="grid grid-cols-5 items-center bg-slate-50 border border-slate-100 rounded-xl px-2 py-1.5 text-center text-xs">
+                    <div className="grid grid-cols-4 items-center bg-slate-50 border border-slate-100 rounded-xl px-2 py-1.5 text-center text-xs">
                       <div>
-                        <span className="text-[9px] text-slate-500 font-medium block leading-tight">Total</span>
-                        <strong className="text-[11px] font-black text-slate-900 leading-tight">{totalAcqs}</strong>
+                        <span className="text-[9px] text-slate-500 font-medium block">Cust Rate</span>
+                        <strong className="text-[11px] font-black text-slate-900">₹{sv.rate_per_customer}</strong>
                       </div>
                       <div className="border-l border-slate-200 pl-1">
-                        <span className="text-[9px] text-emerald-700 font-bold block leading-tight">Ver: {verAcqs}</span>
-                        <span className="text-[9.5px] font-black text-emerald-700 block leading-tight">₹{Number(m.verified_earnings ?? 0).toLocaleString()}</span>
+                        <span className="text-[9px] text-slate-500 font-medium block">Biz Rate</span>
+                        <strong className="text-[11px] font-black text-slate-900">₹{sv.rate_per_business}</strong>
                       </div>
                       <div className="border-l border-slate-200 pl-1">
-                        <span className="text-[9px] text-amber-700 font-bold block leading-tight">Pend: {pendAcqs}</span>
-                        <span className="text-[9.5px] font-black text-amber-700 block leading-tight">₹{Number(m.pending_earnings ?? 0).toLocaleString()}</span>
+                        <span className="text-[9px] text-indigo-700 font-bold block">Freelancers</span>
+                        <span className="text-[11px] font-black text-indigo-700">{sv.freelancers_count}</span>
                       </div>
                       <div className="border-l border-slate-200 pl-1">
-                        <span className="text-[9px] text-rose-700 font-bold block leading-tight">Rej: <strong className="font-black">{rejAcqs}</strong></span>
-                      </div>
-                      <div className="border-l border-slate-200 pl-1">
-                        <span className="text-[8.5px] text-slate-400 font-medium block leading-tight">Joined</span>
-                        <span className="text-[8.5px] text-slate-600 font-bold block leading-tight truncate">{m.joined_at || "Recent"}</span>
+                        <span className="text-[9px] text-emerald-700 font-bold block">Acquired</span>
+                        <span className="text-[11px] font-black text-emerald-700">{sv.acquisitions_count}</span>
                       </div>
                     </div>
                   </div>
-                );
-              })
-            )}
+                ))
+              )}
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* ── TAB 3: FREELANCERS ── */}
+        {activeMainTab === "freelancers" && (
+          <div className="space-y-2">
+            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+              <span>Freelancers Under You</span>
+              <span className="text-[11px] font-semibold text-slate-500">{teamMembers.length} members</span>
+            </h3>
+
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden divide-y divide-slate-100">
+              {teamMembers.length === 0 ? (
+                <div className="p-6 text-center space-y-1.5">
+                  <Users className="w-8 h-8 text-slate-300 mx-auto" />
+                  <p className="text-xs font-bold text-slate-700">No Freelancers Registered Yet</p>
+                  <p className="text-[11px] text-slate-500">
+                    Share your Vendor Code <strong>{vendorCode}</strong> with agents to register them under you.
+                  </p>
+                </div>
+              ) : (
+                teamMembers.map((m: any, idx: number) => {
+                  const totalAcqs = m.total_users ?? 0;
+                  const verAcqs = m.verified_count ?? 0;
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        setSelectedMember(m);
+                        setSubTab("all");
+                        setSearchQuery("");
+                      }}
+                      className="p-3.5 space-y-2 hover:bg-slate-50/80 cursor-pointer transition-all active:scale-[0.99]"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-900">{m.name}</h4>
+                          <p className="text-[10.5px] text-slate-400 font-mono mt-0.5">
+                            {m.member_code} &bull; {m.phone}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">
+                          <span>View Users</span>
+                          <ChevronRight className="w-3 h-3 stroke-[2.5]" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-4 items-center bg-slate-50 border border-slate-100 rounded-xl px-2 py-1.5 text-center text-xs">
+                        <div>
+                          <span className="text-[9px] text-slate-500 font-medium block">Total</span>
+                          <strong className="text-[11px] font-black text-slate-900">{totalAcqs}</strong>
+                        </div>
+                        <div className="border-l border-slate-200 pl-1">
+                          <span className="text-[9px] text-emerald-700 font-bold block">Verified</span>
+                          <span className="text-[11px] font-black text-emerald-700">{verAcqs}</span>
+                        </div>
+                        <div className="border-l border-slate-200 pl-1">
+                          <span className="text-[9px] text-amber-700 font-bold block">Pending</span>
+                          <span className="text-[11px] font-black text-amber-700">{m.pending_count ?? 0}</span>
+                        </div>
+                        <div className="border-l border-slate-200 pl-1">
+                          <span className="text-[9px] text-emerald-700 font-bold block">Earnings</span>
+                          <span className="text-[11px] font-black text-emerald-700">₹{Number(m.verified_earnings ?? 0).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB 4: PAYMENT LEDGER ── */}
+        {activeMainTab === "ledger" && (
+          <div className="space-y-2">
+            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+              <span>Transaction Payment Ledger</span>
+              <span className="text-[10px] text-slate-500 font-mono">Lineage Tracking</span>
+            </h3>
+
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+              <div className="grid grid-cols-12 bg-slate-50 border-b border-slate-200 px-3 py-2 text-[10px] font-bold text-slate-500 uppercase">
+                <div className="col-span-3">TRX ID / DATE</div>
+                <div className="col-span-5">USER / AGENT</div>
+                <div className="col-span-2 text-right">RATE</div>
+                <div className="col-span-2 text-right">EARNED</div>
+              </div>
+
+              <div className="divide-y divide-slate-100">
+                {ledgerLoading ? (
+                  <div className="p-6 text-center text-xs text-slate-400">Loading ledger records...</div>
+                ) : ledgerItems.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-500">
+                    No ledger transactions recorded yet. Verified acquisitions will appear here.
+                  </div>
+                ) : (
+                  ledgerItems.map((item: any, idx: number) => (
+                    <div key={idx} className="grid grid-cols-12 items-center px-3 py-2.5 hover:bg-slate-50/50 text-xs">
+                      <div className="col-span-3">
+                        <span className="font-mono font-bold text-[10.5px] text-slate-900 block truncate">{item.transaction_id}</span>
+                        <span className="text-[9px] text-slate-400 block">{item.date}</span>
+                      </div>
+                      <div className="col-span-5">
+                        <span className="font-bold text-slate-900 block truncate">{item.user_name}</span>
+                        <span className="text-[9.5px] text-slate-400 block">
+                          {item.freelancer_code} &bull; {item.acquired_user_type}
+                        </span>
+                      </div>
+                      <div className="col-span-2 text-right font-medium text-slate-600">
+                        ₹{item.rate_applied}
+                      </div>
+                      <div className="col-span-2 text-right font-black text-emerald-700">
+                        ₹{item.earned_amount}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB 5: CONSOLIDATED REPORT ── */}
+        {activeMainTab === "report" && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Chain Consolidated Report
+              </h3>
+              <select
+                value={reportPeriod}
+                onChange={(e) => setReportPeriod(e.target.value)}
+                className="bg-white border border-slate-200 rounded-lg text-xs px-2 py-1 font-semibold text-slate-700 focus:outline-none"
+              >
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">Past 7 Days</option>
+                <option value="month">Past 30 Days</option>
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-2xs space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Total Acquired</span>
+                <p className="text-xl font-black text-slate-900">{reportData?.total_acquisitions ?? totalInstall}</p>
+                <span className="text-[10px] text-slate-500 font-medium">Across all sub-teams</span>
+              </div>
+              <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-2xs space-y-1">
+                <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide">Total Verified</span>
+                <p className="text-xl font-black text-emerald-700">{reportData?.total_verified ?? totalVerified}</p>
+                <span className="text-[10px] text-emerald-600 font-medium">Eligible for payout</span>
+              </div>
+              <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-2xs space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Gross Earned</span>
+                <p className="text-xl font-black text-slate-900">₹{reportData?.total_earned ?? totalEarnings}</p>
+                <span className="text-[10px] text-slate-500 font-medium">Verified acquisitions</span>
+              </div>
+              <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-2xs space-y-1">
+                <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wide">Pending Due</span>
+                <p className="text-xl font-black text-amber-700">₹{reportData?.total_pending_due ?? pendingPayout}</p>
+                <span className="text-[10px] text-amber-600 font-medium">Unsettled amount</span>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
+
+      {/* ── APPROVAL MODAL FOR SUB-VENDOR REQUEST ── */}
+      {selectedPendingSubVendor && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-4 border border-slate-200 shadow-xl space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">Approve Sub-Vendor</h4>
+                  <p className="text-[10px] text-slate-500">
+                    {selectedPendingSubVendor.name} &bull; {selectedPendingSubVendor.phone}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedPendingSubVendor(null)}
+                className="w-6 h-6 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Rate Ceiling Info Box */}
+            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-2.5 space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-800 block">
+                Your Rate Ceiling:
+              </span>
+              <p className="text-xs text-indigo-950 font-bold">
+                Max Cust: ₹{rateCustomer.toFixed(2)} &bull; Max Biz: ₹{rateBusiness.toFixed(2)}
+              </p>
+              <p className="text-[9.5px] text-indigo-700">
+                Sub-Vendor rates cannot exceed your rate. The difference is your profit margin!
+              </p>
+            </div>
+
+            {/* Designation Selector */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-slate-700 block">Sub-Vendor Designation</label>
+              <select
+                value={approvalDesignation}
+                onChange={(e) => setApprovalDesignation(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none"
+              >
+                <option value="Marketing Head">Marketing Head</option>
+                <option value="Digital Marketer">Digital Marketer</option>
+                <option value="Area Sales Manager">Area Sales Manager</option>
+                <option value="Field Coordinator">Field Coordinator</option>
+                <option value="Territory Lead">Territory Lead</option>
+                <option value="Sub-Vendor">Sub-Vendor (General)</option>
+              </select>
+            </div>
+
+            {/* Customer Rate Input */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-slate-700 block">
+                Rate per Verified Customer (₹)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max={rateCustomer}
+                value={approvalCustRate}
+                onChange={(e) => setApprovalCustRate(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none"
+                placeholder="₹0.00"
+              />
+              <span className="text-[9.5px] text-slate-400">Max allowed: ₹{rateCustomer.toFixed(2)}</span>
+            </div>
+
+            {/* Business Rate Input */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-slate-700 block">
+                Rate per Verified Business (₹)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max={rateBusiness}
+                value={approvalBizRate}
+                onChange={(e) => setApprovalBizRate(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none"
+                placeholder="₹0.00"
+              />
+              <span className="text-[9.5px] text-slate-400">Max allowed: ₹{rateBusiness.toFixed(2)}</span>
+            </div>
+
+            {/* Rate Visibility Toggle */}
+            <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+              <div>
+                <span className="text-xs font-bold text-slate-800 block">Show Rate to Sub-Vendor</span>
+                <span className="text-[9.5px] text-slate-400 block">When OFF, rates are hidden from their view</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setApprovalRateVisible(!approvalRateVisible)}
+                className={`w-11 h-6 rounded-full transition-colors relative ${
+                  approvalRateVisible ? "bg-emerald-600" : "bg-slate-300"
+                }`}
+              >
+                <div
+                  className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
+                    approvalRateVisible ? "left-6" : "left-1"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Actions */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                onClick={() => setSelectedPendingSubVendor(null)}
+                className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApproveSubVendorSubmit}
+                disabled={approvingLoading}
+                className="w-full py-2.5 rounded-xl bg-indigo-700 text-white text-xs font-bold hover:bg-indigo-800 transition-colors shadow-2xs disabled:opacity-50"
+              >
+                {approvingLoading ? "Approving..." : "Approve & Activate"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

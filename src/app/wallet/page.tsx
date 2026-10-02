@@ -420,6 +420,18 @@ export default function WalletPage() {
     }
 
     const targetUrl = `${targetPath}?${queryParams.toString()}`;
+    const fullTargetUrl = targetUrl.startsWith('http') ? targetUrl : `https://api.fiinway.com${targetUrl}`;
+    if (typeof window !== 'undefined' && (window as any).AppBridge) {
+      try {
+        (window as any).AppBridge.postMessage(JSON.stringify({
+          action: 'open_finance',
+          url: fullTargetUrl,
+        }));
+        return;
+      } catch (e) {
+        console.error(e);
+      }
+    }
     window.location.href = targetUrl;
   };
 

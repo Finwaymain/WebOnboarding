@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, Briefcase, MapPin, Layers, FileText, CheckCircle2, AlertCircle } from "lucide-react";
+import { X, Briefcase, MapPin, Layers, FileText, CheckCircle2, AlertCircle, Building2 } from "lucide-react";
 
 interface VendorApplicationModalProps {
   isOpen: boolean;
@@ -24,6 +24,8 @@ export default function VendorApplicationModal({
   token,
   apiKey,
 }: VendorApplicationModalProps) {
+  const [parentCode, setParentCode] = useState("");
+  const [designation, setDesignation] = useState("Marketing Head");
   const [teamLocation, setTeamLocation] = useState("");
   const [teamType, setTeamType] = useState("Field Marketing Team");
   const [remarks, setRemarks] = useState("");
@@ -55,15 +57,33 @@ export default function VendorApplicationModal({
         "user_cat": userCat,
       };
 
-      const payload = {
-        id_user: userId,
-        user_cat: userCat,
-        team_location: teamLocation.trim(),
-        team_type: teamType.trim(),
-        remarks: remarks.trim(),
-      };
+      const hasParent = Boolean(parentCode.trim());
 
-      const res = await fetch(`${apiBase}/vendor-team/apply`, {
+      const url = hasParent
+        ? `${apiBase}/vendor-team/join`
+        : `${apiBase}/vendor-team/apply`;
+
+      const payload = hasParent
+        ? {
+            id_user: userId,
+            user_cat: userCat,
+            vendor_code: parentCode.trim().toUpperCase(),
+            role_type: "sub_vendor",
+            designation: designation.trim(),
+            team_location: teamLocation.trim(),
+            team_type: teamType.trim(),
+            remarks: remarks.trim(),
+          }
+        : {
+            id_user: userId,
+            user_cat: userCat,
+            designation: "Head Vendor",
+            team_location: teamLocation.trim(),
+            team_type: teamType.trim(),
+            remarks: remarks.trim(),
+          };
+
+      const res = await fetch(url, {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
@@ -74,7 +94,7 @@ export default function VendorApplicationModal({
         onSuccess(json.data || payload);
         onClose();
       } else {
-        setError(json.message || "Failed to submit application. Please try again.");
+        setError(json.message || json.error || "Failed to submit application. Please check details.");
       }
     } catch (err: any) {
       setError("Network error. Please check your connection and try again.");
@@ -92,35 +112,34 @@ export default function VendorApplicationModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 relative animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 relative animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
         
         {/* Close Button */}
         <button
           onClick={onClose}
           disabled={submitting}
-          className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-          title="Close"
+          className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
         </button>
 
         {/* Header */}
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-            <Briefcase className="w-6 h-6" />
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold shrink-0">
+            <Building2 className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-              Team Manager Role
-            </span>
-            <h3 className="text-lg font-bold text-slate-900 leading-snug">
-              Apply as Marketing Vendor
+            <h3 className="text-base font-bold text-slate-900 leading-tight">
+              Apply for Vendor / Sub-Vendor
             </h3>
+            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full inline-block mt-0.5">
+              Multi-Level Partner Network
+            </span>
           </div>
         </div>
 
         <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-          Lead a team of freelancers under your unique Vendor Code. Company Admin will review your application and configure your custom payout rates for verified customers & businesses.
+          Manage your own team of Sub-Vendors and Freelancers. Earn custom commission on every verified customer and business user acquired.
         </p>
 
         {error && (
@@ -130,10 +149,45 @@ export default function VendorApplicationModal({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3.5">
+          {/* Parent Vendor Code (Optional) */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+              <span>Parent Vendor Code (Optional)</span>
+              <span className="text-[10px] text-slate-400 font-normal">Leave blank if Top-Level Vendor</span>
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. VR10001 (if joining under a parent vendor)"
+              value={parentCode}
+              onChange={(e) => setParentCode(e.target.value.toUpperCase())}
+              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono focus:outline-hidden focus:border-indigo-600 bg-slate-50/50"
+            />
+          </div>
+
+          {/* Designation */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Your Designation / Role Title <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={designation}
+              onChange={(e) => setDesignation(e.target.value)}
+              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-600 bg-slate-50/50 font-medium text-slate-800"
+            >
+              <option value="Marketing Head">Marketing Head</option>
+              <option value="Digital Marketer">Digital Marketer</option>
+              <option value="Area Sales Manager">Area Sales Manager</option>
+              <option value="Field Coordinator">Field Coordinator</option>
+              <option value="Business Development Lead">Business Development Lead</option>
+              <option value="Head Vendor">Head Vendor (Direct)</option>
+              <option value="Sub-Vendor">Sub-Vendor (General)</option>
+            </select>
+          </div>
+
           {/* Team Location */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+            <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
               <MapPin className="w-3.5 h-3.5 text-slate-400" />
               Team Territory / City / Location <span className="text-red-500">*</span>
             </label>
@@ -143,23 +197,23 @@ export default function VendorApplicationModal({
               placeholder="e.g. Jaipur & Suburbs, Lucknow Division..."
               value={teamLocation}
               onChange={(e) => setTeamLocation(e.target.value)}
-              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 bg-slate-50/50"
+              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-600 bg-slate-50/50"
             />
           </div>
 
           {/* Team Type */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+            <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-slate-400" />
               Team Type & Structure <span className="text-red-500">*</span>
             </label>
-            <div className="flex flex-wrap gap-1.5 mb-2">
+            <div className="flex flex-wrap gap-1.5 mb-1.5">
               {predefinedTypes.map((type) => (
                 <button
                   type="button"
                   key={type}
                   onClick={() => setTeamType(type)}
-                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all ${
+                  className={`text-[10.5px] font-semibold px-2 py-0.5 rounded-lg border transition-all ${
                     teamType === type
                       ? "bg-emerald-50 border-emerald-500 text-emerald-800"
                       : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
@@ -175,22 +229,22 @@ export default function VendorApplicationModal({
               placeholder="Or specify custom team type..."
               value={teamType}
               onChange={(e) => setTeamType(e.target.value)}
-              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 bg-slate-50/50"
+              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-600 bg-slate-50/50"
             />
           </div>
 
           {/* Remarks */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+            <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
               <FileText className="w-3.5 h-3.5 text-slate-400" />
-              Additional Remarks / Experience (Optional)
+              Additional Notes / Remarks (Optional)
             </label>
             <textarea
               rows={2}
-              placeholder="e.g. 20+ campus agents ready to onboard customers..."
+              placeholder="Brief details about your team size, target territory..."
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
-              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 bg-slate-50/50"
+              className="w-full text-xs px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-600 bg-slate-50/50 resize-none"
             />
           </div>
 
@@ -198,22 +252,21 @@ export default function VendorApplicationModal({
           <button
             type="submit"
             disabled={submitting}
-            className="w-full mt-2 bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs py-3.5 rounded-xl shadow-xs flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-50"
+            className="w-full mt-2 bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs py-3 rounded-xl shadow-xs flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-50"
           >
             {submitting ? (
               <>
-                <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 <span>Submitting Application...</span>
               </>
             ) : (
               <>
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Submit Vendor Application</span>
+                <span>Submit Application</span>
               </>
             )}
           </button>
         </form>
-
       </div>
     </div>
   );

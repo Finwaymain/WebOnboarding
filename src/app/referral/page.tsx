@@ -1114,6 +1114,11 @@ function ReferralDashboardContent() {
           onBack={handleBack}
           vendorData={vendorData}
           showToast={showToast}
+          apiBase={getApiBase()}
+          userId={userId || driverId}
+          userCat={userCat || (driverId ? "driver" : "customer")}
+          token={token}
+          onRefresh={fetchVendorTeamData}
         />
       )}
 

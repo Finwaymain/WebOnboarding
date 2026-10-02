@@ -399,7 +399,8 @@ function OnboardingForm() {
 
   const isHomeServicesCategory = (category: any = primaryCategory) => {
     const label = (category?.libelle || '').toLowerCase();
-    return label.includes('home services');
+    const subLabel = (businessType?.libelle || '').toLowerCase();
+    return label.includes('home services') || label.includes('home service') || subLabel.includes('home service');
   };
 
   const skillCatalogForDisplay = useMemo(
@@ -862,7 +863,7 @@ function OnboardingForm() {
   };
 
   const isTransportOrDeliveryCategory = () => {
-    return !isHomeServicesCategory();
+    return businessRequiresVehicle();
   };
 
   // Deduplicate adminDocs by normalized title so each document type (e.g. Aadhaar) is requested only once and shop photos are excluded for Transport & Delivery
@@ -954,7 +955,7 @@ function OnboardingForm() {
 
   const businessRequiresHomeVisitPricing = () => {
     if (!businessType || businessRequiresVehicle()) return false;
-    return isHomeServicesCategory() || businessType.requires_home_visit === true;
+    return isHomeServicesCategory();
   };
 
   const step2IsPricing = () => businessRequiresHomeVisitPricing();
