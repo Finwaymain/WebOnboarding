@@ -94,7 +94,8 @@ export default function VendorDashboardView({
   const freelancerCode = vendorData?.freelancer_code || (numPart ? `FR${numPart}` : `FR------`);
 
   const isHeadVendor = vendorData?.is_head_vendor ?? !vendorData?.parent_vendor;
-  const isRateVisible = vendorData?.is_rate_visible ?? true;
+  const isRateVisible = !(vendorData?.is_rate_visible === false || vendorData?.is_rate_visible === 0 || vendorData?.is_rate_visible === "0");
+  const canViewFinancials = isHeadVendor || isRateVisible;
   const designation = vendorData?.designation || (isHeadVendor ? "Head Vendor" : "Sub-Vendor");
   const parentVendor = vendorData?.parent_vendor;
 
@@ -646,7 +647,7 @@ export default function VendorDashboardView({
         </div>
 
         {/* Assigned Payout Rates Card (Only shown if Head Vendor or if rates are NOT hidden by parent) */}
-        {(isHeadVendor || isRateVisible) && (
+        {canViewFinancials && (
           <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-sm space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -700,14 +701,16 @@ export default function VendorDashboardView({
           >
             Freelancers ({teamMembers.length})
           </button>
-          <button
-            onClick={() => setActiveMainTab("ledger")}
-            className={`text-xs font-bold px-3 py-2 rounded-xl shrink-0 transition-all ${
-              activeMainTab === "ledger" ? "bg-slate-900 text-white shadow-2xs" : "bg-white text-slate-600 border border-slate-200"
-            }`}
-          >
-            Payment Ledger
-          </button>
+          {canViewFinancials && (
+            <button
+              onClick={() => setActiveMainTab("ledger")}
+              className={`text-xs font-bold px-3 py-2 rounded-xl shrink-0 transition-all ${
+                activeMainTab === "ledger" ? "bg-slate-900 text-white shadow-2xs" : "bg-white text-slate-600 border border-slate-200"
+              }`}
+            >
+              Payment Ledger
+            </button>
+          )}
           <button
             onClick={() => setActiveMainTab("report")}
             className={`text-xs font-bold px-3 py-2 rounded-xl shrink-0 transition-all ${
@@ -722,46 +725,48 @@ export default function VendorDashboardView({
         {activeMainTab === "overview" && (
           <div className="space-y-3">
             {/* Financial Earnings Card */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                    <Wallet className="w-4 h-4" />
+            {canViewFinancials && (
+              <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                      <Wallet className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-800">Verified Earnings</span>
                   </div>
-                  <span className="text-xs font-bold text-slate-800">Verified Earnings</span>
+                  <span className="text-base font-black text-emerald-700">
+                    ₹{Number(totalEarnings).toLocaleString()}
+                  </span>
                 </div>
-                <span className="text-base font-black text-emerald-700">
-                  ₹{Number(totalEarnings).toLocaleString()}
-                </span>
-              </div>
 
-              <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-100 text-center">
-                <div className="bg-slate-50 rounded-xl p-2">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block truncate">
-                    Sub-Vendors
-                  </span>
-                  <span className="text-sm font-black text-slate-900">
-                    {directSubVendors.length}
-                  </span>
-                </div>
-                <div className="bg-slate-50 rounded-xl p-2">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block truncate">
-                    Unsettled Due
-                  </span>
-                  <span className="text-sm font-black text-amber-700">
-                    ₹{Number(pendingPayout).toLocaleString()}
-                  </span>
-                </div>
-                <div className="bg-slate-50 rounded-xl p-2">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block truncate">
-                    Settled Paid
-                  </span>
-                  <span className="text-sm font-black text-emerald-700">
-                    ₹{Number(paidEarnings).toLocaleString()}
-                  </span>
+                <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-100 text-center">
+                  <div className="bg-slate-50 rounded-xl p-2">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block truncate">
+                      Sub-Vendors
+                    </span>
+                    <span className="text-sm font-black text-slate-900">
+                      {directSubVendors.length}
+                    </span>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-2">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block truncate">
+                      Unsettled Due
+                    </span>
+                    <span className="text-sm font-black text-amber-700">
+                      ₹{Number(pendingPayout).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-2">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block truncate">
+                      Settled Paid
+                    </span>
+                    <span className="text-sm font-black text-emerald-700">
+                      ₹{Number(paidEarnings).toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Status Breakdown */}
             <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
@@ -808,24 +813,26 @@ export default function VendorDashboardView({
             </div>
 
             {/* Dues & Upcoming */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-2">
-              <div className="grid grid-cols-2 gap-3 divide-x divide-slate-100">
-                <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">VERIFIED DUE</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-black text-emerald-700">₹{customerDue.toLocaleString()} (Cust)</span>
-                    <span className="text-sm font-black text-blue-700">₹{businessDue.toLocaleString()} (Biz)</span>
+            {canViewFinancials && (
+              <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-2">
+                <div className="grid grid-cols-2 gap-3 divide-x divide-slate-100">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">VERIFIED DUE</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-black text-emerald-700">₹{customerDue.toLocaleString()} (Cust)</span>
+                      <span className="text-sm font-black text-blue-700">₹{businessDue.toLocaleString()} (Biz)</span>
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-1 pl-3">
-                  <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">UPCOMING DUE</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-black text-amber-700">₹{customerUpcoming.toLocaleString()}</span>
-                    <span className="text-sm font-black text-indigo-700">₹{businessUpcoming.toLocaleString()}</span>
+                  <div className="space-y-1 pl-3">
+                    <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">UPCOMING DUE</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-black text-amber-700">₹{customerUpcoming.toLocaleString()}</span>
+                      <span className="text-sm font-black text-indigo-700">₹{businessUpcoming.toLocaleString()}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -969,7 +976,7 @@ export default function VendorDashboardView({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-4 items-center bg-slate-50 border border-slate-100 rounded-xl px-2 py-1.5 text-center text-xs">
+                      <div className={`grid ${canViewFinancials ? "grid-cols-4" : "grid-cols-3"} items-center bg-slate-50 border border-slate-100 rounded-xl px-2 py-1.5 text-center text-xs`}>
                         <div>
                           <span className="text-[9px] text-slate-500 font-medium block">Total</span>
                           <strong className="text-[11px] font-black text-slate-900">{totalAcqs}</strong>
@@ -982,10 +989,12 @@ export default function VendorDashboardView({
                           <span className="text-[9px] text-amber-700 font-bold block">Pending</span>
                           <span className="text-[11px] font-black text-amber-700">{m.pending_count ?? 0}</span>
                         </div>
-                        <div className="border-l border-slate-200 pl-1">
-                          <span className="text-[9px] text-emerald-700 font-bold block">Earnings</span>
-                          <span className="text-[11px] font-black text-emerald-700">₹{Number(m.verified_earnings ?? 0).toLocaleString()}</span>
-                        </div>
+                        {canViewFinancials && (
+                          <div className="border-l border-slate-200 pl-1">
+                            <span className="text-[9px] text-emerald-700 font-bold block">Earnings</span>
+                            <span className="text-[11px] font-black text-emerald-700">₹{Number(m.verified_earnings ?? 0).toLocaleString()}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -996,7 +1005,7 @@ export default function VendorDashboardView({
         )}
 
         {/* ── TAB 4: PAYMENT LEDGER ── */}
-        {activeMainTab === "ledger" && (
+        {activeMainTab === "ledger" && canViewFinancials && (
           <div className="space-y-2">
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
               <span>Transaction Payment Ledger</span>
@@ -1075,16 +1084,20 @@ export default function VendorDashboardView({
                 <p className="text-xl font-black text-emerald-700">{reportData?.total_verified ?? totalVerified}</p>
                 <span className="text-[10px] text-emerald-600 font-medium">Eligible for payout</span>
               </div>
-              <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-2xs space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Gross Earned</span>
-                <p className="text-xl font-black text-slate-900">₹{reportData?.total_earned ?? totalEarnings}</p>
-                <span className="text-[10px] text-slate-500 font-medium">Verified acquisitions</span>
-              </div>
-              <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-2xs space-y-1">
-                <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wide">Pending Due</span>
-                <p className="text-xl font-black text-amber-700">₹{reportData?.total_pending_due ?? pendingPayout}</p>
-                <span className="text-[10px] text-amber-600 font-medium">Unsettled amount</span>
-              </div>
+              {canViewFinancials && (
+                <>
+                  <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-2xs space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Gross Earned</span>
+                    <p className="text-xl font-black text-slate-900">₹{reportData?.total_earned ?? totalEarnings}</p>
+                    <span className="text-[10px] text-slate-500 font-medium">Verified acquisitions</span>
+                  </div>
+                  <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-2xs space-y-1">
+                    <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wide">Pending Due</span>
+                    <p className="text-xl font-black text-amber-700">₹{reportData?.total_pending_due ?? pendingPayout}</p>
+                    <span className="text-[10px] text-amber-600 font-medium">Unsettled amount</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
