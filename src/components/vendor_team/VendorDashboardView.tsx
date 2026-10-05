@@ -88,6 +88,20 @@ export default function VendorDashboardView({
     return [];
   };
 
+  const maskSubVendorPhone = (phone?: string | null): string => {
+    if (!phone) return "";
+    const str = String(phone).trim();
+    if (/^x{6}\d{4}$/i.test(str)) {
+      return str.toLowerCase();
+    }
+    const digits = str.replace(/\D/g, "");
+    if (digits.length >= 4) {
+      const last4 = digits.slice(-4);
+      return `xxxxxx${last4}`;
+    }
+    return str;
+  };
+
   const vendorCode = String(vendorData?.vendor_code || "VR------");
   const numPart = vendorCode.replace(/^[A-Za-z]+/, "");
   const subVendorCode = vendorData?.sub_vendor_code || (numPart ? `SV${numPart}` : `SV------`);
@@ -518,7 +532,7 @@ export default function VendorDashboardView({
                   <div className="min-w-0 flex-1 mr-2">
                     <p className="text-xs font-bold text-white truncate">{pending.name}</p>
                     <p className="text-[10.5px] text-amber-100 truncate">
-                      {pending.phone} &bull; {pending.designation}
+                      {pending.phone ? `${maskSubVendorPhone(pending.phone)} • ` : ""}{pending.designation}
                     </p>
                   </div>
                   <button
@@ -878,7 +892,13 @@ export default function VendorDashboardView({
                           </span>
                         </div>
                         <p className="text-[10.5px] text-slate-400 font-mono mt-0.5">
-                          {sv.vendor_code} &bull; {sv.phone}
+                          {sv.vendor_code}
+                          {sv.phone ? (
+                            <>
+                              {" "}&bull;{" "}
+                              <span>{maskSubVendorPhone(sv.phone)}</span>
+                            </>
+                          ) : null}
                         </p>
                       </div>
 
@@ -1116,7 +1136,8 @@ export default function VendorDashboardView({
                 <div>
                   <h4 className="text-xs font-bold text-slate-900">Approve Sub-Vendor</h4>
                   <p className="text-[10px] text-slate-500">
-                    {selectedPendingSubVendor.name} &bull; {selectedPendingSubVendor.phone}
+                    {selectedPendingSubVendor.name}
+                    {selectedPendingSubVendor.phone ? ` • ${maskSubVendorPhone(selectedPendingSubVendor.phone)}` : ""}
                   </p>
                 </div>
               </div>
