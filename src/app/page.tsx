@@ -170,6 +170,28 @@ function OnboardingForm() {
   }]);
 
   const [documents, setDocuments] = useState<Record<string, File | null>>({});
+  const [vehiclePhotos, setVehiclePhotos] = useState<Record<string, File>>({});
+  const [vehiclePhotoPreviews, setVehiclePhotoPreviews] = useState<Record<string, string>>({});
+
+  const handleVehiclePhotoChange = (vehId: number | string, field: string, file: File | null) => {
+    const key = `${vehId}_${field}`;
+    if (file) {
+      setVehiclePhotos(prev => ({ ...prev, [key]: file }));
+      const url = URL.createObjectURL(file);
+      setVehiclePhotoPreviews(prev => ({ ...prev, [key]: url }));
+    } else {
+      setVehiclePhotos(prev => {
+        const copy = { ...prev };
+        delete copy[key];
+        return copy;
+      });
+      setVehiclePhotoPreviews(prev => {
+        const copy = { ...prev };
+        delete copy[key];
+        return copy;
+      });
+    }
+  };
   const [bankName, setBankName] = useState("");
   const [accountNo, setAccountNo] = useState("");
   const [ifscCode, setIfscCode] = useState("");
@@ -1238,6 +1260,17 @@ function OnboardingForm() {
         };
       });
       data.append("vehicles", JSON.stringify(sanitizedVehicles));
+
+      // Append vehicle photos
+      Object.entries(vehiclePhotos).forEach(([key, file]) => {
+        if (file) {
+          data.append(`vehicle_${key}`, file);
+          if (vehicles.length > 0 && key.startsWith(`${vehicles[0]?.id}_`)) {
+            const photoType = key.replace(`${vehicles[0]?.id}_`, '');
+            data.append(`vehicle_${photoType}`, file);
+          }
+        }
+      });
     }
 
     if (businessRequiresHomeVisitPricing()) {
@@ -2044,6 +2077,137 @@ function OnboardingForm() {
                         {isBike && (
                           <p className="text-[10px] text-gray-500 mt-1">Bike allows 1 passenger by default</p>
                         )}
+                      </div>
+
+                      {/* Vehicle Photos */}
+                      <div className="pt-3 border-t border-gray-100 mt-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block text-xs font-semibold text-gray-700">
+                            Vehicle Photos
+                          </label>
+                          <span className="text-[10px] text-gray-400 font-medium">Front, Back, Side & Number Plate</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2.5">
+                          {/* 1. Vehicle Front Photo */}
+                          <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-2.5 text-center hover:border-green-500 hover:bg-green-50/20 transition-all">
+                            <label className="cursor-pointer block">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] || null;
+                                  handleVehiclePhotoChange(veh.id, 'front_photo', file);
+                                }}
+                              />
+                              {vehiclePhotoPreviews[`${veh.id}_front_photo`] ? (
+                                <img
+                                  src={vehiclePhotoPreviews[`${veh.id}_front_photo`]}
+                                  alt="Front photo"
+                                  className="w-full h-16 object-cover rounded-lg mb-1"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 mx-auto mb-1 rounded-full bg-white shadow-sm flex items-center justify-center text-sm">
+                                  📸
+                                </div>
+                              )}
+                              <p className="text-[11px] font-bold text-gray-800">Vehicle Front Photo</p>
+                              <p className={`text-[10px] truncate mt-0.5 ${vehiclePhotos[`${veh.id}_front_photo`] ? 'text-green-600 font-semibold' : 'text-gray-400'}`}>
+                                {vehiclePhotos[`${veh.id}_front_photo`] ? `✓ ${vehiclePhotos[`${veh.id}_front_photo`].name}` : 'Tap to upload'}
+                              </p>
+                            </label>
+                          </div>
+
+                          {/* 2. Vehicle Back Photo */}
+                          <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-2.5 text-center hover:border-green-500 hover:bg-green-50/20 transition-all">
+                            <label className="cursor-pointer block">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] || null;
+                                  handleVehiclePhotoChange(veh.id, 'back_photo', file);
+                                }}
+                              />
+                              {vehiclePhotoPreviews[`${veh.id}_back_photo`] ? (
+                                <img
+                                  src={vehiclePhotoPreviews[`${veh.id}_back_photo`]}
+                                  alt="Back photo"
+                                  className="w-full h-16 object-cover rounded-lg mb-1"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 mx-auto mb-1 rounded-full bg-white shadow-sm flex items-center justify-center text-sm">
+                                  📸
+                                </div>
+                              )}
+                              <p className="text-[11px] font-bold text-gray-800">Vehicle Back Photo</p>
+                              <p className={`text-[10px] truncate mt-0.5 ${vehiclePhotos[`${veh.id}_back_photo`] ? 'text-green-600 font-semibold' : 'text-gray-400'}`}>
+                                {vehiclePhotos[`${veh.id}_back_photo`] ? `✓ ${vehiclePhotos[`${veh.id}_back_photo`].name}` : 'Tap to upload'}
+                              </p>
+                            </label>
+                          </div>
+
+                          {/* 3. Vehicle Side Photo */}
+                          <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-2.5 text-center hover:border-green-500 hover:bg-green-50/20 transition-all">
+                            <label className="cursor-pointer block">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] || null;
+                                  handleVehiclePhotoChange(veh.id, 'side_photo', file);
+                                }}
+                              />
+                              {vehiclePhotoPreviews[`${veh.id}_side_photo`] ? (
+                                <img
+                                  src={vehiclePhotoPreviews[`${veh.id}_side_photo`]}
+                                  alt="Side photo"
+                                  className="w-full h-16 object-cover rounded-lg mb-1"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 mx-auto mb-1 rounded-full bg-white shadow-sm flex items-center justify-center text-sm">
+                                  📸
+                                </div>
+                              )}
+                              <p className="text-[11px] font-bold text-gray-800">Vehicle Side Photo</p>
+                              <p className={`text-[10px] truncate mt-0.5 ${vehiclePhotos[`${veh.id}_side_photo`] ? 'text-green-600 font-semibold' : 'text-gray-400'}`}>
+                                {vehiclePhotos[`${veh.id}_side_photo`] ? `✓ ${vehiclePhotos[`${veh.id}_side_photo`].name}` : 'Tap to upload'}
+                              </p>
+                            </label>
+                          </div>
+
+                          {/* 4. Vehicle Number Plate Photo */}
+                          <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-2.5 text-center hover:border-green-500 hover:bg-green-50/20 transition-all">
+                            <label className="cursor-pointer block">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] || null;
+                                  handleVehiclePhotoChange(veh.id, 'numberplate_photo', file);
+                                }}
+                              />
+                              {vehiclePhotoPreviews[`${veh.id}_numberplate_photo`] ? (
+                                <img
+                                  src={vehiclePhotoPreviews[`${veh.id}_numberplate_photo`]}
+                                  alt="Number plate photo"
+                                  className="w-full h-16 object-cover rounded-lg mb-1"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 mx-auto mb-1 rounded-full bg-white shadow-sm flex items-center justify-center text-sm">
+                                  🔢
+                                </div>
+                              )}
+                              <p className="text-[11px] font-bold text-gray-800">Vehicle Number Plate Photo</p>
+                              <p className={`text-[10px] truncate mt-0.5 ${vehiclePhotos[`${veh.id}_numberplate_photo`] ? 'text-green-600 font-semibold' : 'text-gray-400'}`}>
+                                {vehiclePhotos[`${veh.id}_numberplate_photo`] ? `✓ ${vehiclePhotos[`${veh.id}_numberplate_photo`].name}` : 'Tap to upload'}
+                              </p>
+                            </label>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
