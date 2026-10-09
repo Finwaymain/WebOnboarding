@@ -397,6 +397,22 @@ function OnboardingForm() {
     };
   }, []);
 
+  // Ensure bike vehicles default to 1 passenger
+  useEffect(() => {
+    if (!vehiclesData || vehiclesData.length === 0) return;
+    setVehicles(prevVehicles =>
+      prevVehicles.map(v => {
+        if (!v.type_id) return v;
+        const selectedType = vehiclesData.find((t: any) => t.id?.toString() === v.type_id?.toString());
+        const isBike = Boolean(selectedType && /bike|moto|scooter|two\s*wheeler/i.test(selectedType.name || ''));
+        if (isBike && (!v.passenger || v.passenger === '')) {
+          return { ...v, passenger: '1' };
+        }
+        return v;
+      })
+    );
+  }, [vehiclesData]);
+
   const isHomeServicesCategory = (category: any = primaryCategory) => {
     const label = (category?.libelle || '').toLowerCase();
     const subLabel = (businessType?.libelle || '').toLowerCase();
@@ -992,10 +1008,15 @@ function OnboardingForm() {
     if (!businessRequiresVehicle()) return true;
 
     // Ensure all active vehicles are fully filled
-    return vehicles.every(v =>
-      v.type_id && v.brand && v.model && v.number_plate &&
-      v.color && v.car_make && v.passenger && v.milage && v.km
-    );
+    return vehicles.every(v => {
+      const selectedType = vehiclesData.find((t: any) => t.id?.toString() === v.type_id?.toString());
+      const isBike = Boolean(selectedType && /bike|moto|scooter|two\s*wheeler/i.test(selectedType.name || ''));
+      const passenger = v.passenger || (isBike ? '1' : '');
+      return (
+        v.type_id && v.brand && v.model && v.number_plate &&
+        v.color && v.car_make && passenger && v.milage && v.km
+      );
+    });
   };
 
   const handleNextFromStep1 = () => {
@@ -1135,9 +1156,19 @@ function OnboardingForm() {
   const updateVehicle = (id: number, field: string, value: string) => {
     setVehicles(vehicles.map(v => {
       if (v.id === id) {
-        // If type changes, reset brand and model
+        // If type changes, reset brand and model, and set passenger to 1 by default for bikes
         if (field === 'type_id') {
-          return { ...v, type_id: value, brand: '', model: '' };
+          const selectedType = vehiclesData.find((t: any) => t.id?.toString() === value?.toString());
+          const isBike = Boolean(
+            selectedType && /bike|moto|scooter|two\s*wheeler/i.test(selectedType.name || '')
+          );
+          return {
+            ...v,
+            type_id: value,
+            brand: '',
+            model: '',
+            passenger: isBike ? '1' : (v.passenger === '1' ? '' : v.passenger),
+          };
         }
         // If brand changes, reset model
         if (field === 'brand') {
@@ -1198,7 +1229,15 @@ function OnboardingForm() {
     }
 
     if (businessRequiresVehicle()) {
-      data.append("vehicles", JSON.stringify(vehicles));
+      const sanitizedVehicles = vehicles.map(v => {
+        const selectedType = vehiclesData.find((t: any) => t.id?.toString() === v.type_id?.toString());
+        const isBike = Boolean(selectedType && /bike|moto|scooter|two\s*wheeler/i.test(selectedType.name || ''));
+        return {
+          ...v,
+          passenger: (isBike && (!v.passenger || v.passenger === '')) ? '1' : v.passenger,
+        };
+      });
+      data.append("vehicles", JSON.stringify(sanitizedVehicles));
     }
 
     if (businessRequiresHomeVisitPricing()) {
@@ -1851,6 +1890,9 @@ function OnboardingForm() {
                 const allowedVehTypes = vehicleMappings[String(relevantRoleId)] || vehicleMappings[relevantRoleId] || [];
                 const availableTypes = vehiclesData.filter((v: any) => allowedVehTypes.some((av: any) => av.vehicle_type_id == v.id));
                 const selectedTypeObj = availableTypes.find((t: any) => t.id == veh.type_id);
+                const isBike = Boolean(
+                  selectedTypeObj && /bike|moto|scooter|two\s*wheeler/i.test(selectedTypeObj.name || '')
+                );
                 const availableBrands = selectedTypeObj ? Object.keys(selectedTypeObj.brands) : [];
                 const availableModels = (selectedTypeObj && veh.brand) ? (selectedTypeObj.brands[veh.brand] || []) : [];
 
@@ -1955,8 +1997,14 @@ function OnboardingForm() {
                           <input type="text" placeholder="MH 12 AB 1234" className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-xl px-3 py-2.5 text-sm font-medium" value={veh.number_plate} onChange={(e) => updateVehicle(veh.id, 'number_plate', e.target.value.toUpperCase())} />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">Car Manufacturer</label>
-                          <input type="text" placeholder="e.g. Maruti" className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-xl px-3 py-2.5 text-sm font-medium" value={veh.car_make} onChange={(e) => updateVehicle(veh.id, 'car_make', e.target.value)} />
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Vehicle Manufacturer</label>
+                          <input
+                            type="text"
+                            placeholder={isBike ? "e.g. TVS, Honda, Hero" : "e.g. Maruti, Hyundai, Tata"}
+                            className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-xl px-3 py-2.5 text-sm font-medium"
+                            value={veh.car_make}
+                            onChange={(e) => updateVehicle(veh.id, 'car_make', e.target.value)}
+                          />
                         </div>
                       </div>
 
@@ -1977,7 +2025,25 @@ function OnboardingForm() {
 
                       <div>
                         <label className="block text-xs font-semibold text-gray-700 mb-1">Number of Passengers Allowed</label>
-                        <input type="number" placeholder="e.g. 4" className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-xl px-3 py-2.5 text-sm font-medium" value={veh.passenger} onChange={(e) => updateVehicle(veh.id, 'passenger', e.target.value)} />
+                        <input
+                          type="number"
+                          placeholder={isBike ? "1" : "e.g. 4"}
+                          min="1"
+                          max={isBike ? 1 : undefined}
+                          className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-xl px-3 py-2.5 text-sm font-medium"
+                          value={veh.passenger || (isBike ? '1' : '')}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (isBike && Number(val) > 1) {
+                              updateVehicle(veh.id, 'passenger', '1');
+                            } else {
+                              updateVehicle(veh.id, 'passenger', val);
+                            }
+                          }}
+                        />
+                        {isBike && (
+                          <p className="text-[10px] text-gray-500 mt-1">Bike allows 1 passenger by default</p>
+                        )}
                       </div>
                     </div>
                   </div>
