@@ -1260,7 +1260,14 @@ export default function WalletPage() {
                       // 1. Resolve Category Title first
                       let categoryTitle = tx.category_title || tx.categoryTitle;
                       if (!categoryTitle || categoryTitle === 'Wallet Transaction' || categoryTitle === 'Bank' || categoryTitle === 'Bank Transaction' || categoryTitle === 'Money Received' || categoryTitle === 'Money Transfer') {
-                        if (desc.includes('marketplace sale') || desc.includes('sale earnings') || (tx.payment_method && tx.payment_method.toLowerCase().includes('marketplace escrow'))) {
+                        if (
+                          (tx.payment_method && tx.payment_method.toLowerCase() === 'upi') ||
+                          desc.includes('via upi') ||
+                          desc.includes('upi payment') ||
+                          (tx.icon_type && tx.icon_type.toLowerCase() === 'upi')
+                        ) {
+                          categoryTitle = 'UPI Payment Received';
+                        } else if (desc.includes('marketplace sale') || desc.includes('sale earnings') || (tx.payment_method && tx.payment_method.toLowerCase().includes('marketplace escrow'))) {
                           categoryTitle = 'Marketplace Sale';
                         } else if (desc.includes('marketplace purchase') || desc.includes('purchased')) {
                           categoryTitle = 'Marketplace Purchase';
@@ -1296,7 +1303,8 @@ export default function WalletPage() {
                       }
 
                       // 2. Strict Sign Determination (+ for Credit, - for Debit)
-                      const isCredit = categoryTitle === 'Wallet Top-Up' ||
+                      const isCredit = categoryTitle === 'UPI Payment Received' ||
+                                       categoryTitle === 'Wallet Top-Up' ||
                                        categoryTitle === 'Marketplace Sale' ||
                                        categoryTitle === 'Referral Cashback' ||
                                        categoryTitle === 'Smart Value Cashback' ||
@@ -1305,9 +1313,11 @@ export default function WalletPage() {
                                        (deductionType === '1' && categoryTitle !== 'Bank Withdrawal' && categoryTitle !== 'Admin Commission' && categoryTitle !== 'Marketplace Purchase');
 
                       const isNegative = !isCredit;
+                      const isUpi = categoryTitle === 'UPI Payment Received' || (tx.icon_type && tx.icon_type.toLowerCase() === 'upi') || (tx.payment_method && tx.payment_method.toLowerCase() === 'upi');
                       
                       // Extract Party Details
                       const paidFrom = tx.paid_from || (isNegative ? 'Your Wallet' : (
+                        isUpi ? (tx.counterparty || tx.counterparty_name || 'UPI Payer') :
                         categoryTitle === 'Marketplace Sale' ? 'Marketplace Escrow' :
                         categoryTitle === 'Wallet Top-Up' ? (tx.payment_method || 'Payment Gateway') :
                         categoryTitle === 'Referral Cashback' ? 'Fiinway Referral Program' :
@@ -1320,7 +1330,7 @@ export default function WalletPage() {
                         categoryTitle === 'Marketplace Purchase' ? 'Marketplace Store' :
                         (tx.counterparty || tx.counterparty_name || (isDriver ? 'Fiinway Platform' : 'Service Expert'))
                       ) : 'Your Wallet');
-                      const counterpartyLabel = isNegative ? `To: ${paidTo}` : `From: ${paidFrom}`;
+                      const counterpartyLabel = isNegative ? `To: ${paidTo}` : (isUpi && paidFrom.startsWith('From ') ? paidFrom : `From: ${paidFrom}`);
 
                       return (
                         <div
@@ -1339,9 +1349,19 @@ export default function WalletPage() {
                             className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer active:scale-[0.99]"
                           >
                             <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                              isNegative ? 'bg-red-500/10 text-red-600' : 'bg-emerald-500/10 text-[#15803D]'
+                              isUpi 
+                                ? 'bg-sky-500/15 text-sky-600'
+                                : isNegative 
+                                ? 'bg-red-500/10 text-red-600' 
+                                : 'bg-emerald-500/10 text-[#15803D]'
                             }`}>
-                              {isNegative ? <ArrowUpRightIcon className="w-5 h-5 text-red-600" /> : <ArrowDownLeftIcon className="w-5 h-5 text-[#15803D]" />}
+                              {isUpi ? (
+                                <QrCodeIcon className="w-5 h-5 text-sky-600" />
+                              ) : isNegative ? (
+                                <ArrowUpRightIcon className="w-5 h-5 text-red-600" />
+                              ) : (
+                                <ArrowDownLeftIcon className="w-5 h-5 text-[#15803D]" />
+                              )}
                             </div>
                             <div className="space-y-0.5 min-w-0 pr-1">
                               <h4 className={`text-xs font-bold ${themeClasses.textMain} truncate`}>
@@ -1705,9 +1725,19 @@ export default function WalletPage() {
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
-                  selectedTx.parsedIsNegative ? 'bg-red-500/10 text-red-600' : 'bg-emerald-600/15 text-[#15803D]'
+                  selectedTx.parsedCategoryTitle === 'UPI Payment Received' || (selectedTx.payment_method && selectedTx.payment_method.toLowerCase() === 'upi')
+                    ? 'bg-sky-500/15 text-sky-600'
+                    : selectedTx.parsedIsNegative 
+                    ? 'bg-red-500/10 text-red-600' 
+                    : 'bg-emerald-600/15 text-[#15803D]'
                 }`}>
-                  {selectedTx.parsedIsNegative ? <ArrowUpRightIcon className="w-3.5 h-3.5 text-red-600" /> : <ArrowDownLeftIcon className="w-3.5 h-3.5 text-[#15803D]" />}
+                  {selectedTx.parsedCategoryTitle === 'UPI Payment Received' || (selectedTx.payment_method && selectedTx.payment_method.toLowerCase() === 'upi') ? (
+                    <QrCodeIcon className="w-3.5 h-3.5 text-sky-600" />
+                  ) : selectedTx.parsedIsNegative ? (
+                    <ArrowUpRightIcon className="w-3.5 h-3.5 text-red-600" />
+                  ) : (
+                    <ArrowDownLeftIcon className="w-3.5 h-3.5 text-[#15803D]" />
+                  )}
                 </div>
                 <h3 className={`text-sm font-bold ${themeClasses.textMain}`}>Transaction Receipt</h3>
               </div>
