@@ -286,6 +286,14 @@ export default function WalletPage() {
   const [showTopUpModal, setShowTopUpModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showBankModal, setShowBankModal] = useState(false);
+  const [showSbiModal, setShowSbiModal] = useState(false);
+
+  // SBI Lead Capture Form
+  const [sbiName, setSbiName] = useState('');
+  const [sbiPhone, setSbiPhone] = useState('');
+  const [sbiEmail, setSbiEmail] = useState('');
+  const [sbiRef, setSbiRef] = useState('');
+  const [sbiSubmitting, setSbiSubmitting] = useState(false);
 
   // Form Inputs
   const [topUpAmount, setTopUpAmount] = useState('');
@@ -433,6 +441,64 @@ export default function WalletPage() {
       }
     }
     window.location.href = targetUrl;
+  };
+
+  const getSubAffId = () => {
+    const rawMobile = params.phone || '';
+    const digits = rawMobile.replace(/[^0-9]/g, '');
+    const clean10 = digits.length > 10 ? digits.slice(-10) : digits;
+    return clean10 || 'fiinway';
+  };
+
+  const openAffiliateUrl = (urlTemplate: string) => {
+    const url = urlTemplate.replace('{replace_it}', encodeURIComponent(getSubAffId()));
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const openSbiLeadModal = () => {
+    const defaultName = params.name || (isDriver ? 'Driver Partner' : 'Fiinway User');
+    const defaultPhone = getSubAffId() !== 'fiinway' ? getSubAffId() : '';
+    setSbiName(defaultName);
+    setSbiPhone(defaultPhone);
+    setSbiEmail('');
+    setSbiRef('');
+    setShowSbiModal(true);
+  };
+
+  const handleSbiLeadSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sbiName.trim() || !sbiPhone.trim()) {
+      showToast('Please enter your Full Name and Mobile Number', 'error');
+      return;
+    }
+    setSbiSubmitting(true);
+    let redirectUrl = `https://EasyPe.o18a.com/c?o=21983875&m=26892&a=761563&sub_aff_id=${encodeURIComponent(sbiPhone.trim())}`;
+    try {
+      const resp = await fetch('/api/v1/finance/affiliate-lead', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          name: sbiName.trim(),
+          phone: sbiPhone.trim(),
+          email: sbiEmail.trim(),
+          referral_code: sbiRef.trim(),
+          lender_name: 'SBI Credit Card'
+        })
+      });
+      const data = await resp.json();
+      if (data.redirect_url) {
+        redirectUrl = data.redirect_url;
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSbiSubmitting(false);
+      setShowSbiModal(false);
+      window.open(redirectUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   // API Call Headers
@@ -1021,28 +1087,27 @@ export default function WalletPage() {
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
+                  <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
                     {/* Card 1: Interest Free Loan */}
                     <div 
                       onClick={() => handleLoanClick('interest_free', 'Interest Free Loan', 'Upto ₹2,00,000')}
-                      className="bg-[#EBFAF3] border border-[#DCFCE7] rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
-                      style={{ backgroundColor: '#EBFAF3' }}
+                      className="bg-[#F0FDF4] border border-[#DCFCE7] rounded-xl p-2 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
                     >
                       <div>
-                        <div className="w-10 h-10 rounded-full overflow-hidden mb-2.5 shadow-sm bg-[#DCFCE7] flex items-center justify-center">
+                        <div className="h-8 flex items-center justify-center mb-1.5">
                           <img 
                             src="/images/loans/interest_free.png" 
                             alt="Interest Free Loan" 
-                            className="w-full h-full object-cover rounded-full" 
+                            className="max-h-8 max-w-full object-contain" 
                             onError={(e) => {
                               (e.target as HTMLImageElement).src = '/onboarding-assets/images/loans/interest_free.png';
                             }}
                           />
                         </div>
-                        <h4 className="text-[12.5px] sm:text-[13px] font-bold leading-tight text-[#0F172A] min-h-[32px]">
+                        <h4 className="text-[10px] font-bold leading-tight text-[#0F172A] min-h-[24px]">
                           Interest Free<br />Loan
                         </h4>
-                        <p className="text-[11px] font-semibold text-[#16A34A] mt-1.5">
+                        <p className="text-[8.5px] font-semibold text-[#16A34A] mt-0.5 leading-tight min-h-[22px]">
                           Upto ₹2,00,000
                         </p>
                       </div>
@@ -1052,34 +1117,33 @@ export default function WalletPage() {
                           e.stopPropagation();
                           handleLoanClick('interest_free', 'Interest Free Loan', 'Upto ₹2,00,000');
                         }}
-                        className="mt-3 w-full bg-[#16A34A] hover:bg-[#15803D] text-white text-[11px] font-bold py-1.5 px-2 rounded-full flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer"
+                        className="mt-1.5 w-full bg-[#16A34A] hover:bg-[#15803D] text-white text-[8.5px] font-bold h-[22px] rounded-full flex items-center justify-center gap-0.5 shadow-sm transition-colors cursor-pointer"
                       >
                         <span>Apply Now</span>
-                        <ChevronRightIcon className="w-3 h-3 text-white" />
+                        <ChevronRightIcon className="w-2.5 h-2.5 text-white" />
                       </button>
                     </div>
 
                     {/* Card 2: 0 CIBIL Loan */}
                     <div 
                       onClick={() => handleLoanClick('zero_cibil', '0 CIBIL Loan', 'Upto ₹5,00,000')}
-                      className="bg-[#EDF5FF] border border-[#DBEAFE] rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
-                      style={{ backgroundColor: '#EDF5FF', opacity: 1 }}
+                      className="bg-[#EFF6FF] border border-[#DBEAFE] rounded-xl p-2 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
                     >
                       <div>
-                        <div className="w-10 h-10 rounded-full overflow-hidden mb-2.5 shadow-sm bg-[#DBEAFE] flex items-center justify-center">
+                        <div className="h-8 flex items-center justify-center mb-1.5">
                           <img 
                             src="/images/loans/zero_cibil.png" 
                             alt="0 CIBIL Loan" 
-                            className="w-full h-full object-cover rounded-full" 
+                            className="max-h-8 max-w-full object-contain" 
                             onError={(e) => {
                               (e.target as HTMLImageElement).src = '/onboarding-assets/images/loans/zero_cibil.png';
                             }}
                           />
                         </div>
-                        <h4 className="text-[12.5px] sm:text-[13px] font-bold leading-tight text-[#0F172A] min-h-[32px]">
-                          0 CIBIL Loan
+                        <h4 className="text-[10px] font-bold leading-tight text-[#0F172A] min-h-[24px]">
+                          0 CIBIL<br />Loan
                         </h4>
-                        <p className="text-[11px] font-medium text-[#64748B] mt-1.5">
+                        <p className="text-[8.5px] font-semibold text-[#64748B] mt-0.5 leading-tight min-h-[22px]">
                           Upto ₹5,00,000
                         </p>
                       </div>
@@ -1089,34 +1153,33 @@ export default function WalletPage() {
                           e.stopPropagation();
                           handleLoanClick('zero_cibil', '0 CIBIL Loan', 'Upto ₹5,00,000');
                         }}
-                        className="mt-3 w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-[11px] font-bold py-1.5 px-2 rounded-full flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer"
+                        className="mt-1.5 w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-[8.5px] font-bold h-[22px] rounded-full flex items-center justify-center gap-0.5 shadow-sm transition-colors cursor-pointer"
                       >
                         <span>Apply Now</span>
-                        <ChevronRightIcon className="w-3 h-3 text-white" />
+                        <ChevronRightIcon className="w-2.5 h-2.5 text-white" />
                       </button>
                     </div>
 
                     {/* Card 3: Low CIBIL Loan */}
                     <div 
                       onClick={() => handleLoanClick('low_cibil', 'Low CIBIL Loan', 'Fast Approval')}
-                      className="bg-[#FEF4E8] border border-[#FED7AA] rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
-                      style={{ backgroundColor: '#FEF4E8', opacity: 1 }}
+                      className="bg-[#FFF7ED] border border-[#FED7AA] rounded-xl p-2 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
                     >
                       <div>
-                        <div className="w-10 h-10 rounded-full overflow-hidden mb-2.5 shadow-sm bg-[#FED7AA] flex items-center justify-center">
+                        <div className="h-8 flex items-center justify-center mb-1.5">
                           <img 
                             src="/images/loans/low_cibil.png" 
                             alt="Low CIBIL Loan" 
-                            className="w-full h-full object-cover rounded-full" 
+                            className="max-h-8 max-w-full object-contain" 
                             onError={(e) => {
                               (e.target as HTMLImageElement).src = '/onboarding-assets/images/loans/low_cibil.png';
                             }}
                           />
                         </div>
-                        <h4 className="text-[12.5px] sm:text-[13px] font-bold leading-tight text-[#0F172A] min-h-[32px]">
-                          Low CIBIL Loan
+                        <h4 className="text-[10px] font-bold leading-tight text-[#0F172A] min-h-[24px]">
+                          Low CIBIL<br />Loan
                         </h4>
-                        <p className="text-[11px] font-medium text-[#64748B] mt-1.5">
+                        <p className="text-[8.5px] font-semibold text-[#64748B] mt-0.5 leading-tight min-h-[22px]">
                           Fast Approval
                         </p>
                       </div>
@@ -1126,10 +1189,190 @@ export default function WalletPage() {
                           e.stopPropagation();
                           handleLoanClick('low_cibil', 'Low CIBIL Loan', 'Fast Approval');
                         }}
-                        className="mt-3 w-full bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-[11px] font-bold py-1.5 px-2 rounded-full flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer"
+                        className="mt-1.5 w-full bg-[#EA580C] hover:bg-[#C2410C] text-white text-[8.5px] font-bold h-[22px] rounded-full flex items-center justify-center gap-0.5 shadow-sm transition-colors cursor-pointer"
                       >
                         <span>Apply Now</span>
-                        <ChevronRightIcon className="w-3 h-3 text-white" />
+                        <ChevronRightIcon className="w-2.5 h-2.5 text-white" />
+                      </button>
+                    </div>
+
+                    {/* Card 4: CIBIL Score Check */}
+                    <div 
+                      onClick={() => openAffiliateUrl('https://EasyPe.o18a.com/c?o=21966472&m=26892&a=761563&sub_aff_id={replace_it}')}
+                      className="bg-[#F5F3FF] border border-[#EDE9FE] rounded-xl p-2 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                    >
+                      <div>
+                        <div className="h-8 flex items-center justify-center mb-1.5">
+                          <img 
+                            src="/images/loans/cibil_check.png" 
+                            alt="CIBIL Score Check" 
+                            className="max-h-8 max-w-full object-contain" 
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/onboarding-assets/images/loans/cibil_check.png';
+                            }}
+                          />
+                        </div>
+                        <h4 className="text-[10px] font-bold leading-tight text-[#0F172A] min-h-[24px]">
+                          CIBIL<br />Score Check
+                        </h4>
+                        <p className="text-[8.5px] font-semibold text-[#64748B] mt-0.5 leading-tight min-h-[22px]">
+                          Free & Instant
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openAffiliateUrl('https://EasyPe.o18a.com/c?o=21966472&m=26892&a=761563&sub_aff_id={replace_it}');
+                        }}
+                        className="mt-1.5 w-full bg-[#6366F1] hover:bg-[#4F46E5] text-white text-[8.5px] font-bold h-[22px] rounded-full flex items-center justify-center gap-0.5 shadow-sm transition-colors cursor-pointer"
+                      >
+                        <span>Check Now</span>
+                        <ChevronRightIcon className="w-2.5 h-2.5 text-white" />
+                      </button>
+                    </div>
+
+                    {/* Card 5: Novio FD Credit Card */}
+                    <div 
+                      onClick={() => openAffiliateUrl('https://EasyPe.o18a.com/c?o=21966470&m=26892&a=761563&sub_aff_id={replace_it}')}
+                      className="bg-[#F0FDF4] border border-[#DCFCE7] rounded-xl p-2 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                    >
+                      <div>
+                        <div className="h-8 flex items-center justify-center mb-1.5">
+                          <img 
+                            src="/images/loans/novio_card.png" 
+                            alt="Novio FD Credit Card" 
+                            className="max-h-8 max-w-full object-contain" 
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/onboarding-assets/images/loans/novio_card.png';
+                            }}
+                          />
+                        </div>
+                        <h4 className="text-[10px] font-bold leading-tight text-[#0F172A] min-h-[24px]">
+                          Novio FD<br />Credit Card
+                        </h4>
+                        <p className="text-[8.5px] font-semibold text-[#64748B] mt-0.5 leading-tight min-h-[22px]">
+                          FD Backed
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openAffiliateUrl('https://EasyPe.o18a.com/c?o=21966470&m=26892&a=761563&sub_aff_id={replace_it}');
+                        }}
+                        className="mt-1.5 w-full bg-[#16A34A] hover:bg-[#15803D] text-white text-[8.5px] font-bold h-[22px] rounded-full flex items-center justify-center gap-0.5 shadow-sm transition-colors cursor-pointer"
+                      >
+                        <span>Apply Now</span>
+                        <ChevronRightIcon className="w-2.5 h-2.5 text-white" />
+                      </button>
+                    </div>
+
+                    {/* Card 6: SBI Credit Card */}
+                    <div 
+                      onClick={() => openSbiLeadModal()}
+                      className="bg-[#EFF6FF] border border-[#DBEAFE] rounded-xl p-2 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                    >
+                      <div>
+                        <div className="h-8 flex items-center justify-center mb-1.5">
+                          <img 
+                            src="/images/loans/sbi_card.png" 
+                            alt="SBI Credit Card" 
+                            className="max-h-8 max-w-full object-contain" 
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/onboarding-assets/images/loans/sbi_card.png';
+                            }}
+                          />
+                        </div>
+                        <h4 className="text-[10px] font-bold leading-tight text-[#0F172A] min-h-[24px]">
+                          SBI<br />Credit Card
+                        </h4>
+                        <p className="text-[8.5px] font-semibold text-[#64748B] mt-0.5 leading-tight min-h-[22px]">
+                          Great Rewards
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openSbiLeadModal();
+                        }}
+                        className="mt-1.5 w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-[8.5px] font-bold h-[22px] rounded-full flex items-center justify-center gap-0.5 shadow-sm transition-colors cursor-pointer"
+                      >
+                        <span>Apply Now</span>
+                        <ChevronRightIcon className="w-2.5 h-2.5 text-white" />
+                      </button>
+                    </div>
+
+                    {/* Card 7: Personal Loan */}
+                    <div 
+                      onClick={() => openAffiliateUrl('https://EasyPe.o18a.com/c?o=21983875&m=26892&a=761563&sub_aff_id={replace_it}')}
+                      className="bg-[#FFF7ED] border border-[#FED7AA] rounded-xl p-2 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                    >
+                      <div>
+                        <div className="h-8 flex items-center justify-center mb-1.5">
+                          <img 
+                            src="/images/loans/personal_loan.png" 
+                            alt="Personal Loan" 
+                            className="max-h-8 max-w-full object-contain" 
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/onboarding-assets/images/loans/personal_loan.png';
+                            }}
+                          />
+                        </div>
+                        <h4 className="text-[10px] font-bold leading-tight text-[#0F172A] min-h-[24px]">
+                          Personal<br />Loan
+                        </h4>
+                        <p className="text-[8.5px] font-semibold text-[#64748B] mt-0.5 leading-tight min-h-[22px]">
+                          Upto ₹50 Lakh
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openAffiliateUrl('https://EasyPe.o18a.com/c?o=21983875&m=26892&a=761563&sub_aff_id={replace_it}');
+                        }}
+                        className="mt-1.5 w-full bg-[#EA580C] hover:bg-[#C2410C] text-white text-[8.5px] font-bold h-[22px] rounded-full flex items-center justify-center gap-0.5 shadow-sm transition-colors cursor-pointer"
+                      >
+                        <span>Apply Now</span>
+                        <ChevronRightIcon className="w-2.5 h-2.5 text-white" />
+                      </button>
+                    </div>
+
+                    {/* Card 8: Business Loan */}
+                    <div 
+                      onClick={() => handleLoanClick('business', 'Business Loan & Private Funding', 'Upto ₹1 Crore')}
+                      className="bg-[#F5F3FF] border border-[#EDE9FE] rounded-xl p-2 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+                    >
+                      <div>
+                        <div className="h-8 flex items-center justify-center mb-1.5">
+                          <img 
+                            src="/images/loans/business_loan.png" 
+                            alt="Business Loan" 
+                            className="max-h-8 max-w-full object-contain" 
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/onboarding-assets/images/loans/business_loan.png';
+                            }}
+                          />
+                        </div>
+                        <h4 className="text-[10px] font-bold leading-tight text-[#0F172A] min-h-[24px]">
+                          Business<br />Loan
+                        </h4>
+                        <p className="text-[8.5px] font-semibold text-[#64748B] mt-0.5 leading-tight min-h-[22px]">
+                          Upto ₹1 Crore
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleLoanClick('business', 'Business Loan & Private Funding', 'Upto ₹1 Crore');
+                        }}
+                        className="mt-1.5 w-full bg-[#6366F1] hover:bg-[#4F46E5] text-white text-[8.5px] font-bold h-[22px] rounded-full flex items-center justify-center gap-0.5 shadow-sm transition-colors cursor-pointer"
+                      >
+                        <span>Apply Now</span>
+                        <ChevronRightIcon className="w-2.5 h-2.5 text-white" />
                       </button>
                     </div>
                   </div>
@@ -1810,6 +2053,123 @@ export default function WalletPage() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* SBI CREDIT CARD LEAD CAPTURE MODAL */}
+      {showSbiModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className={`w-full max-w-sm ${themeClasses.modalBg} border rounded-3xl p-5 sm:p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in duration-150`}>
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 flex items-center justify-center overflow-hidden">
+                  <img 
+                    src="/images/loans/sbi_card.png" 
+                    alt="SBI" 
+                    className="h-6 w-auto object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/onboarding-assets/images/loans/sbi_card.png';
+                    }}
+                  />
+                </div>
+                <div>
+                  <h3 className={`text-sm font-bold ${themeClasses.textMain}`}>SBI Credit Card</h3>
+                  <p className={`text-[10px] ${themeClasses.textMuted}`}>Pre-approved offers & rewards</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowSbiModal(false)} 
+                className={`${themeClasses.textMuted} hover:text-slate-800 dark:hover:text-white p-1 rounded-lg`}
+              >
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSbiLeadSubmit} className="space-y-3">
+              <div>
+                <label className={`block text-[11px] font-semibold ${themeClasses.textMuted} mb-1`}>
+                  Full Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Enter full name as per PAN"
+                  value={sbiName}
+                  onChange={(e) => setSbiName(e.target.value)}
+                  className={`w-full ${themeClasses.inputBg} border rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-[#2563EB]`}
+                />
+              </div>
+
+              <div>
+                <label className={`block text-[11px] font-semibold ${themeClasses.textMuted} mb-1`}>
+                  Mobile Number <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <span className={`absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold ${themeClasses.textMuted}`}>
+                    +91
+                  </span>
+                  <input
+                    type="tel"
+                    required
+                    maxLength={10}
+                    placeholder="10-digit mobile number"
+                    value={sbiPhone}
+                    onChange={(e) => setSbiPhone(e.target.value.replace(/[^0-9]/g, '').slice(0, 10))}
+                    className={`w-full ${themeClasses.inputBg} border rounded-xl pl-12 pr-3.5 py-2.5 text-xs font-mono focus:outline-none focus:border-[#2563EB]`}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className={`block text-[11px] font-semibold ${themeClasses.textMuted} mb-1`}>
+                  Email Address <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="email"
+                  placeholder="name@example.com"
+                  value={sbiEmail}
+                  onChange={(e) => setSbiEmail(e.target.value)}
+                  className={`w-full ${themeClasses.inputBg} border rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-[#2563EB]`}
+                />
+              </div>
+
+              <div>
+                <label className={`block text-[11px] font-semibold ${themeClasses.textMuted} mb-1`}>
+                  Referral Code <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. FW1234"
+                  value={sbiRef}
+                  onChange={(e) => setSbiRef(e.target.value.toUpperCase())}
+                  className={`w-full ${themeClasses.inputBg} border rounded-xl px-3.5 py-2.5 text-xs font-mono uppercase focus:outline-none focus:border-[#2563EB]`}
+                />
+              </div>
+
+              <p className="text-[10px] text-slate-500 leading-tight pt-1">
+                By continuing, you authorize Fiinway to submit your contact request to SBI Card & its affiliate partners.
+              </p>
+
+              <div className="pt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSbiModal(false)}
+                  className="px-4 py-3 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={sbiSubmitting}
+                  className="flex-1 py-3 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                >
+                  <span>{sbiSubmitting ? 'Submitting...' : 'Continue to SBI Card'}</span>
+                  <ChevronRightIcon className="w-3.5 h-3.5 text-white" />
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
