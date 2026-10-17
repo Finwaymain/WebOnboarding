@@ -1122,7 +1122,9 @@ export default function WalletPage() {
 
                 {/* Compact Payment Default Alert Banner (Below Top Up & Withdraw) */}
                 {virtualLoan && virtualLoan.has_loan && (virtualLoan.is_defaulter || virtualLoan.status === 'blocked') && (
-                  <div className="rounded-2xl p-3 bg-[#FFF0F3] dark:bg-rose-950/30 border border-[#FECDD3] dark:border-rose-900/60 shadow-sm flex items-center justify-between gap-2.5 transition-all">
+                  <div className={`rounded-2xl p-3 border shadow-sm flex items-center justify-between gap-2.5 transition-all ${
+                    isDark ? 'bg-rose-950/30 border-rose-900/60' : 'bg-[#FFF0F3] border-[#FECDD3]'
+                  }`}>
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="shrink-0 relative">
                         <svg className="w-10 h-10" viewBox="0 0 44 44" fill="none">
@@ -1142,7 +1144,9 @@ export default function WalletPage() {
                         <h4 className="text-[13px] font-bold text-[#DC2626] leading-tight">
                           Payment Default Alert
                         </h4>
-                        <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-tight mt-0.5 font-normal">
+                        <p className={`text-[11px] leading-tight mt-0.5 font-normal ${
+                          isDark ? 'text-slate-300' : 'text-slate-600'
+                        }`}>
                           You have an overdue payment.
                           <br />
                           Please clear to continue using all services.
@@ -1537,7 +1541,9 @@ export default function WalletPage() {
                     {/* CIBIL Score Card */}
                     <div 
                       onClick={() => openAffiliateUrl('https://EasyPe.o18a.com/c?o=21983875&m=26892&a=761563&sub_aff_id={replace_it}')}
-                      className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-[#F0FDFA] border border-[#99F6E4] dark:bg-teal-950/30 dark:border-teal-800 cursor-pointer hover:shadow-sm active:scale-95 transition-all shadow-xs"
+                      className={`shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-2xl cursor-pointer hover:shadow-sm active:scale-95 transition-all shadow-xs ${
+                        isDark ? 'bg-teal-950/40 border border-teal-800' : 'bg-[#F0FDFA] border border-[#5EEAD4]'
+                      }`}
                       style={{ minWidth: '150px' }}
                     >
                       <img 
@@ -1549,8 +1555,8 @@ export default function WalletPage() {
                         }}
                       />
                       <div className="flex items-center gap-1 min-w-0">
-                        <span className="text-[11px] font-bold text-[#1E1B4B] dark:text-teal-200 whitespace-nowrap">Check CIBIL Score</span>
-                        <ChevronRightIcon className="w-3 h-3 text-[#1E1B4B] dark:text-teal-200 shrink-0" />
+                        <span className={`text-[11px] font-bold whitespace-nowrap ${isDark ? 'text-teal-200' : 'text-slate-900'}`}>Check CIBIL Score</span>
+                        <ChevronRightIcon className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-teal-300' : 'text-teal-700'}`} />
                       </div>
                     </div>
 
@@ -1563,7 +1569,9 @@ export default function WalletPage() {
                         lender: 'Kotak 811 - 5000',
                         url: 'https://EasyPe.o18a.com/c?o=21949291&m=26892&a=761563&sub_aff_id='
                       })}
-                      className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-[#FFF1F2] border border-[#FFE4E6] dark:bg-rose-950/30 dark:border-rose-900/60 cursor-pointer hover:shadow-sm active:scale-95 transition-all shadow-xs"
+                      className={`shrink-0 flex items-center gap-2.5 px-3 py-1.5 rounded-2xl cursor-pointer hover:shadow-sm active:scale-95 transition-all shadow-xs ${
+                        isDark ? 'bg-rose-950/40 border border-rose-900' : 'bg-[#FFF5F5] border border-[#FECDD3]'
+                      }`}
                       style={{ minWidth: '160px' }}
                     >
                       <img 
@@ -1575,10 +1583,10 @@ export default function WalletPage() {
                         }}
                       />
                       <div className="flex flex-col justify-center min-w-0 leading-tight">
-                        <span className="text-[10px] font-semibold text-[#DC2626] dark:text-rose-300 whitespace-nowrap">Open Kotak Account</span>
+                        <span className={`text-[10.5px] font-bold whitespace-nowrap ${isDark ? 'text-rose-200' : 'text-slate-900'}`}>Open Kotak Account</span>
                         <div className="flex items-center gap-1">
-                          <span className="text-xs font-black text-[#DC2626] dark:text-rose-400 whitespace-nowrap">₹5,000</span>
-                          <ChevronRightIcon className="w-3 h-3 text-[#DC2626] dark:text-rose-400 shrink-0" />
+                          <span className={`text-xs font-black whitespace-nowrap ${isDark ? 'text-rose-400' : 'text-[#DC2626]'}`}>₹5,000</span>
+                          <ChevronRightIcon className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-rose-400' : 'text-[#DC2626]'}`} />
                         </div>
                       </div>
                     </div>
@@ -1592,7 +1600,9 @@ export default function WalletPage() {
                         lender: 'Kotak 811 - 2000',
                         url: 'https://EasyPe.o18a.com/c?o=21949291&m=26892&a=761563&sub_aff_id='
                       })}
-                      className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-[#EFF6FF] border border-[#DBEAFE] dark:bg-blue-950/30 dark:border-blue-900/60 cursor-pointer hover:shadow-sm active:scale-95 transition-all shadow-xs"
+                      className={`shrink-0 flex items-center gap-2.5 px-3 py-1.5 rounded-2xl cursor-pointer hover:shadow-sm active:scale-95 transition-all shadow-xs ${
+                        isDark ? 'bg-blue-950/40 border border-blue-900' : 'bg-[#F0F7FF] border border-[#BFDBFE]'
+                      }`}
                       style={{ minWidth: '160px' }}
                     >
                       <img 
@@ -1604,10 +1614,10 @@ export default function WalletPage() {
                         }}
                       />
                       <div className="flex flex-col justify-center min-w-0 leading-tight">
-                        <span className="text-[10px] font-semibold text-[#1D4ED8] dark:text-blue-300 whitespace-nowrap">Open Kotak Account</span>
+                        <span className={`text-[10.5px] font-bold whitespace-nowrap ${isDark ? 'text-blue-200' : 'text-slate-900'}`}>Open Kotak Account</span>
                         <div className="flex items-center gap-1">
-                          <span className="text-xs font-black text-[#1D4ED8] dark:text-blue-400 whitespace-nowrap">₹2,000</span>
-                          <ChevronRightIcon className="w-3 h-3 text-[#1D4ED8] dark:text-blue-400 shrink-0" />
+                          <span className={`text-xs font-black whitespace-nowrap ${isDark ? 'text-blue-400' : 'text-[#1D4ED8]'}`}>₹2,000</span>
+                          <ChevronRightIcon className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-blue-400' : 'text-[#1D4ED8]'}`} />
                         </div>
                       </div>
                     </div>
