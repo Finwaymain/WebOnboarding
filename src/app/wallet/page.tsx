@@ -1034,98 +1034,55 @@ export default function WalletPage() {
                   </div>
                 </div>
 
-                {/* Virtual Loan Credit Card (App to App Segregated Ledger) */}
-                {virtualLoan && virtualLoan.has_loan && (
-                  <div className={`relative rounded-2xl p-4.5 border transition-all ${
-                    virtualLoan.is_defaulter || virtualLoan.status === 'blocked'
-                      ? 'bg-rose-50/90 dark:bg-rose-950/20 border-rose-300 dark:border-rose-900 shadow-sm'
-                      : 'bg-gradient-to-br from-indigo-900 via-slate-900 to-sky-950 text-white border-indigo-700/50 shadow-md'
-                  }`}>
+                {/* Virtual Loan Credit Card (App to App Segregated Ledger) - Active state only */}
+                {virtualLoan && virtualLoan.has_loan && !virtualLoan.is_defaulter && virtualLoan.status !== 'blocked' && (
+                  <div className="relative rounded-2xl p-4.5 border transition-all bg-gradient-to-br from-indigo-900 via-slate-900 to-sky-950 text-white border-indigo-700/50 shadow-md">
                     {/* Header */}
-                    <div className="flex items-center justify-between pb-2.5 border-b border-indigo-500/20 dark:border-rose-900/40">
+                    <div className="flex items-center justify-between pb-2.5 border-b border-indigo-500/20">
                       <div className="flex items-center gap-2">
-                        <div className={`p-1.5 rounded-lg ${
-                          virtualLoan.is_defaulter 
-                            ? 'bg-rose-500/10 text-rose-600' 
-                            : 'bg-indigo-500/20 text-indigo-300'
-                        }`}>
+                        <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-300">
                           <CreditCardIcon className="w-4 h-4" />
                         </div>
                         <div>
-                          <h4 className={`text-xs font-bold tracking-tight ${
-                            virtualLoan.is_defaulter ? 'text-rose-700 dark:text-rose-400' : 'text-white'
-                          }`}>
+                          <h4 className="text-xs font-bold tracking-tight text-white">
                             Virtual Credit Ledger
                           </h4>
-                          <p className={`text-[10px] ${
-                            virtualLoan.is_defaulter ? 'text-rose-600/80 dark:text-rose-300/70' : 'text-indigo-200/70'
-                          }`}>
+                          <p className="text-[10px] text-indigo-200/70">
                             In-App Spending Balance &bull; Non-Withdrawable
                           </p>
                         </div>
                       </div>
 
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        virtualLoan.is_defaulter || virtualLoan.status === 'blocked'
-                          ? 'bg-rose-600 text-white animate-pulse'
-                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                      }`}>
-                        {virtualLoan.is_defaulter ? 'Locked (Defaulter)' : 'Active'}
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        Active
                       </span>
                     </div>
-
-                    {/* Defaulter Alert Banner */}
-                    {virtualLoan.is_defaulter && (
-                      <div className="mt-3 p-2.5 bg-rose-600/10 border border-rose-500/30 rounded-xl flex items-start gap-2 text-rose-700 dark:text-rose-300">
-                        <AlertIcon className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                        <div className="text-[11px] leading-tight space-y-1">
-                          <p className="font-bold">Virtual Credit Locked due to Overdue Repayment</p>
-                          <p className="text-[10.5px] opacity-90">
-                            Clear today's pending due of ₹{virtualLoan.today_due} via Razorpay to immediately resume in-app usage.
-                          </p>
-                        </div>
-                      </div>
-                    )}
 
                     {/* Amounts */}
                     <div className="grid grid-cols-3 gap-2 py-3">
                       <div>
-                        <div className={`text-[10px] font-medium uppercase ${
-                          virtualLoan.is_defaulter ? 'text-slate-500' : 'text-slate-400'
-                        }`}>Available Credit</div>
-                        <div className={`text-base font-black ${
-                          virtualLoan.is_defaulter ? 'text-slate-700 dark:text-slate-300' : 'text-white'
-                        }`}>
+                        <div className="text-[10px] font-medium uppercase text-slate-400">Available Credit</div>
+                        <div className="text-base font-black text-white">
                           {formatCurrency(virtualLoan.available_balance)}
                         </div>
                       </div>
                       <div>
-                        <div className={`text-[10px] font-medium uppercase ${
-                          virtualLoan.is_defaulter ? 'text-slate-500' : 'text-slate-400'
-                        }`}>Approved Limit</div>
-                        <div className={`text-base font-black ${
-                          virtualLoan.is_defaulter ? 'text-slate-700 dark:text-slate-300' : 'text-slate-200'
-                        }`}>
+                        <div className="text-[10px] font-medium uppercase text-slate-400">Approved Limit</div>
+                        <div className="text-base font-black text-slate-200">
                           {formatCurrency(virtualLoan.approved_limit)}
                         </div>
                       </div>
                       <div>
-                        <div className={`text-[10px] font-medium uppercase ${
-                          virtualLoan.is_defaulter ? 'text-slate-500' : 'text-slate-400'
-                        }`}>Used / Due</div>
-                        <div className={`text-base font-black ${
-                          virtualLoan.is_defaulter ? 'text-rose-600' : 'text-amber-400'
-                        }`}>
+                        <div className="text-[10px] font-medium uppercase text-slate-400">Used / Due</div>
+                        <div className="text-base font-black text-amber-400">
                           {formatCurrency(virtualLoan.today_due || virtualLoan.used_amount)}
                         </div>
                       </div>
                     </div>
 
                     {/* Action Bar */}
-                    <div className="pt-2 border-t border-indigo-500/20 dark:border-rose-900/40 flex items-center justify-between gap-2">
-                      <span className={`text-[10.5px] ${
-                        virtualLoan.is_defaulter ? 'text-slate-500' : 'text-indigo-200/80'
-                      }`}>
+                    <div className="pt-2 border-t border-indigo-500/20 flex items-center justify-between gap-2">
+                      <span className="text-[10.5px] text-indigo-200/80">
                         Daily Limit: ₹{virtualLoan.daily_usage_limit}
                       </span>
 
@@ -1135,17 +1092,9 @@ export default function WalletPage() {
                           const targetUrl = `/finance/virtual-loan/dashboard?phone=${encodeURIComponent(params.phone || '')}`;
                           window.location.href = targetUrl;
                         }}
-                        style={{
-                          backgroundColor: virtualLoan.is_defaulter ? '#DC2626' : undefined,
-                          color: '#FFFFFF'
-                        }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-sm ${
-                          virtualLoan.is_defaulter
-                            ? 'defaulter-pay-btn bg-[#DC2626] hover:bg-red-700 text-white shadow-red-500/30'
-                            : 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                        }`}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-sm bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer"
                       >
-                        <span style={{ color: '#FFFFFF', fontWeight: 800 }}>{virtualLoan.is_defaulter ? 'Pay Now' : 'Manage Credit'}</span>
+                        <span>Manage Credit</span>
                         <ChevronRightIcon className="w-3.5 h-3.5 text-white" />
                       </button>
                     </div>
@@ -1170,6 +1119,52 @@ export default function WalletPage() {
                     WITHDRAW
                   </button>
                 </div>
+
+                {/* Compact Payment Default Alert Banner (Below Top Up & Withdraw) */}
+                {virtualLoan && virtualLoan.has_loan && (virtualLoan.is_defaulter || virtualLoan.status === 'blocked') && (
+                  <div className="rounded-2xl p-3 bg-[#FFF0F3] dark:bg-rose-950/30 border border-[#FECDD3] dark:border-rose-900/60 shadow-sm flex items-center justify-between gap-2.5 transition-all">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="shrink-0 relative">
+                        <svg className="w-10 h-10" viewBox="0 0 44 44" fill="none">
+                          <circle cx="20" cy="14" r="7" fill="url(#alertUserGrad)" />
+                          <path d="M7 34C7 27.5 12 23 19 23H21C26.5 23 31 26.5 32.5 31.5C31.5 32.5 29.5 33.5 27 34H7Z" fill="url(#alertUserGrad)" />
+                          <circle cx="32" cy="30" r="7.5" fill="#E11D48" stroke="#FFF0F3" strokeWidth="2.5" />
+                          <path d="M32 26.5V30.5M32 32.5V33" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+                          <defs>
+                            <linearGradient id="alertUserGrad" x1="7" y1="7" x2="33" y2="34" gradientUnits="userSpaceOnUse">
+                              <stop stopColor="#F43F5E" />
+                              <stop offset="1" stopColor="#BE123C" />
+                            </linearGradient>
+                          </defs>
+                        </svg>
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="text-[13px] font-bold text-[#DC2626] leading-tight">
+                          Payment Default Alert
+                        </h4>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-tight mt-0.5 font-normal">
+                          You have an overdue payment.
+                          <br />
+                          Please clear to continue using all services.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetUrl = `/finance/virtual-loan/dashboard?phone=${encodeURIComponent(params.phone || '')}`;
+                        window.location.href = targetUrl;
+                      }}
+                      className="shrink-0 px-3.5 py-2 rounded-full bg-gradient-to-r from-[#FF1E56] to-[#E50914] hover:from-[#E11D48] hover:to-[#DC2626] text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-red-500/25 active:scale-95 transition-all cursor-pointer"
+                    >
+                      <span>Pay Now</span>
+                      <span className="w-4 h-4 rounded-full bg-black/25 flex items-center justify-center text-[10px] leading-none text-white font-black">
+                        ›
+                      </span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Account & Card Details Shortcut */}
                 <div 
