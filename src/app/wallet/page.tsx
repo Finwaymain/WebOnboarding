@@ -302,6 +302,13 @@ export default function WalletPage() {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showBankModal, setShowBankModal] = useState(false);
   const [showSbiModal, setShowSbiModal] = useState(false);
+  const [affConfig, setAffConfig] = useState({
+    title: 'SBI Credit Card',
+    sub: 'Pre-approved offers & rewards',
+    logo: '/images/loans/sbi_card.png',
+    lender: 'SBI Credit Card',
+    url: 'https://EasyPe.o18a.com/c?o=21966470&m=26892&a=761563&sub_aff_id='
+  });
 
   // SBI Lead Capture Form
   const [sbiName, setSbiName] = useState('');
@@ -470,7 +477,18 @@ export default function WalletPage() {
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  const openSbiLeadModal = () => {
+  const openAffLeadModal = (config?: Partial<typeof affConfig>) => {
+    if (config) {
+      setAffConfig(prev => ({ ...prev, ...config }));
+    } else {
+      setAffConfig({
+        title: 'SBI Credit Card',
+        sub: 'Pre-approved offers & rewards',
+        logo: '/images/loans/sbi_card.png',
+        lender: 'SBI Credit Card',
+        url: 'https://EasyPe.o18a.com/c?o=21966470&m=26892&a=761563&sub_aff_id='
+      });
+    }
     const defaultName = params.name || (isDriver ? 'Driver Partner' : 'Fiinway User');
     const defaultPhone = getSubAffId() !== 'fiinway' ? getSubAffId() : '';
     setSbiName(defaultName);
@@ -480,6 +498,8 @@ export default function WalletPage() {
     setShowSbiModal(true);
   };
 
+  const openSbiLeadModal = () => openAffLeadModal();
+
   const handleSbiLeadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sbiName.trim() || !sbiPhone.trim()) {
@@ -487,7 +507,7 @@ export default function WalletPage() {
       return;
     }
     setSbiSubmitting(true);
-    let redirectUrl = `https://EasyPe.o18a.com/c?o=21983875&m=26892&a=761563&sub_aff_id=${encodeURIComponent(sbiPhone.trim())}`;
+    let redirectUrl = `${affConfig.url}${encodeURIComponent(sbiPhone.trim())}`;
     try {
       const resp = await fetch('/api/v1/finance/affiliate-lead', {
         method: 'POST',
@@ -500,7 +520,7 @@ export default function WalletPage() {
           phone: sbiPhone.trim(),
           email: sbiEmail.trim(),
           referral_code: sbiRef.trim(),
-          lender_name: 'SBI Credit Card'
+          lender_name: affConfig.lender || 'SBI Credit Card'
         })
       });
       const data = await resp.json();
@@ -1115,13 +1135,17 @@ export default function WalletPage() {
                           const targetUrl = `/finance/virtual-loan/dashboard?phone=${encodeURIComponent(params.phone || '')}`;
                           window.location.href = targetUrl;
                         }}
+                        style={{
+                          backgroundColor: virtualLoan.is_defaulter ? '#DC2626' : undefined,
+                          color: '#FFFFFF'
+                        }}
                         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-sm ${
                           virtualLoan.is_defaulter
-                            ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                            ? 'defaulter-pay-btn bg-[#DC2626] hover:bg-red-700 text-white shadow-red-500/30'
                             : 'bg-indigo-600 hover:bg-indigo-500 text-white'
                         }`}
                       >
-                        <span>{virtualLoan.is_defaulter ? 'Repay Overdue' : 'Manage Credit'}</span>
+                        <span style={{ color: '#FFFFFF', fontWeight: 800 }}>{virtualLoan.is_defaulter ? 'Pay Now' : 'Manage Credit'}</span>
                         <ChevronRightIcon className="w-3.5 h-3.5 text-white" />
                       </button>
                     </div>
@@ -1507,6 +1531,90 @@ export default function WalletPage() {
                         <span>Apply Now</span>
                         <ChevronRightIcon className="w-2.5 h-2.5 text-white" />
                       </button>
+                    </div>
+                  </div>
+
+                  {/* Horizontal Scroll Strip: CIBIL Score & Kotak 811 Cards */}
+                  <div 
+                    className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 -mx-0.5 px-0.5 snap-x scroll-smooth mt-1"
+                    style={{ WebkitOverflowScrolling: 'touch' }}
+                  >
+                    {/* CIBIL Score Card */}
+                    <div 
+                      onClick={() => openAffiliateUrl('https://EasyPe.o18a.com/c?o=21983875&m=26892&a=761563&sub_aff_id={replace_it}')}
+                      className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-[#F0FDFA] border border-[#99F6E4] dark:bg-teal-950/30 dark:border-teal-800 cursor-pointer hover:shadow-sm active:scale-95 transition-all shadow-xs"
+                      style={{ minWidth: '150px' }}
+                    >
+                      <img 
+                        src="/images/loans/cibil_speedometer.svg" 
+                        alt="CIBIL" 
+                        className="w-6 h-6 object-contain shrink-0" 
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/onboarding-assets/images/loans/cibil_speedometer.svg';
+                        }}
+                      />
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className="text-[11px] font-bold text-[#1E1B4B] dark:text-teal-200 whitespace-nowrap">Check CIBIL Score</span>
+                        <ChevronRightIcon className="w-3 h-3 text-[#1E1B4B] dark:text-teal-200 shrink-0" />
+                      </div>
+                    </div>
+
+                    {/* Kotak 811 Account Card - ₹5,000 */}
+                    <div 
+                      onClick={() => openAffLeadModal({
+                        title: 'Kotak 811 Account',
+                        sub: 'Open Kotak Account - ₹5,000',
+                        logo: '/images/loans/kotak_logo.svg',
+                        lender: 'Kotak 811 - 5000',
+                        url: 'https://EasyPe.o18a.com/c?o=21949291&m=26892&a=761563&sub_aff_id='
+                      })}
+                      className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-[#FFF1F2] border border-[#FFE4E6] dark:bg-rose-950/30 dark:border-rose-900/60 cursor-pointer hover:shadow-sm active:scale-95 transition-all shadow-xs"
+                      style={{ minWidth: '160px' }}
+                    >
+                      <img 
+                        src="/images/loans/kotak_logo.svg" 
+                        alt="Kotak" 
+                        className="w-6 h-6 object-contain shrink-0" 
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/onboarding-assets/images/loans/kotak_logo.svg';
+                        }}
+                      />
+                      <div className="flex flex-col justify-center min-w-0 leading-tight">
+                        <span className="text-[10px] font-semibold text-[#DC2626] dark:text-rose-300 whitespace-nowrap">Open Kotak Account</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs font-black text-[#DC2626] dark:text-rose-400 whitespace-nowrap">₹5,000</span>
+                          <ChevronRightIcon className="w-3 h-3 text-[#DC2626] dark:text-rose-400 shrink-0" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Kotak 811 Account Card - ₹2,000 */}
+                    <div 
+                      onClick={() => openAffLeadModal({
+                        title: 'Kotak 811 Account',
+                        sub: 'Open Kotak Account - ₹2,000',
+                        logo: '/images/loans/kotak_logo.svg',
+                        lender: 'Kotak 811 - 2000',
+                        url: 'https://EasyPe.o18a.com/c?o=21949291&m=26892&a=761563&sub_aff_id='
+                      })}
+                      className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-[#EFF6FF] border border-[#DBEAFE] dark:bg-blue-950/30 dark:border-blue-900/60 cursor-pointer hover:shadow-sm active:scale-95 transition-all shadow-xs"
+                      style={{ minWidth: '160px' }}
+                    >
+                      <img 
+                        src="/images/loans/kotak_logo.svg" 
+                        alt="Kotak" 
+                        className="w-6 h-6 object-contain shrink-0" 
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/onboarding-assets/images/loans/kotak_logo.svg';
+                        }}
+                      />
+                      <div className="flex flex-col justify-center min-w-0 leading-tight">
+                        <span className="text-[10px] font-semibold text-[#1D4ED8] dark:text-blue-300 whitespace-nowrap">Open Kotak Account</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs font-black text-[#1D4ED8] dark:text-blue-400 whitespace-nowrap">₹2,000</span>
+                          <ChevronRightIcon className="w-3 h-3 text-[#1D4ED8] dark:text-blue-400 shrink-0" />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2198,17 +2306,17 @@ export default function WalletPage() {
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 flex items-center justify-center overflow-hidden">
                   <img 
-                    src="/images/loans/sbi_card.png" 
-                    alt="SBI" 
+                    src={affConfig.logo} 
+                    alt="Logo" 
                     className="h-6 w-auto object-contain"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = '/onboarding-assets/images/loans/sbi_card.png';
+                      (e.target as HTMLImageElement).src = '/onboarding-assets' + affConfig.logo;
                     }}
                   />
                 </div>
                 <div>
-                  <h3 className={`text-sm font-bold ${themeClasses.textMain}`}>SBI Credit Card</h3>
-                  <p className={`text-[10px] ${themeClasses.textMuted}`}>Pre-approved offers & rewards</p>
+                  <h3 className={`text-sm font-bold ${themeClasses.textMain}`}>{affConfig.title}</h3>
+                  <p className={`text-[10px] ${themeClasses.textMuted}`}>{affConfig.sub}</p>
                 </div>
               </div>
               <button 
@@ -2282,7 +2390,7 @@ export default function WalletPage() {
               </div>
 
               <p className="text-[10px] text-slate-500 leading-tight pt-1">
-                By continuing, you authorize Fiinway to submit your contact request to SBI Card & its affiliate partners.
+                By continuing, you authorize Fiinway to submit your contact request to our banking & affiliate partner.
               </p>
 
               <div className="pt-2 flex items-center gap-2">
@@ -2298,7 +2406,7 @@ export default function WalletPage() {
                   disabled={sbiSubmitting}
                   className="flex-1 py-3 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
                 >
-                  <span>{sbiSubmitting ? 'Submitting...' : 'Continue to SBI Card'}</span>
+                  <span>{sbiSubmitting ? 'Submitting...' : `Continue to ${affConfig.title}`}</span>
                   <ChevronRightIcon className="w-3.5 h-3.5 text-white" />
                 </button>
               </div>
