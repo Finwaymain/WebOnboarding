@@ -474,7 +474,14 @@ export default function WalletPage() {
 
   const openAffiliateUrl = (urlTemplate: string) => {
     const url = urlTemplate.replace('{replace_it}', encodeURIComponent(getSubAffId()));
-    window.open(url, '_blank', 'noopener,noreferrer');
+    try {
+      const win = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!win || win.closed || typeof win.closed === 'undefined') {
+        window.location.href = url;
+      }
+    } catch (_) {
+      window.location.href = url;
+    }
   };
 
   const openAffLeadModal = (config?: Partial<typeof affConfig>) => {
@@ -532,7 +539,14 @@ export default function WalletPage() {
     } finally {
       setSbiSubmitting(false);
       setShowSbiModal(false);
-      window.open(redirectUrl, '_blank', 'noopener,noreferrer');
+      try {
+        const win = window.open(redirectUrl, '_blank', 'noopener,noreferrer');
+        if (!win || win.closed || typeof win.closed === 'undefined') {
+          window.location.href = redirectUrl;
+        }
+      } catch (_) {
+        window.location.href = redirectUrl;
+      }
     }
   };
 
@@ -1354,7 +1368,7 @@ export default function WalletPage() {
 
                     {/* Card 4: CIBIL Score Check */}
                     <div 
-                      onClick={() => openAffiliateUrl('https://EasyPe.o18a.com/c?o=21966472&m=26892&a=761563&sub_aff_id={replace_it}')}
+                      onClick={() => openAffiliateUrl('https://EasyPe.o18a.com/c?o=21983875&m=26892&a=761563&sub_aff_id={replace_it}')}
                       className="bg-[#F5F3FF] border border-[#EDE9FE] rounded-xl p-2 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
                     >
                       <div>
@@ -1379,7 +1393,7 @@ export default function WalletPage() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          openAffiliateUrl('https://EasyPe.o18a.com/c?o=21966472&m=26892&a=761563&sub_aff_id={replace_it}');
+                          openAffiliateUrl('https://EasyPe.o18a.com/c?o=21983875&m=26892&a=761563&sub_aff_id={replace_it}');
                         }}
                         className="mt-1.5 w-full bg-[#6366F1] hover:bg-[#4F46E5] text-white text-[8.5px] font-bold h-[22px] rounded-full flex items-center justify-center gap-0.5 shadow-sm transition-colors cursor-pointer"
                       >
@@ -1390,7 +1404,7 @@ export default function WalletPage() {
 
                     {/* Card 5: Novio FD Credit Card */}
                     <div 
-                      onClick={() => openAffiliateUrl('https://EasyPe.o18a.com/c?o=21966470&m=26892&a=761563&sub_aff_id={replace_it}')}
+                      onClick={() => openAffiliateUrl('https://EasyPe.o18a.com/c?o=21966472&m=26892&a=761563&sub_aff_id={replace_it}')}
                       className="bg-[#F0FDF4] border border-[#DCFCE7] rounded-xl p-2 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
                     >
                       <div>
@@ -1415,7 +1429,7 @@ export default function WalletPage() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          openAffiliateUrl('https://EasyPe.o18a.com/c?o=21966470&m=26892&a=761563&sub_aff_id={replace_it}');
+                          openAffiliateUrl('https://EasyPe.o18a.com/c?o=21966472&m=26892&a=761563&sub_aff_id={replace_it}');
                         }}
                         className="mt-1.5 w-full bg-[#16A34A] hover:bg-[#15803D] text-white text-[8.5px] font-bold h-[22px] rounded-full flex items-center justify-center gap-0.5 shadow-sm transition-colors cursor-pointer"
                       >
@@ -1462,7 +1476,7 @@ export default function WalletPage() {
 
                     {/* Card 7: Personal Loan */}
                     <div 
-                      onClick={() => openAffiliateUrl('https://EasyPe.o18a.com/c?o=21983875&m=26892&a=761563&sub_aff_id={replace_it}')}
+                      onClick={() => handleLoanClick('personal', 'Personal Loan', 'Upto ₹50 Lakh')}
                       className="bg-[#FFF7ED] border border-[#FED7AA] rounded-xl p-2 flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
                     >
                       <div>
@@ -1487,7 +1501,7 @@ export default function WalletPage() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          openAffiliateUrl('https://EasyPe.o18a.com/c?o=21983875&m=26892&a=761563&sub_aff_id={replace_it}');
+                          handleLoanClick('personal', 'Personal Loan', 'Upto ₹50 Lakh');
                         }}
                         className="mt-1.5 w-full bg-[#EA580C] hover:bg-[#C2410C] text-white text-[8.5px] font-bold h-[22px] rounded-full flex items-center justify-center gap-0.5 shadow-sm transition-colors cursor-pointer"
                       >
