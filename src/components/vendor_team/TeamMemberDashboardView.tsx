@@ -403,7 +403,7 @@ export default function TeamMemberDashboardView({
                           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
                             isBiz ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"
                           }`}>
-                            {isBiz ? "Business Driver" : "Customer"}
+                            {isBiz ? "Business App" : "User App"}
                           </span>
                         </div>
 

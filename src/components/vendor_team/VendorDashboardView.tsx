@@ -337,9 +337,19 @@ export default function VendorDashboardView({
 
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim();
+        const isBizItem =
+          item.user_type === "business" ||
+          item.user_type === "driver" ||
+          item.app_type === "Business App" ||
+          String(item.user_type_label || "").toLowerCase().includes("business");
+        const appLabel = isBizItem ? "business app" : "user app";
+
         return (
           (item.name || "").toLowerCase().includes(query) ||
-          (item.phone || "").toLowerCase().includes(query)
+          (item.phone || "").toLowerCase().includes(query) ||
+          (item.user_type || "").toLowerCase().includes(query) ||
+          (item.app_type || "").toLowerCase().includes(query) ||
+          appLabel.includes(query)
         );
       }
       return true;
@@ -416,45 +426,69 @@ export default function VendorDashboardView({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by name or number..."
+              placeholder="Search by name, number, or app type..."
               className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-            <div className="grid grid-cols-12 bg-slate-50 border-b border-slate-200 px-3 py-2.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-              <div className="col-span-3">DATE</div>
-              <div className="col-span-5">NAME / NUMBER</div>
-              <div className="col-span-4 text-right">STATUS</div>
-            </div>
+            <div className="overflow-x-auto scrollbar-none">
+              <div className="min-w-[340px]">
+                <div className="grid grid-cols-[72px_1fr_82px_64px] items-center gap-2 bg-slate-50 border-b border-slate-200 px-3 py-2.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  <div>DATE</div>
+                  <div>NAME / NUMBER</div>
+                  <div className="text-center">APP TYPE</div>
+                  <div className="text-right">STATUS</div>
+                </div>
 
-            <div className="divide-y divide-slate-100">
-              {filteredAcquisitions.length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-500">No User Records Found</div>
-              ) : (
-                filteredAcquisitions.map((acq: any, idx: number) => (
-                  <div key={idx} className="grid grid-cols-12 items-center px-3 py-3 hover:bg-slate-50/50">
-                    <div className="col-span-3 text-[11px] text-slate-600 font-medium">{acq.date}</div>
-                    <div className="col-span-5">
-                      <div className="text-xs font-bold text-slate-900 truncate">{acq.name}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">{acq.phone}</div>
-                    </div>
-                    <div className="col-span-4 text-right">
-                      <span
-                        className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full inline-block ${
-                          acq.verification_status === "verified"
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                            : acq.verification_status === "rejected"
-                            ? "bg-rose-50 text-rose-700 border border-rose-200"
-                            : "bg-amber-50 text-amber-700 border border-amber-200"
-                        }`}
-                      >
-                        {acq.verification_status === "verified" ? "Verified" : acq.verification_status === "rejected" ? "Rejected" : "Pending"}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
+                <div className="divide-y divide-slate-100">
+                  {filteredAcquisitions.length === 0 ? (
+                    <div className="p-8 text-center text-xs text-slate-500">No User Records Found</div>
+                  ) : (
+                    filteredAcquisitions.map((acq: any, idx: number) => {
+                      const isBiz =
+                        acq.user_type === "business" ||
+                        acq.user_type === "driver" ||
+                        acq.app_type === "Business App" ||
+                        String(acq.user_type_label || "").toLowerCase().includes("business");
+
+                      return (
+                        <div key={idx} className="grid grid-cols-[72px_1fr_82px_64px] items-center gap-2 px-3 py-3 hover:bg-slate-50/50">
+                          <div className="text-[11px] text-slate-600 font-medium whitespace-nowrap">{acq.date}</div>
+                          <div className="min-w-0 pr-1">
+                            <div className="text-xs font-bold text-slate-900 truncate">{acq.name}</div>
+                            <div className="text-[10px] text-slate-400 font-mono truncate">{acq.phone}</div>
+                          </div>
+                          <div className="text-center">
+                            <span
+                              className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full inline-flex items-center justify-center whitespace-nowrap ${
+                                isBiz
+                                  ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                  : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              }`}
+                            >
+                              {isBiz ? "Business App" : "User App"}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span
+                              className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full inline-block whitespace-nowrap ${
+                                acq.verification_status === "verified"
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                  : acq.verification_status === "rejected"
+                                  ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                  : "bg-amber-50 text-amber-700 border border-amber-200"
+                              }`}
+                            >
+                              {acq.verification_status === "verified" ? "Verified" : acq.verification_status === "rejected" ? "Rejected" : "Pending"}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
