@@ -55,6 +55,8 @@ import {
   Landmark,
   Shield,
   CheckCircle,
+  Gift,
+  Share2,
 } from "lucide-react";
 
 const ENV_API_KEY = "base64:nTfofcBByTDenJQYlsRbH0JjeVFW5lWsIIyXtq8/9sU=";
@@ -234,6 +236,14 @@ export default function RestaurantPartnerPortal({
   const [bankBranch, setBankBranch] = useState<string>("");
   const [upiId, setUpiId] = useState<string>("");
 
+  // Referral & Partner Code State
+  const [restaurantReferralCode, setRestaurantReferralCode] = useState<string>("");
+  const [referrerCodeInput, setReferrerCodeInput] = useState<string>("");
+  const [appliedReferrerCode, setAppliedReferrerCode] = useState<string>("");
+  const [appliedReferrerInfo, setAppliedReferrerInfo] = useState<any>(null);
+  const [isApplyingReferral, setIsApplyingReferral] = useState<boolean>(false);
+  const [copiedMyCode, setCopiedMyCode] = useState<boolean>(false);
+
   // Hidden File Input Refs
   const ownerPhotoInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -373,6 +383,9 @@ export default function RestaurantPartnerPortal({
           if (o.phone) setOwnerPhone(o.phone);
           if (o.email) setOwnerEmail(o.email);
           if (o.pan_number) setOwnerPan(o.pan_number);
+          if (o.referral_code) setRestaurantReferralCode(o.referral_code);
+          if (o.ref_by) setAppliedReferrerCode(o.ref_by);
+          if (o.referrer_info) setAppliedReferrerInfo(o.referrer_info);
           if (o.image) {
             setOwnerImagePreview(o.image.startsWith("http") ? o.image : `https://api.fiinway.com/storage/${o.image}`);
           }
@@ -1032,6 +1045,80 @@ export default function RestaurantPartnerPortal({
     } finally {
       setIsSavingProfile(false);
       fetchPortalData();
+    }
+  };
+
+  // Handle Applying Referral or Partner Code
+  const handleApplyReferral = async () => {
+    const code = referrerCodeInput.trim().toUpperCase();
+    if (!code) {
+      showToast("Please enter a referral or partner code.");
+      return;
+    }
+    if (restaurantReferralCode && code === restaurantReferralCode.toUpperCase()) {
+      showToast("You cannot use your own restaurant referral code.");
+      return;
+    }
+
+    setIsApplyingReferral(true);
+    const effectiveToken = resolveToken();
+    try {
+      const headers = getApiHeaders(effectiveToken);
+      headers["Content-Type"] = "application/json";
+
+      const res = await fetch("https://api.fiinway.com/api/v1/food/restaurant/apply-referral", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ referral_code: code }),
+      });
+      const data = await res.json();
+
+      if (data?.success) {
+        setAppliedReferrerCode(code);
+        if (data.referrer) {
+          setAppliedReferrerInfo(data.referrer);
+        } else {
+          setAppliedReferrerInfo({ code, type_label: "Partner Code" });
+        }
+        setReferrerCodeInput("");
+        showToast(data.message || "Referral code applied successfully!");
+      } else {
+        showToast(data?.error || data?.message || "Failed to apply referral code. Please check the code.");
+      }
+    } catch (e: any) {
+      showToast("Error applying referral code: " + (e?.message || "Network error"));
+    } finally {
+      setIsApplyingReferral(false);
+    }
+  };
+
+  // Handle Sharing Own Restaurant Code
+  const handleShareMyCode = async () => {
+    if (!restaurantReferralCode) {
+      showToast("Referral code is still loading. Please try again.");
+      return;
+    }
+    const shareText = `Partner with Fiinway Restaurant! Register your kitchen or restaurant using my code: ${restaurantReferralCode} to unlock business perks.`;
+    const shareUrl = "https://fiinway.com/food";
+
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({
+          title: "Join Fiinway Restaurant Partner",
+          text: shareText,
+          url: shareUrl,
+        });
+        return;
+      } catch (_) {}
+    }
+
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(restaurantReferralCode);
+      setCopiedMyCode(true);
+      showToast("Restaurant referral code copied to clipboard!");
+      setTimeout(() => setCopiedMyCode(false), 2000);
+    } else {
+      showToast(`Your referral code is: ${restaurantReferralCode}`);
     }
   };
 
@@ -3275,6 +3362,165 @@ export default function RestaurantPartnerPortal({
                       className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-medium text-slate-800 focus:bg-white focus:border-[#FF5200] outline-hidden"
                     />
                   </div>
+                </div>
+              </div>
+
+              {/* CARD 6: REFERRAL & PARTNER ONBOARDING CODE */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-orange-100 text-[#FF5200]">
+                      <Gift className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <h2 className="text-sm font-black text-slate-900">Referral & Partner Code</h2>
+                      <p className="text-[11px] text-slate-500">
+                        Link to your coordinator/vendor or invite other food outlets
+                      </p>
+                    </div>
+                  </div>
+                  {appliedReferrerCode && (
+                    <span className="text-[10.5px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Partner Linked
+                    </span>
+                  )}
+                </div>
+
+                {/* Section A: Share My Restaurant Referral Code */}
+                <div className="p-4 rounded-xl bg-gradient-to-br from-orange-50/70 to-amber-50/40 border border-orange-100/90 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">Your Restaurant Referral Code</span>
+                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-orange-500 text-white uppercase">Merchant</span>
+                    </div>
+                    <span className="text-[11px] text-orange-700 font-semibold">Earn rewards on partner referrals</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 flex items-center justify-between px-3.5 py-2.5 bg-white border border-orange-200 rounded-xl shadow-2xs font-mono font-black text-slate-900 text-sm tracking-wider">
+                      <span>{restaurantReferralCode || "Generating code..."}</span>
+                      <span className="text-[10px] font-bold font-sans text-orange-600 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-100">
+                        Active
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!restaurantReferralCode) return;
+                        if (typeof navigator !== "undefined" && navigator.clipboard) {
+                          navigator.clipboard.writeText(restaurantReferralCode);
+                          setCopiedMyCode(true);
+                          showToast("Referral code copied to clipboard!");
+                          setTimeout(() => setCopiedMyCode(false), 2000);
+                        }
+                      }}
+                      className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-orange-50 border border-orange-200 text-slate-700 font-bold rounded-xl text-xs transition-all active:scale-95 shadow-2xs shrink-0 cursor-pointer"
+                    >
+                      {copiedMyCode ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-slate-500" />}
+                      <span>{copiedMyCode ? "Copied" : "Copy"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleShareMyCode}
+                      className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-[#FF5200] hover:bg-[#e04800] text-white font-bold rounded-xl text-xs transition-all active:scale-95 shadow-2xs shrink-0 cursor-pointer"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      <span>Share</span>
+                    </button>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Share your unique referral code with fellow restaurant owners, cloud kitchens, and cafes to earn merchant referral credits upon activation.
+                  </p>
+                </div>
+
+                {/* Section B: Apply Referrer / Partner Code */}
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-800">
+                      {appliedReferrerCode ? "Connected Referrer / Partner" : "Have a Referral / Partner Code?"}
+                    </h3>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      {appliedReferrerCode
+                        ? "This restaurant is officially attributed under the verified partner below."
+                        : "Enter any User code, Business driver code, Freelancer (FR...), Sub-Vendor (SV...) or Vendor (VR...) code."}
+                    </p>
+                  </div>
+
+                  {appliedReferrerCode ? (
+                    <div className="p-3 bg-white rounded-xl border border-emerald-200 shadow-2xs flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center shrink-0">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                              {appliedReferrerCode}
+                            </span>
+                            {appliedReferrerInfo?.type_label && (
+                              <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                {appliedReferrerInfo.type_label}
+                              </span>
+                            )}
+                          </div>
+                          {appliedReferrerInfo?.name && (
+                            <p className="text-[11px] text-slate-600 font-medium truncate mt-0.5">
+                              Referred by: <strong className="text-slate-800">{appliedReferrerInfo.name}</strong>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg shrink-0 border border-emerald-100">
+                        <Lock className="w-3 h-3" />
+                        <span>Verified</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={referrerCodeInput}
+                          onChange={(e) => setReferrerCodeInput(e.target.value.toUpperCase())}
+                          placeholder="e.g. FR10234, VR10001, SV10001, FIIN..."
+                          disabled={isApplyingReferral}
+                          className="flex-1 p-2.5 rounded-xl bg-white border border-slate-300 font-mono font-bold text-xs text-slate-900 placeholder-slate-400 focus:border-[#FF5200] focus:ring-2 focus:ring-[#FF5200]/10 outline-hidden uppercase tracking-wider"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleApplyReferral}
+                          disabled={isApplyingReferral || !referrerCodeInput.trim()}
+                          className="flex items-center justify-center gap-1.5 px-5 py-2.5 bg-[#FF5200] hover:bg-[#e04800] disabled:bg-slate-300 text-white font-bold rounded-xl text-xs transition-all active:scale-95 shadow-2xs shrink-0 cursor-pointer"
+                        >
+                          {isApplyingReferral ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Verifying...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Apply Code</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Pill hints of accepted code types */}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[10px] text-slate-500">
+                        <span className="font-semibold text-slate-600">Supported:</span>
+                        <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-mono text-[9.5px]">Vendor (VR...)</span>
+                        <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-mono text-[9.5px]">Sub-Vendor (SV...)</span>
+                        <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-mono text-[9.5px]">Freelancer (FR...)</span>
+                        <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-mono text-[9.5px]">Business (FIINB...)</span>
+                        <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-mono text-[9.5px]">User (FIINC...)</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

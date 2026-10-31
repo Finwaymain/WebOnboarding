@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   XCircle,
   Smartphone,
+  Utensils,
 } from "lucide-react";
 
 interface TeamMemberDashboardViewProps {
@@ -31,7 +32,7 @@ export default function TeamMemberDashboardView({
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedCustLink, setCopiedCustLink] = useState(false);
   const [copiedBizLink, setCopiedBizLink] = useState(false);
-  const [filterType, setFilterType] = useState<"all" | "customer" | "business">("all");
+  const [filterType, setFilterType] = useState<"all" | "customer" | "business" | "restaurant">("all");
 
   const memberCode = memberData?.member_code || "FR------";
   const baseOrigin = typeof window !== "undefined" ? window.location.origin : "https://api.fiinway.com";
@@ -78,7 +79,8 @@ export default function TeamMemberDashboardView({
 
   const custCount = Number(memberData?.acquired_customers_count ?? memberData?.customer_joined ?? 0);
   const bizCount = Number(memberData?.acquired_businesses_count ?? memberData?.business_joined ?? 0);
-  const totalCount = Number(memberData?.total_users ?? memberData?.total_acquisitions_count ?? (custCount + bizCount));
+  const restCount = Number(memberData?.acquired_restaurants_count ?? memberData?.restaurant_joined ?? 0);
+  const totalCount = Number(memberData?.total_users ?? memberData?.total_acquisitions_count ?? (custCount + bizCount + restCount));
 
   const custVer = Number(memberData?.customer_verified ?? 0);
   const bizVer = Number(memberData?.business_verified ?? 0);
@@ -360,6 +362,14 @@ export default function TeamMemberDashboardView({
               >
                 Business ({bizCount})
               </button>
+              <button
+                onClick={() => setFilterType("restaurant")}
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-md transition-all ${
+                  filterType === "restaurant" ? "bg-white text-orange-600 shadow-2xs" : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                Restaurants ({restCount})
+              </button>
             </div>
           </div>
 
@@ -380,7 +390,8 @@ export default function TeamMemberDashboardView({
               </div>
             ) : (
               filteredAcquisitions.map((acq: any, idx: number) => {
-                const isBiz = acq.user_type === "business";
+                const isRest = acq.user_type === "restaurant" || acq.app_type === "Restaurant App";
+                const isBiz = !isRest && acq.user_type === "business";
                 const isVerified = acq.verification_status === "verified";
                 const isRejected = acq.verification_status === "rejected";
 
@@ -388,22 +399,28 @@ export default function TeamMemberDashboardView({
                   <div key={idx} className="p-3.5 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 ${
-                        isBiz
+                        isRest
+                          ? "bg-orange-50 text-[#FF5200] border border-orange-200"
+                          : isBiz
                           ? "bg-blue-50 text-blue-700 border border-blue-200"
                           : "bg-emerald-50 text-emerald-700 border border-emerald-200"
                       }`}>
-                        {isBiz ? <Briefcase className="w-4 h-4" /> : <Users className="w-4 h-4" />}
+                        {isRest ? <Utensils className="w-4 h-4" /> : isBiz ? <Briefcase className="w-4 h-4" /> : <Users className="w-4 h-4" />}
                       </div>
 
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <p className="text-xs font-bold text-slate-900 truncate">
-                            {acq.user_name || (isBiz ? "Business Driver" : "Customer User")}
+                            {acq.user_name || (isRest ? "Restaurant Partner" : isBiz ? "Business Driver" : "Customer User")}
                           </p>
                           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                            isBiz ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"
+                            isRest
+                              ? "bg-orange-50 text-[#FF5200] border border-orange-200"
+                              : isBiz
+                              ? "bg-blue-50 text-blue-700"
+                              : "bg-emerald-50 text-emerald-700"
                           }`}>
-                            {isBiz ? "Business App" : "User App"}
+                            {isRest ? "Restaurant App" : isBiz ? "Business App" : "User App"}
                           </span>
                         </div>
 

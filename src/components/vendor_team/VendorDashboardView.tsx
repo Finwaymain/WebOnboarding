@@ -337,12 +337,18 @@ export default function VendorDashboardView({
 
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim();
+        const isRestItem =
+          item.user_type === "restaurant" ||
+          item.app_type === "Restaurant App" ||
+          String(item.user_type_label || "").toLowerCase().includes("restaurant");
         const isBizItem =
-          item.user_type === "business" ||
-          item.user_type === "driver" ||
-          item.app_type === "Business App" ||
-          String(item.user_type_label || "").toLowerCase().includes("business");
-        const appLabel = isBizItem ? "business app" : "user app";
+          !isRestItem && (
+            item.user_type === "business" ||
+            item.user_type === "driver" ||
+            item.app_type === "Business App" ||
+            String(item.user_type_label || "").toLowerCase().includes("business")
+          );
+        const appLabel = isRestItem ? "restaurant app food merchant" : isBizItem ? "business app" : "user app";
 
         return (
           (item.name || "").toLowerCase().includes(query) ||
@@ -446,11 +452,17 @@ export default function VendorDashboardView({
                     <div className="p-8 text-center text-xs text-slate-500">No User Records Found</div>
                   ) : (
                     filteredAcquisitions.map((acq: any, idx: number) => {
+                      const isRest =
+                        acq.user_type === "restaurant" ||
+                        acq.app_type === "Restaurant App" ||
+                        String(acq.user_type_label || "").toLowerCase().includes("restaurant");
                       const isBiz =
-                        acq.user_type === "business" ||
-                        acq.user_type === "driver" ||
-                        acq.app_type === "Business App" ||
-                        String(acq.user_type_label || "").toLowerCase().includes("business");
+                        !isRest && (
+                          acq.user_type === "business" ||
+                          acq.user_type === "driver" ||
+                          acq.app_type === "Business App" ||
+                          String(acq.user_type_label || "").toLowerCase().includes("business")
+                        );
 
                       return (
                         <div key={idx} className="grid grid-cols-[72px_1fr_82px_64px] items-center gap-2 px-3 py-3 hover:bg-slate-50/50">
@@ -462,12 +474,14 @@ export default function VendorDashboardView({
                           <div className="text-center">
                             <span
                               className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full inline-flex items-center justify-center whitespace-nowrap ${
-                                isBiz
+                                isRest
+                                  ? "bg-orange-50 text-[#FF5200] border border-orange-200"
+                                  : isBiz
                                   ? "bg-blue-50 text-blue-700 border border-blue-200"
                                   : "bg-emerald-50 text-emerald-700 border border-emerald-200"
                               }`}
                             >
-                              {isBiz ? "Business App" : "User App"}
+                              {isRest ? "Restaurant App" : isBiz ? "Business App" : "User App"}
                             </span>
                           </div>
                           <div className="text-right">
