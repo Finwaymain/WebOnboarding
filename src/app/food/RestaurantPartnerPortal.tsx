@@ -377,6 +377,12 @@ export default function RestaurantPartnerPortal({
       try {
         const profRes = await fetch("https://api.fiinway.com/api/v1/food/restaurant/profile", { headers });
         const profData = await profRes.json();
+        if (profData?.success && profData?.data) {
+          const t = profData.data.token || profData.data.accesstoken;
+          if (t && typeof window !== "undefined") {
+            try { localStorage.setItem("restaurant_token", t); } catch (_) {}
+          }
+        }
         if (profData?.success && profData?.data?.owner) {
           const o = profData.data.owner;
           if (o.name) setOwnerName(o.name);
@@ -1065,11 +1071,20 @@ export default function RestaurantPartnerPortal({
     try {
       const headers = getApiHeaders(effectiveToken);
       headers["Content-Type"] = "application/json";
+      if (phone) {
+        headers["X-Owner-Phone"] = phone;
+        headers["phone"] = phone;
+      }
 
       const res = await fetch("https://api.fiinway.com/api/v1/food/restaurant/apply-referral", {
         method: "POST",
         headers,
-        body: JSON.stringify({ referral_code: code }),
+        body: JSON.stringify({
+          referral_code: code,
+          token: effectiveToken || undefined,
+          accesstoken: effectiveToken || undefined,
+          phone: phone || undefined,
+        }),
       });
       const data = await res.json();
 
@@ -2885,80 +2900,11 @@ export default function RestaurantPartnerPortal({
 
               {/* CARD: REFERRAL & PARTNER ONBOARDING CODE (Prominent at top) */}
               <div className="p-4 sm:p-5 rounded-2xl bg-white border-2 border-orange-200 shadow-xs space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="p-1.5 rounded-lg bg-orange-100 text-[#FF5200]">
-                      <Gift className="w-4 h-4" />
-                    </span>
-                    <div>
-                      <h2 className="text-sm font-black text-slate-900">Referral & Partner Code</h2>
-                      <p className="text-[11px] text-slate-500">
-                        Link to your coordinator/vendor or invite other food outlets
-                      </p>
-                    </div>
-                  </div>
-                  {appliedReferrerCode && (
-                    <span className="text-[10.5px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" />
-                      Partner Linked
-                    </span>
-                  )}
-                </div>
-
-                {/* Section A: Share My Restaurant Referral Code */}
-                <div className="p-4 rounded-xl bg-gradient-to-br from-orange-50/70 to-amber-50/40 border border-orange-100/90 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">Your Restaurant Referral Code</span>
-                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-orange-500 text-white uppercase">Merchant</span>
-                    </div>
-                    <span className="text-[11px] text-orange-700 font-semibold">Earn rewards on partner referrals</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 flex items-center justify-between px-3.5 py-2.5 bg-white border border-orange-200 rounded-xl shadow-2xs font-mono font-black text-slate-900 text-sm tracking-wider">
-                      <span>{restaurantReferralCode || "Generating code..."}</span>
-                      <span className="text-[10px] font-bold font-sans text-orange-600 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-100">
-                        Active
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!restaurantReferralCode) return;
-                        if (typeof navigator !== "undefined" && navigator.clipboard) {
-                          navigator.clipboard.writeText(restaurantReferralCode);
-                          setCopiedMyCode(true);
-                          showToast("Referral code copied to clipboard!");
-                          setTimeout(() => setCopiedMyCode(false), 2000);
-                        }
-                      }}
-                      className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-orange-50 border border-orange-200 text-slate-700 font-bold rounded-xl text-xs transition-all active:scale-95 shadow-2xs shrink-0 cursor-pointer"
-                    >
-                      {copiedMyCode ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-slate-500" />}
-                      <span>{copiedMyCode ? "Copied" : "Copy"}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleShareMyCode}
-                      className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-[#FF5200] hover:bg-[#e04800] text-white font-bold rounded-xl text-xs transition-all active:scale-95 shadow-2xs shrink-0 cursor-pointer"
-                    >
-                      <Share2 className="w-4 h-4" />
-                      <span>Share</span>
-                    </button>
-                  </div>
-
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
-                    Share your unique referral code with fellow restaurant owners, cloud kitchens, and cafes to earn merchant referral credits upon activation.
-                  </p>
-                </div>
-
+                
                 {/* Section B: Apply Referrer / Partner Code */}
                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
                   <div>
-                    <h3 className="text-xs font-bold text-slate-800">
+                    <h3 className="text-sm font-black text-slate-900">
                       {appliedReferrerCode ? "Connected Referrer / Partner" : "Have a Referral / Partner Code?"}
                     </h3>
                     <p className="text-[11px] text-slate-500 mt-0.5">
@@ -3028,15 +2974,7 @@ export default function RestaurantPartnerPortal({
                         </button>
                       </div>
 
-                      {/* Pill hints of accepted code types */}
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[10px] text-slate-500">
-                        <span className="font-semibold text-slate-600">Supported:</span>
-                        <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-mono text-[9.5px]">Vendor (VR...)</span>
-                        <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-mono text-[9.5px]">Sub-Vendor (SV...)</span>
-                        <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-mono text-[9.5px]">Freelancer (FR...)</span>
-                        <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-mono text-[9.5px]">Business (FIINB...)</span>
-                        <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-mono text-[9.5px]">User (FIINC...)</span>
-                      </div>
+                     
                     </div>
                   )}
                 </div>
