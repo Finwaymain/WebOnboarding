@@ -65,6 +65,7 @@ export default function VendorDashboardView({
   const [selectedPendingSubVendor, setSelectedPendingSubVendor] = useState<any | null>(null);
   const [approvalCustRate, setApprovalCustRate] = useState<string>("");
   const [approvalBizRate, setApprovalBizRate] = useState<string>("");
+  const [approvalRestRate, setApprovalRestRate] = useState<string>("");
   const [approvalDesignation, setApprovalDesignation] = useState<string>("Marketing Head");
   const [approvalRateVisible, setApprovalRateVisible] = useState<boolean>(true);
   const [approvingLoading, setApprovingLoading] = useState<boolean>(false);
@@ -119,6 +120,7 @@ export default function VendorDashboardView({
 
   const rateCustomer = Number(vendorData?.rate_per_customer ?? 0);
   const rateBusiness = Number(vendorData?.rate_per_business ?? 0);
+  const rateRestaurant = Number(vendorData?.rate_per_restaurant ?? 0);
 
   const directSubVendors: any[] = toArray(vendorData?.direct_sub_vendors);
   const pendingSubVendors: any[] = toArray(vendorData?.pending_sub_vendors);
@@ -126,19 +128,23 @@ export default function VendorDashboardView({
 
   const totalCustomers = Number(vendorData?.total_customers ?? vendorData?.customer_joined ?? 0);
   const totalBusinesses = Number(vendorData?.total_businesses ?? vendorData?.business_joined ?? 0);
-  const totalInstall = Number(vendorData?.total_install ?? (totalCustomers + totalBusinesses));
+  const totalRestaurants = Number(vendorData?.total_restaurants ?? vendorData?.restaurant_joined ?? 0);
+  const totalInstall = Number(vendorData?.total_install ?? (totalCustomers + totalBusinesses + totalRestaurants));
 
   const verifiedCustomers = Number(vendorData?.verified_customers ?? vendorData?.customer_verified ?? 0);
   const verifiedBusinesses = Number(vendorData?.verified_businesses ?? vendorData?.business_verified ?? 0);
-  const totalVerified = Number(vendorData?.total_verified ?? (verifiedCustomers + verifiedBusinesses));
+  const verifiedRestaurants = Number(vendorData?.verified_restaurants ?? vendorData?.restaurant_verified ?? 0);
+  const totalVerified = Number(vendorData?.total_verified ?? (verifiedCustomers + verifiedBusinesses + verifiedRestaurants));
 
   const pendingCustomers = Number(vendorData?.customer_pending ?? Math.max(0, totalCustomers - verifiedCustomers));
   const pendingBusinesses = Number(vendorData?.business_pending ?? Math.max(0, totalBusinesses - verifiedBusinesses));
-  const totalPending = Number(vendorData?.total_pending ?? (pendingCustomers + pendingBusinesses));
+  const pendingRestaurants = Number(vendorData?.restaurant_pending ?? Math.max(0, totalRestaurants - verifiedRestaurants));
+  const totalPending = Number(vendorData?.total_pending ?? (pendingCustomers + pendingBusinesses + pendingRestaurants));
 
   const rejectedCustomers = Number(vendorData?.customer_rejected ?? 0);
   const rejectedBusinesses = Number(vendorData?.business_rejected ?? 0);
-  const totalRejected = Number(vendorData?.total_rejected ?? (rejectedCustomers + rejectedBusinesses));
+  const rejectedRestaurants = Number(vendorData?.restaurant_rejected ?? 0);
+  const totalRejected = Number(vendorData?.total_rejected ?? (rejectedCustomers + rejectedBusinesses + rejectedRestaurants));
 
   const totalEarnings = vendorData?.total_earnings ?? vendorData?.total_verified_due ?? 0;
   const paidEarnings = Number(vendorData?.paid_earnings ?? 0);
@@ -146,11 +152,13 @@ export default function VendorDashboardView({
 
   const customerDue = Number(vendorData?.customer_due ?? (verifiedCustomers * rateCustomer));
   const businessDue = Number(vendorData?.business_due ?? (verifiedBusinesses * rateBusiness));
-  const totalVerifiedDue = Number(vendorData?.total_verified_due ?? (customerDue + businessDue));
+  const restaurantDue = Number(vendorData?.restaurant_due ?? (verifiedRestaurants * rateRestaurant));
+  const totalVerifiedDue = Number(vendorData?.total_verified_due ?? (customerDue + businessDue + restaurantDue));
 
   const customerUpcoming = Number(vendorData?.customer_upcoming ?? (pendingCustomers * rateCustomer));
   const businessUpcoming = Number(vendorData?.business_upcoming ?? (pendingBusinesses * rateBusiness));
-  const totalUpcomingIncome = Number(vendorData?.total_upcoming_income ?? (customerUpcoming + businessUpcoming));
+  const restaurantUpcoming = Number(vendorData?.restaurant_upcoming ?? (pendingRestaurants * rateRestaurant));
+  const totalUpcomingIncome = Number(vendorData?.total_upcoming_income ?? (customerUpcoming + businessUpcoming + restaurantUpcoming));
 
   const location = vendorData?.team_location || "Territory";
   const teamType = vendorData?.team_type || "Field Marketing";
@@ -254,6 +262,7 @@ export default function VendorDashboardView({
     setSelectedPendingSubVendor(pending);
     setApprovalCustRate(rateCustomer > 0 ? (rateCustomer * 0.6).toFixed(2) : "0.00");
     setApprovalBizRate(rateBusiness > 0 ? (rateBusiness * 0.6).toFixed(2) : "0.00");
+    setApprovalRestRate(rateRestaurant > 0 ? (rateRestaurant * 0.6).toFixed(2) : "0.00");
     setApprovalDesignation(pending.designation || "Marketing Head");
     setApprovalRateVisible(true);
   };
@@ -263,6 +272,7 @@ export default function VendorDashboardView({
 
     const cust = parseFloat(approvalCustRate) || 0;
     const biz = parseFloat(approvalBizRate) || 0;
+    const rest = parseFloat(approvalRestRate) || 0;
 
     if (cust > rateCustomer) {
       showToast(`Customer rate cannot exceed your rate of ₹${rateCustomer.toFixed(2)}`);
@@ -270,6 +280,10 @@ export default function VendorDashboardView({
     }
     if (biz > rateBusiness) {
       showToast(`Business rate cannot exceed your rate of ₹${rateBusiness.toFixed(2)}`);
+      return;
+    }
+    if (rest > rateRestaurant) {
+      showToast(`Restaurant rate cannot exceed your rate of ₹${rateRestaurant.toFixed(2)}`);
       return;
     }
 
@@ -284,6 +298,7 @@ export default function VendorDashboardView({
           sub_vendor_id: selectedPendingSubVendor.id,
           rate_per_customer: cust,
           rate_per_business: biz,
+          rate_per_restaurant: rest,
           designation: approvalDesignation,
           is_rate_visible: approvalRateVisible,
         }),
@@ -720,17 +735,23 @@ export default function VendorDashboardView({
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-3">
-                <span className="text-[10.5px] font-medium text-slate-400 block">Per Verified Customer</span>
-                <span className="text-xl font-extrabold text-emerald-400">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 pt-1">
+              <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-2.5 sm:p-3">
+                <span className="text-[10px] sm:text-[10.5px] font-medium text-slate-400 block truncate">Per Verified Customer</span>
+                <span className="text-lg sm:text-xl font-extrabold text-emerald-400">
                   ₹{Number(rateCustomer).toFixed(2)}
                 </span>
               </div>
-              <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-3">
-                <span className="text-[10.5px] font-medium text-slate-400 block">Per Verified Business</span>
-                <span className="text-xl font-extrabold text-blue-400">
+              <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-2.5 sm:p-3">
+                <span className="text-[10px] sm:text-[10.5px] font-medium text-slate-400 block truncate">Per Verified Business</span>
+                <span className="text-lg sm:text-xl font-extrabold text-blue-400">
                   ₹{Number(rateBusiness).toFixed(2)}
+                </span>
+              </div>
+              <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-2.5 sm:p-3">
+                <span className="text-[10px] sm:text-[10.5px] font-medium text-slate-400 block truncate">Per Verified Restaurant</span>
+                <span className="text-lg sm:text-xl font-extrabold text-amber-400">
+                  ₹{Number(rateRestaurant).toFixed(2)}
                 </span>
               </div>
             </div>
@@ -839,10 +860,12 @@ export default function VendorDashboardView({
                     <span>VERIFIED</span>
                   </div>
                   <p className="text-2xl font-black text-emerald-700 leading-none">{totalVerified}</p>
-                  <div className="pt-1 text-[11px] font-bold text-slate-700 flex items-center justify-center gap-1.5">
-                    <span>{verifiedCustomers}</span>
+                  <div className="pt-1 text-[10.5px] font-bold text-slate-700 flex items-center justify-center gap-1.5 flex-wrap">
+                    <span title="Customers">{verifiedCustomers} C</span>
                     <span className="text-slate-300">|</span>
-                    <span>{verifiedBusinesses}</span>
+                    <span title="Businesses">{verifiedBusinesses} B</span>
+                    <span className="text-slate-300">|</span>
+                    <span title="Restaurants">{verifiedRestaurants} R</span>
                   </div>
                 </div>
 
@@ -852,10 +875,12 @@ export default function VendorDashboardView({
                     <span>PENDING</span>
                   </div>
                   <p className="text-2xl font-black text-amber-700 leading-none">{totalPending}</p>
-                  <div className="pt-1 text-[11px] font-bold text-slate-700 flex items-center justify-center gap-1.5">
-                    <span>{pendingCustomers}</span>
+                  <div className="pt-1 text-[10.5px] font-bold text-slate-700 flex items-center justify-center gap-1.5 flex-wrap">
+                    <span title="Customers">{pendingCustomers} C</span>
                     <span className="text-slate-300">|</span>
-                    <span>{pendingBusinesses}</span>
+                    <span title="Businesses">{pendingBusinesses} B</span>
+                    <span className="text-slate-300">|</span>
+                    <span title="Restaurants">{pendingRestaurants} R</span>
                   </div>
                 </div>
 
@@ -865,10 +890,12 @@ export default function VendorDashboardView({
                     <span>REJECTED</span>
                   </div>
                   <p className="text-2xl font-black text-rose-700 leading-none">{totalRejected}</p>
-                  <div className="pt-1 text-[11px] font-bold text-slate-700 flex items-center justify-center gap-1.5">
-                    <span>{rejectedCustomers}</span>
+                  <div className="pt-1 text-[10.5px] font-bold text-slate-700 flex items-center justify-center gap-1.5 flex-wrap">
+                    <span title="Customers">{rejectedCustomers} C</span>
                     <span className="text-slate-300">|</span>
-                    <span>{rejectedBusinesses}</span>
+                    <span title="Businesses">{rejectedBusinesses} B</span>
+                    <span className="text-slate-300">|</span>
+                    <span title="Restaurants">{rejectedRestaurants} R</span>
                   </div>
                 </div>
               </div>
@@ -880,16 +907,18 @@ export default function VendorDashboardView({
                 <div className="grid grid-cols-2 gap-3 divide-x divide-slate-100">
                   <div className="space-y-1">
                     <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">VERIFIED DUE</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-black text-emerald-700">₹{customerDue.toLocaleString()} (Cust)</span>
-                      <span className="text-sm font-black text-blue-700">₹{businessDue.toLocaleString()} (Biz)</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-black text-emerald-700">₹{customerDue.toLocaleString()} (Cust)</span>
+                      <span className="text-xs font-black text-blue-700">₹{businessDue.toLocaleString()} (Biz)</span>
+                      <span className="text-xs font-black text-amber-700">₹{restaurantDue.toLocaleString()} (Rest)</span>
                     </div>
                   </div>
                   <div className="space-y-1 pl-3">
                     <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">UPCOMING DUE</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-black text-amber-700">₹{customerUpcoming.toLocaleString()}</span>
-                      <span className="text-sm font-black text-indigo-700">₹{businessUpcoming.toLocaleString()}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-black text-amber-700">₹{customerUpcoming.toLocaleString()} (Cust)</span>
+                      <span className="text-xs font-black text-indigo-700">₹{businessUpcoming.toLocaleString()} (Biz)</span>
+                      <span className="text-xs font-black text-orange-700">₹{restaurantUpcoming.toLocaleString()} (Rest)</span>
                     </div>
                   </div>
                 </div>
@@ -975,22 +1004,26 @@ export default function VendorDashboardView({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-4 items-center bg-slate-50 border border-slate-100 rounded-xl px-2 py-1.5 text-center text-xs">
+                    <div className="grid grid-cols-5 items-center bg-slate-50 border border-slate-100 rounded-xl px-1.5 py-1.5 text-center text-xs">
                       <div>
                         <span className="text-[9px] text-slate-500 font-medium block">Cust Rate</span>
-                        <strong className="text-[11px] font-black text-slate-900">₹{sv.rate_per_customer}</strong>
+                        <strong className="text-[10.5px] font-black text-slate-900">₹{sv.rate_per_customer}</strong>
                       </div>
                       <div className="border-l border-slate-200 pl-1">
                         <span className="text-[9px] text-slate-500 font-medium block">Biz Rate</span>
-                        <strong className="text-[11px] font-black text-slate-900">₹{sv.rate_per_business}</strong>
+                        <strong className="text-[10.5px] font-black text-slate-900">₹{sv.rate_per_business}</strong>
+                      </div>
+                      <div className="border-l border-slate-200 pl-1">
+                        <span className="text-[9px] text-amber-700 font-medium block">Rest Rate</span>
+                        <strong className="text-[10.5px] font-black text-amber-700">₹{sv.rate_per_restaurant ?? '0.00'}</strong>
                       </div>
                       <div className="border-l border-slate-200 pl-1">
                         <span className="text-[9px] text-indigo-700 font-bold block">Freelancers</span>
-                        <span className="text-[11px] font-black text-indigo-700">{sv.freelancers_count}</span>
+                        <span className="text-[10.5px] font-black text-indigo-700">{sv.freelancers_count}</span>
                       </div>
                       <div className="border-l border-slate-200 pl-1">
                         <span className="text-[9px] text-emerald-700 font-bold block">Acquired</span>
-                        <span className="text-[11px] font-black text-emerald-700">{sv.acquisitions_count ?? sv.total_users ?? 0}</span>
+                        <span className="text-[10.5px] font-black text-emerald-700">{sv.acquisitions_count ?? sv.total_users ?? 0}</span>
                       </div>
                     </div>
                   </div>
@@ -1203,7 +1236,7 @@ export default function VendorDashboardView({
                 Your Rate Ceiling:
               </span>
               <p className="text-xs text-indigo-950 font-bold">
-                Max Cust: ₹{rateCustomer.toFixed(2)} &bull; Max Biz: ₹{rateBusiness.toFixed(2)}
+                Max Cust: ₹{rateCustomer.toFixed(2)} &bull; Max Biz: ₹{rateBusiness.toFixed(2)} &bull; Max Rest: ₹{rateRestaurant.toFixed(2)}
               </p>
               <p className="text-[9.5px] text-indigo-700">
                 Sub-Vendor rates cannot exceed your rate. The difference is your profit margin!
@@ -1261,6 +1294,24 @@ export default function VendorDashboardView({
                 placeholder="₹0.00"
               />
               <span className="text-[9.5px] text-slate-400">Max allowed: ₹{rateBusiness.toFixed(2)}</span>
+            </div>
+
+            {/* Restaurant Rate Input */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-slate-700 block">
+                Rate per Verified Restaurant (₹)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max={rateRestaurant}
+                value={approvalRestRate}
+                onChange={(e) => setApprovalRestRate(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none"
+                placeholder="₹0.00"
+              />
+              <span className="text-[9.5px] text-slate-400">Max allowed: ₹{rateRestaurant.toFixed(2)}</span>
             </div>
 
             {/* Rate Visibility Toggle */}
