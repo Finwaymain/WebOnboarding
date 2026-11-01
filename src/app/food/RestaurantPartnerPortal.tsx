@@ -1195,6 +1195,11 @@ export default function RestaurantPartnerPortal({
   );
 
   const feePaid = Number(restaurant?.onboarding_fee_paid ?? 0);
+  const dynamicOnboardingFee = Number(
+    restaurant?.onboarding_fee ??
+    restaurant?.type?.onboarding_fee ??
+    (restaurant?.business_type === "actual_restaurant" ? 1500 : 499)
+  );
   const isPaymentPending = Boolean(
     isPendingVerification &&
     (feePaid <= 0 || String(restaurant?.onboarding_status).toLowerCase().trim() === "payment_pending")
@@ -1267,7 +1272,7 @@ export default function RestaurantPartnerPortal({
       const loaded = await loadRazorpayScript();
       if (!loaded || !(window as any).Razorpay) {
         // Fallback: Direct UPI link
-        const fallbackUpi = `upi://pay?pa=fiinway@icici&pn=Fiinway%20Technologies&am=${amount || 499}&cu=INR&tn=Onboarding%20Fee%20Restaurant%20${restaurant.id}`;
+        const fallbackUpi = `upi://pay?pa=fiinway@icici&pn=Fiinway%20Technologies&am=${amount || dynamicOnboardingFee || 1500}&cu=INR&tn=Onboarding%20Fee%20Restaurant%20${restaurant.id}`;
         window.location.href = fallbackUpi;
         setIsPayingOnboardingFee(false);
         return;
@@ -1275,7 +1280,7 @@ export default function RestaurantPartnerPortal({
 
       const options: any = {
         key: razorpay_key,
-        amount: amount_paise || ((amount || 499) * 100),
+        amount: amount_paise || ((amount || dynamicOnboardingFee || 1500) * 100),
         currency: "INR",
         name: "Fiinway Food Partner",
         description: "Restaurant Onboarding Fee",
@@ -1815,7 +1820,7 @@ export default function RestaurantPartnerPortal({
                       >
                         <CreditCard className="w-4 h-4" />
                         <span>
-                          {isPayingOnboardingFee ? "Opening Payment..." : `Pay ₹${restaurant.business_type === "actual_restaurant" ? "999" : "499"} with UPI / Razorpay`}
+                          {isPayingOnboardingFee ? "Opening Payment..." : `Pay ₹${dynamicOnboardingFee} with UPI / Razorpay`}
                         </span>
                       </button>
                     )}
