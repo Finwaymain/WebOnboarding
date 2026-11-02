@@ -737,19 +737,19 @@ export default function VendorDashboardView({
 
             <div className="grid grid-cols-3 gap-2 sm:gap-3 pt-1">
               <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-2.5 sm:p-3">
-                <span className="text-[10px] sm:text-[10.5px] font-medium text-slate-400 block truncate">Per Verified Customer</span>
+                <span className="text-[10.5px] sm:text-xs font-semibold text-slate-400 block truncate">User Payout</span>
                 <span className="text-lg sm:text-xl font-extrabold text-emerald-400">
                   ₹{Number(rateCustomer).toFixed(2)}
                 </span>
               </div>
               <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-2.5 sm:p-3">
-                <span className="text-[10px] sm:text-[10.5px] font-medium text-slate-400 block truncate">Per Verified Business</span>
+                <span className="text-[10.5px] sm:text-xs font-semibold text-slate-400 block truncate">Biz Payout</span>
                 <span className="text-lg sm:text-xl font-extrabold text-blue-400">
                   ₹{Number(rateBusiness).toFixed(2)}
                 </span>
               </div>
               <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-2.5 sm:p-3">
-                <span className="text-[10px] sm:text-[10.5px] font-medium text-slate-400 block truncate">Per Verified Restaurant</span>
+                <span className="text-[10.5px] sm:text-xs font-semibold text-slate-400 block truncate">Rest Payout</span>
                 <span className="text-lg sm:text-xl font-extrabold text-amber-400">
                   ₹{Number(rateRestaurant).toFixed(2)}
                 </span>
