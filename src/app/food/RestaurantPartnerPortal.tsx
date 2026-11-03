@@ -118,6 +118,20 @@ export default function RestaurantPartnerPortal({
     total_reviews: 0
   });
 
+  // Dynamic restaurant types configured by admin
+  const [availableTypes, setAvailableTypes] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("https://api.fiinway.com/api/v1/food/types")
+      .then((r) => r.json())
+      .then((res) => {
+        if (res?.success && Array.isArray(res.data)) {
+          setAvailableTypes(res.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Sound alert toggle
   const [isAudioMuted, setIsAudioMuted] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -1194,12 +1208,35 @@ export default function RestaurantPartnerPortal({
     !["active", "approved", "verified"].includes(String(restaurant.onboarding_status).toLowerCase().trim())
   );
 
+  const matchingType =
+    restaurant?.type ||
+    availableTypes.find((t: any) => t.code === restaurant?.business_type);
+
+  const typeDisplayTitle =
+    matchingType?.name ||
+    restaurant?.type?.name ||
+    restaurant?.category ||
+    (restaurant?.business_type === "actual_restaurant"
+      ? "Restaurant"
+      : restaurant?.business_type === "food_cart"
+      ? "Food Cart"
+      : "Cloud Kitchen");
+
   const feePaid = Number(restaurant?.onboarding_fee_paid ?? 0);
-  const dynamicOnboardingFee = Number(
-    restaurant?.onboarding_fee ??
+  const rawFee =
+    matchingType?.onboarding_fee ??
     restaurant?.type?.onboarding_fee ??
-    (restaurant?.business_type === "actual_restaurant" ? 1500 : 499)
-  );
+    restaurant?.onboarding_fee;
+
+  const dynamicOnboardingFee =
+    rawFee !== undefined && rawFee !== null && Number(rawFee) > 0
+      ? Number(rawFee)
+      : (restaurant?.business_type === "actual_restaurant"
+          ? 1500
+          : restaurant?.business_type === "cloud_kitchen"
+          ? 2000
+          : 1200);
+
   const isPaymentPending = Boolean(
     isPendingVerification &&
     (feePaid <= 0 || String(restaurant?.onboarding_status).toLowerCase().trim() === "payment_pending")
@@ -1272,7 +1309,7 @@ export default function RestaurantPartnerPortal({
       const loaded = await loadRazorpayScript();
       if (!loaded || !(window as any).Razorpay) {
         // Fallback: Direct UPI link
-        const fallbackUpi = `upi://pay?pa=fiinway@icici&pn=Fiinway%20Technologies&am=${amount || dynamicOnboardingFee || 1500}&cu=INR&tn=Onboarding%20Fee%20Restaurant%20${restaurant.id}`;
+        const fallbackUpi = `upi://pay?pa=fiinway@icici&pn=Fiinway%20Technologies&am=${amount || dynamicOnboardingFee}&cu=INR&tn=Onboarding%20Fee%20Restaurant%20${restaurant.id}`;
         window.location.href = fallbackUpi;
         setIsPayingOnboardingFee(false);
         return;
@@ -1280,10 +1317,10 @@ export default function RestaurantPartnerPortal({
 
       const options: any = {
         key: razorpay_key,
-        amount: amount_paise || ((amount || dynamicOnboardingFee || 1500) * 100),
+        amount: amount_paise || ((amount || dynamicOnboardingFee) * 100),
         currency: "INR",
         name: "Fiinway Food Partner",
-        description: "Restaurant Onboarding Fee",
+        description: `Restaurant Onboarding Fee (${typeDisplayTitle})`,
         order_id: gateway_order_id,
         prefill: {
           name: owner_name || restaurant.name || "Partner",
@@ -1377,7 +1414,7 @@ export default function RestaurantPartnerPortal({
                   {restaurant.name || "Kitchen"}
                 </span>
                 <span className="hidden md:inline-block px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide bg-emerald-100 text-[#0F5132]">
-                  {restaurant.business_type === "actual_restaurant" ? "Restaurant" : "Cloud"}
+                  {typeDisplayTitle}
                 </span>
               </div>
               <p className="text-[10px] text-slate-400 truncate hidden sm:block">
@@ -3225,7 +3262,7 @@ export default function RestaurantPartnerPortal({
                       <input
                         type="text"
                         disabled
-                        value={restaurant.business_type === "actual_restaurant" ? "Dine-In & Delivery" : "Cloud Kitchen"}
+                        value={typeDisplayTitle}
                         className="w-full p-2.5 rounded-xl bg-slate-100 border border-slate-200 font-bold text-slate-700"
                       />
                     </div>
