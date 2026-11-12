@@ -100,6 +100,7 @@ function ReferralDashboardContent() {
 
   // Vendor & Field Team states
   const [vendorRoleStatus, setVendorRoleStatus] = useState<"none" | "pending" | "vendor" | "team_member">("none");
+  const [vendorRoleLoading, setVendorRoleLoading] = useState<boolean>(true);
   const [vendorData, setVendorData] = useState<any>(null);
   const [memberData, setMemberData] = useState<any>(null);
   const [vendorApplicationData, setVendorApplicationData] = useState<any>(null);
@@ -124,17 +125,22 @@ function ReferralDashboardContent() {
     }
   }, [searchParams]);
 
-  const fetchVendorTeamData = useCallback(async () => {
+  const fetchVendorTeamData = useCallback(async (overrideId?: string, overrideCat?: string) => {
     try {
+      setVendorRoleLoading(true);
       const apiBase = getApiBase();
       const parsed = readUrlParams();
-      const uId = userId || parsed.userId || "";
+      const uId = overrideId || userId || parsed.userId || "";
       const dId = driverId || parsed.driverId || "";
       const effectiveId = uId || dId;
-      const uCat = userCat || parsed.userCat || (dId ? "driver" : "customer");
+      const uCat = overrideCat || userCat || parsed.userCat || (dId ? "driver" : "customer");
       const tok = token || parsed.token || "";
+      const ph = phone || parsed.phone || "";
 
-      if (!effectiveId) return;
+      if (!effectiveId && !tok && !ph) {
+        setVendorRoleLoading(false);
+        return;
+      }
 
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -142,9 +148,10 @@ function ReferralDashboardContent() {
         "accesstoken": tok,
         "id_user": effectiveId,
         "user_cat": uCat,
+        "phone": ph,
       };
 
-      const queryStr = `id_user=${encodeURIComponent(effectiveId)}&user_cat=${encodeURIComponent(uCat)}&accesstoken=${encodeURIComponent(tok)}&apikey=${encodeURIComponent(API_KEY)}`;
+      const queryStr = `id_user=${encodeURIComponent(effectiveId)}&user_cat=${encodeURIComponent(uCat)}&phone=${encodeURIComponent(ph)}&accesstoken=${encodeURIComponent(tok)}&apikey=${encodeURIComponent(API_KEY)}`;
 
       const res = await fetch(`${apiBase}/vendor-team/status?${queryStr}`, { headers });
       if (res.ok) {
@@ -154,12 +161,8 @@ function ReferralDashboardContent() {
           const status = json.data.status || "none";
           const appStat = json.data.application_status || status;
 
-          if (status === "pending" || appStat === "pending" || role === "pending") {
-            setVendorRoleStatus("pending");
-            const appData = json.data.application_data || json.data;
-            setVendorApplicationData(appData);
-            setVendorData(appData);
-          } else if (role === "vendor" && (status === "approved" || json.data.is_approved)) {
+          // Priority 1: Approved Vendor / Sub-Vendor
+          if (role === "vendor" && (status === "approved" || json.data.is_approved)) {
             setVendorRoleStatus("vendor");
             const vRes = await fetch(`${apiBase}/vendor-team/vendor-dashboard?${queryStr}`, { headers });
             if (vRes.ok) {
@@ -172,8 +175,17 @@ function ReferralDashboardContent() {
                 });
               }
             }
-          } else if (role === "team_member") {
+          }
+          // Priority 2: Active Freelancer / Team Member (NEVER overridden by unapproved vendor status)
+          else if (role === "team_member" || Boolean(json.data.member_code)) {
             setVendorRoleStatus("team_member");
+            if (json.data.member_code) {
+              setMemberData((prev: any) => prev || {
+                member_id: json.data.member_id,
+                member_code: json.data.member_code,
+                status: "active",
+              });
+            }
             const mRes = await fetch(`${apiBase}/vendor-team/member-dashboard?${queryStr}`, { headers });
             if (mRes.ok) {
               const mJson = await mRes.json();
@@ -181,6 +193,13 @@ function ReferralDashboardContent() {
                 setMemberData(mJson.data);
               }
             }
+          }
+          // Priority 3: Pending Vendor / Sub-Vendor Application (only when not an active Freelancer)
+          else if (status === "pending" || appStat === "pending" || role === "pending") {
+            setVendorRoleStatus("pending");
+            const appData = json.data.application_data || json.data;
+            setVendorApplicationData(appData);
+            setVendorData(appData);
           } else {
             setVendorRoleStatus("none");
           }
@@ -188,8 +207,10 @@ function ReferralDashboardContent() {
       }
     } catch (e) {
       console.error("Error fetching vendor team status:", e);
+    } finally {
+      setVendorRoleLoading(false);
     }
-  }, [userId, driverId, userCat, token]);
+  }, [userId, driverId, userCat, token, phone]);
 
   const fetchReferralStats = useCallback(async () => {
     try {
@@ -243,6 +264,34 @@ function ReferralDashboardContent() {
         try {
           localStorage.setItem("fiinway_partner_stats", JSON.stringify(json.data));
         } catch (_) {}
+
+        // If user_id was resolved on backend via token/phone, sync it to fetchVendorTeamData
+        const resolvedUid = json.data.user_id ? String(json.data.user_id) : "";
+        const resolvedType = json.data.user_type ? String(json.data.user_type) : uCat;
+        if (resolvedUid && !uId && !dId) {
+          fetchVendorTeamData(resolvedUid, resolvedType);
+        }
+
+        // Also apply vendor_team_status embedded in referral-dashboard-stats if present
+        if (json.data.vendor_team_status) {
+          const vt = json.data.vendor_team_status;
+          if (vt.role === "team_member" || vt.member_code) {
+            setVendorRoleStatus("team_member");
+            setMemberData((prev: any) => prev || {
+              member_id: vt.member_id,
+              member_code: vt.member_code,
+              status: "active",
+            });
+            if (resolvedUid) {
+              fetchVendorTeamData(resolvedUid, resolvedType);
+            }
+          } else if (vt.role === "vendor" && vt.is_approved) {
+            setVendorRoleStatus("vendor");
+            if (resolvedUid) {
+              fetchVendorTeamData(resolvedUid, resolvedType);
+            }
+          }
+        }
 
         const isVerified = json.data.aadhar_submitted === true || 
           (json.data.aadhar_number && json.data.aadhar_number.toString().trim().length === 12);
@@ -644,14 +693,16 @@ function ReferralDashboardContent() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-amber-700 shrink-0" />
-                    <h4 className="text-xs font-bold text-amber-950">Sub-Vendor Application Awaiting Review</h4>
+                    <h4 className="text-xs font-bold text-amber-950">
+                      {vendorApplicationData?.parent_vendor_id ? "Sub-Vendor Application Awaiting Review" : "Vendor Application Awaiting Review"}
+                    </h4>
                   </div>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 border border-amber-300">
                     Awaiting Rates
                   </span>
                 </div>
                 <p className="text-[11px] text-amber-800 leading-relaxed">
-                  Your application for territory <strong>{vendorApplicationData?.team_location || "Territory"}</strong> is currently under review by your parent vendor. Payout rates and joining codes are locked until approval.
+                  Your application for territory <strong>{vendorApplicationData?.team_location || "Territory"}</strong> is currently under review. Payout rates and joining codes are locked until approval.
                 </p>
                 <button
                   onClick={() => setViewMode("awaiting_approval")}
@@ -664,8 +715,8 @@ function ReferralDashboardContent() {
               </div>
             )}
 
-            {/* Case D: Not Enrolled -> Apply for Vendor Role */}
-            {vendorRoleStatus === "none" && (
+            {/* Case D: Not Enrolled -> Apply for Vendor Role (hidden while loading role status) */}
+            {!vendorRoleLoading && !loading && vendorRoleStatus === "none" && (
               <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1150,6 +1201,11 @@ function ReferralDashboardContent() {
           onBack={handleBack}
           memberData={memberData}
           showToast={showToast}
+          apiBase={getApiBase()}
+          userId={userId || driverId}
+          userCat={userCat || (driverId ? "driver" : "customer")}
+          token={token}
+          onRefresh={fetchVendorTeamData}
         />
       )}
 
